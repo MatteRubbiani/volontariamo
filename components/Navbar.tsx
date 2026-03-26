@@ -13,33 +13,74 @@ export default async function Navbar() {
 
   const { data: { user } } = await supabase.auth.getUser()
 
-  // Controllo ruolo per i link personalizzati
+  // 1. Identifichiamo il ruolo dell'utente
+  let isVolontario = false
+  let isAssociazione = false
   let dashboardLink = "/onboarding"
+
   if (user) {
-    const { data: vol } = await supabase.from('volontari').select('id').eq('id', user.id).single()
-    const { data: ass } = await supabase.from('associazioni').select('id').eq('id', user.id).single()
-    if (vol) dashboardLink = "/dashboard/volontario"
-    if (ass) dashboardLink = "/dashboard/associazione"
+    const [volRes, assRes] = await Promise.all([
+      supabase.from('volontari').select('id').eq('id', user.id).single(),
+      supabase.from('associazioni').select('id').eq('id', user.id).single()
+    ])
+
+    if (volRes.data) {
+      isVolontario = true
+      dashboardLink = "/dashboard/volontario"
+    }
+    if (assRes.data) {
+      isAssociazione = true
+      dashboardLink = "/dashboard/associazione"
+    }
   }
 
   return (
-    <nav className="border-b bg-white py-4 px-8 flex justify-between items-center shadow-sm">
+    <nav className="border-b bg-white py-4 px-8 flex justify-between items-center shadow-sm sticky top-0 z-[100]">
       <div className="flex items-center gap-8">
-        <Link href="/" className="text-2xl font-black text-blue-600 tracking-tighter">
+        <Link href="/" className="text-2xl font-black text-blue-600 tracking-tighter hover:scale-105 transition-transform">
           VOLONTARIAMO
         </Link>
         
-        <div className="hidden md:flex gap-6 text-sm font-medium text-slate-600">
-          <Link href="/annunci" className="hover:text-blue-600 transition-colors">
-            Esplora Annunci
-          </Link>
+        <div className="hidden md:flex gap-6 items-center">
           {user && (
             <>
-              <Link href={dashboardLink} className="hover:text-blue-600 transition-colors">
-                La mia Dashboard
+              {/* LINK COMUNI */}
+              <Link href={dashboardLink} className="text-sm font-bold text-slate-600 hover:text-blue-600 transition-colors">
+                Dashboard
               </Link>
-              {/* LINK PROFILO AGGIUNTO QUI */}
-              <Link href="/profilo" className="hover:text-blue-600 transition-colors font-bold text-slate-900">
+
+              {/* LINK SPECIFICI VOLONTARIO */}
+              {isVolontario && (
+                <>
+                  <Link href="/annunci" className="text-sm font-bold text-slate-600 hover:text-blue-600 transition-colors">
+                    Esplora Annunci
+                  </Link>
+                  <Link 
+                    href="/dashboard/volontario/candidature" 
+                    className="text-sm font-black text-blue-500 bg-blue-50 px-4 py-2 rounded-xl hover:bg-blue-100 transition-all border border-blue-100"
+                  >
+                    Le Mie Candidature 📭
+                  </Link>
+                </>
+              )}
+
+              {/* LINK SPECIFICI ASSOCIAZIONE */}
+              {isAssociazione && (
+                <>
+                  <Link 
+                    href="/dashboard/associazione/candidature" 
+                    className="text-sm font-black text-emerald-600 bg-emerald-50 px-4 py-2 rounded-xl hover:bg-emerald-100 transition-all border border-emerald-100"
+                  >
+                    Candidature Ricevute 🔔
+                  </Link>
+                  {/* Potresti aggiungere qui anche il link rapido per creare un nuovo annuncio */}
+                  <Link href="/dashboard/associazione/posizioni/nuova" className="text-sm font-bold text-slate-600 hover:text-blue-600 transition-colors">
+                    Nuovo Annuncio +
+                  </Link>
+                </>
+              )}
+
+              <Link href="/profilo" className="text-sm font-bold text-slate-900 hover:text-blue-600 transition-colors">
                 Mio Profilo
               </Link>
             </>
@@ -50,13 +91,17 @@ export default async function Navbar() {
       <div className="flex items-center gap-4">
         {user ? (
           <div className="flex items-center gap-6">
-            <span className="text-xs text-slate-400 hidden lg:block">{user.email}</span>
+            <div className="hidden lg:flex flex-col items-end">
+              <span className="text-[10px] font-black uppercase text-slate-300 tracking-widest leading-none mb-1">Account</span>
+              <span className="text-xs font-bold text-slate-500 leading-none">{user.email}</span>
+            </div>
+            
             <form action={logout}>
               <button 
                 type="submit" 
-                className="text-sm font-bold text-red-500 hover:bg-red-50 px-4 py-2 rounded-xl transition-colors"
+                className="text-sm font-black text-red-500 bg-red-50 hover:bg-red-500 hover:text-white px-5 py-2.5 rounded-xl transition-all border border-red-100 active:scale-95"
               >
-                Esci
+                ESCI
               </button>
             </form>
           </div>
@@ -67,7 +112,7 @@ export default async function Navbar() {
             </Link>
             <Link 
               href="/auth/sign-up" 
-              className="text-sm font-bold bg-blue-600 text-white px-4 py-2 rounded-xl shadow-md hover:bg-blue-700 transition-all"
+              className="text-sm font-black bg-blue-600 text-white px-6 py-2.5 rounded-xl shadow-lg shadow-blue-200 hover:bg-blue-700 hover:-translate-y-0.5 transition-all active:scale-95"
             >
               Unisciti
             </Link>
