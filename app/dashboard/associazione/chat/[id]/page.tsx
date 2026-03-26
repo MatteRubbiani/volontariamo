@@ -21,6 +21,7 @@ export default async function AssociazioneChat({
 
   const { id } = await params
 
+  // 1. Recupero dati con il fix per il tipo
   const { data: candidatura, error: candError } = await supabase
     .from('candidature')
     .select(`
@@ -47,6 +48,11 @@ export default async function AssociazioneChat({
     )
   }
 
+  // FIX TYPESCRIPT: Estraiamo la posizione correttamente gestendo l'eventuale array
+  const infoPosizione = Array.isArray(candidatura.posizioni) 
+    ? candidatura.posizioni[0] 
+    : candidatura.posizioni
+
   const { data: messaggi } = await supabase
     .from('messaggi')
     .select('*')
@@ -56,6 +62,7 @@ export default async function AssociazioneChat({
   return (
     <div className="h-[100dvh] flex flex-col bg-slate-50 overflow-hidden">
       
+      {/* HEADER CHAT */}
       <div className="bg-white border-b p-4 flex-none z-10 shadow-sm">
         <div className="max-w-4xl mx-auto flex items-center gap-4">
           <Link href="/dashboard/associazione/candidature" className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-600 hover:bg-slate-200 transition-colors">
@@ -66,12 +73,14 @@ export default async function AssociazioneChat({
               Volontario ID: {candidatura.volontario_id.substring(0,6)}...
             </p>
             <h1 className="font-black text-slate-800 text-lg leading-tight truncate">
-              {candidatura.posizioni?.titolo}
+              {/* Usiamo la variabile infoPosizione che abbiamo estratto sopra */}
+              {infoPosizione?.titolo || 'Chat Volontario'}
             </h1>
           </div>
         </div>
       </div>
 
+      {/* CHAT REALTIME */}
       <div className="flex-1 w-full max-w-4xl mx-auto overflow-hidden relative">
         <ChatRealtime 
           candidaturaId={id}

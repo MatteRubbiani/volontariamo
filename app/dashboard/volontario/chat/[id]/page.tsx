@@ -21,9 +21,17 @@ export default async function VolontarioChat({
 
   const { id } = await params
 
+  // 1. Recupero dati candidatura
   const { data: candidatura, error: candError } = await supabase
     .from('candidature')
-    .select('id, stato, volontario_id, posizioni (titolo)')
+    .select(`
+      id, 
+      stato, 
+      volontario_id, 
+      posizioni (
+        titolo
+      )
+    `)
     .eq('id', id)
     .eq('volontario_id', user.id)
     .single()
@@ -39,6 +47,11 @@ export default async function VolontarioChat({
     )
   }
 
+  // FIX TYPESCRIPT: Gestiamo il fatto che 'posizioni' potrebbe essere visto come array
+  const infoPosizione = Array.isArray(candidatura.posizioni) 
+    ? candidatura.posizioni[0] 
+    : candidatura.posizioni
+
   const { data: messaggi } = await supabase
     .from('messaggi')
     .select('*')
@@ -48,6 +61,7 @@ export default async function VolontarioChat({
   return (
     <div className="h-[100dvh] flex flex-col bg-slate-50 overflow-hidden">
       
+      {/* HEADER CHAT */}
       <div className="bg-white border-b p-4 flex-none z-10 shadow-sm">
         <div className="max-w-4xl mx-auto flex items-center gap-4">
           <Link href="/dashboard/volontario/candidature" className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center text-slate-600 hover:bg-slate-200 transition-colors">
@@ -56,12 +70,14 @@ export default async function VolontarioChat({
           <div>
             <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Chat Associazione</p>
             <h1 className="font-black text-slate-800 text-lg leading-tight truncate">
-              {candidatura.posizioni?.titolo}
+              {/* Usiamo la variabile sicura estratta sopra */}
+              {infoPosizione?.titolo || 'Chat'}
             </h1>
           </div>
         </div>
       </div>
 
+      {/* COMPONENTE REALTIME */}
       <div className="flex-1 w-full max-w-4xl mx-auto overflow-hidden relative">
         <ChatRealtime 
           candidaturaId={id}
