@@ -1,7 +1,8 @@
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import Link from 'next/link'
-import FormPosizione from './FormPosizione' // Importiamo il componente interattivo
+import FormPosizione from '@/components/FormPosizione'
+import { createPosizione } from '../../actions' // IL FIX È QUI: Due livelli indietro, non tre!
 
 export default async function NuovaPosizionePage() {
   const cookieStore = await cookies()
@@ -11,10 +12,11 @@ export default async function NuovaPosizionePage() {
     { cookies: { getAll() { return cookieStore.getAll() } } }
   )
 
+  // Recuperiamo tutti i tag possibili da mostrare nel form
   const { data: allTags } = await supabase.from('tags').select('*')
 
   return (
-    <div className="max-w-3xl mx-auto py-12 px-6">
+    <div className="max-w-4xl mx-auto py-12 px-6">
       <div className="mb-8 flex items-center justify-between">
         <div>
           <h1 className="text-4xl font-black text-slate-900">Pubblica Posizione</h1>
@@ -25,8 +27,11 @@ export default async function NuovaPosizionePage() {
         </Link>
       </div>
 
-      {/* Qui carichiamo il form che abbiamo creato prima */}
-      <FormPosizione allTags={allTags || []} />
+      {/* Carichiamo il form passando i tag e l'azione di creazione */}
+      <FormPosizione 
+        tagsDisponibili={allTags || []} 
+        salvaAction={createPosizione} 
+      />
     </div>
   )
 }

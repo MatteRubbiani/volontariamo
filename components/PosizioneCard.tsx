@@ -1,17 +1,28 @@
 import Link from 'next/link'
 
-export default function PosizioneCard({ posizione }: { posizione: any }) {
-  // Funzione di utilità per formattare l'ora senza crashare
+export default function PosizioneCard({ 
+  posizione, 
+  ruolo = 'volontario' 
+}: { 
+  posizione: any
+  ruolo?: 'volontario' | 'associazione'
+}) {
   const formattaOra = (ora: string | null) => {
     if (!ora) return '--:--'
     return ora.substring(0, 5)
   }
 
+  // ECCO IL NUOVO PATH PULITO PER L'ASSOCIAZIONE
+  const urlDestinazione = ruolo === 'associazione'
+    ? `/dashboard/associazione/posizione/${posizione.id}/modifica`
+    : `/dashboard/volontario/posizione/${posizione.id}`
+
+  const iconaAzione = ruolo === 'associazione' ? '✏️' : '→'
+
   return (
-    <Link href={`/dashboard/volontario/posizione/${posizione.id}`} className="block group">
+    <Link href={urlDestinazione} className="block group">
       <div className="bg-white p-6 rounded-[2rem] shadow-sm hover:shadow-2xl border border-slate-100 transition-all duration-300 transform group-hover:-translate-y-2 h-full flex flex-col">
         
-        {/* Intestazione: Tipo */}
         <div className="flex justify-between items-start mb-4 gap-2">
           <span className={`px-4 py-1.5 rounded-full text-xs font-black uppercase tracking-wider ${
             posizione.tipo === 'una_tantum' 
@@ -22,7 +33,6 @@ export default function PosizioneCard({ posizione }: { posizione: any }) {
           </span>
         </div>
 
-        {/* Titolo e Descrizione */}
         <h3 className="text-xl font-black text-slate-800 mb-2 leading-tight group-hover:text-blue-600 transition-colors">
           {posizione.titolo || 'Senza Titolo'}
         </h3>
@@ -30,7 +40,6 @@ export default function PosizioneCard({ posizione }: { posizione: any }) {
           {posizione.descrizione || 'Nessuna descrizione presente.'}
         </p>
 
-        {/* Info Rapide (Dove e Quando) */}
         <div className="space-y-2 mb-6 bg-slate-50 p-4 rounded-2xl">
           <div className="flex items-center text-sm text-slate-600 font-bold">
             <span className="mr-2">📍</span> {posizione.dove || 'Luogo da definire'}
@@ -44,7 +53,6 @@ export default function PosizioneCard({ posizione }: { posizione: any }) {
           </div>
         </div>
 
-        {/* Tags e Pulsante finto */}
         <div className="flex items-center justify-between mt-auto pt-4 border-t border-slate-100">
           <div className="flex flex-wrap gap-1">
             {posizione.tags && posizione.tags.length > 0 ? (
@@ -66,7 +74,7 @@ export default function PosizioneCard({ posizione }: { posizione: any }) {
           </div>
           
           <div className="w-10 h-10 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center font-black group-hover:bg-blue-600 group-hover:text-white transition-colors">
-            →
+            {iconaAzione}
           </div>
         </div>
 
