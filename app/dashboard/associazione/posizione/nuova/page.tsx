@@ -2,7 +2,7 @@ import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import Link from 'next/link'
 import FormPosizione from '@/components/FormPosizione'
-import { createPosizione } from '../../actions' // IL FIX È QUI: Due livelli indietro, non tre!
+import { createPosizione } from '../../actions'
 
 export default async function NuovaPosizionePage() {
   const cookieStore = await cookies()

@@ -1,4 +1,6 @@
 import Link from 'next/link'
+// 1. IMPORTIAMO IL NOSTRO COMPONENTE MAGICO!
+import TagBadge from '@/components/TagBadge'
 
 export default function PosizioneCard({ 
   posizione, 
@@ -12,7 +14,6 @@ export default function PosizioneCard({
     return ora.substring(0, 5)
   }
 
-  // ECCO IL NUOVO PATH PULITO PER L'ASSOCIAZIONE
   const urlDestinazione = ruolo === 'associazione'
     ? `/dashboard/associazione/posizione/${posizione.id}/modifica`
     : `/dashboard/volontario/posizione/${posizione.id}`
@@ -57,13 +58,14 @@ export default function PosizioneCard({
           <div className="flex flex-wrap gap-1">
             {posizione.tags && posizione.tags.length > 0 ? (
               <>
+                {/* 2. USIAMO IL TAG BADGE! Stampiamo solo i primi due */}
                 {posizione.tags.slice(0, 2).map((tag: any) => (
-                  <span key={tag.id} className="text-xs font-bold text-slate-400 bg-white border border-slate-200 px-2 py-1 rounded-lg">
-                    #{tag.name}
-                  </span>
+                  <TagBadge key={tag.id} nome={tag.name} size="sm" />
                 ))}
+                
+                {/* Contatore per i tag rimanenti, stilizzato come i badge "sm" */}
                 {posizione.tags.length > 2 && (
-                  <span className="text-xs font-bold text-slate-400 bg-white border border-slate-200 px-2 py-1 rounded-lg">
+                  <span className="inline-flex items-center font-bold border shadow-sm rounded-xl transition-all px-2.5 py-1 text-[10px] bg-slate-50 text-slate-500 border-slate-200">
                     +{posizione.tags.length - 2}
                   </span>
                 )}

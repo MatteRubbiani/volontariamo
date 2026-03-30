@@ -49,7 +49,10 @@ export function SignUpForm({
       });
       if (error) throw error;
 
-      router.push("/"); //da rimettere /auth/sign-up-success appena rimettiamo la conferma della mail
+      // 🪄 LA MAGIA È QUI: Forza Next.js a rileggere i cookie e ri-renderizzare la Navbar!
+      router.refresh();
+      
+      router.push("/"); // da rimettere /auth/sign-up-success appena rimettiamo la conferma della mail
     } catch (error: unknown) {
       setError(error instanceof Error ? error.message : "An error occurred");
     } finally {

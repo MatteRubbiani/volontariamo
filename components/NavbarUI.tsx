@@ -15,8 +15,9 @@ export default function NavbarUI({
   isAssociazione: boolean
   dashboardLink: string
 }) {
-  const [isOpen, setIsOpen] = useState(false) // Questo controlla se il menu mobile è aperto
+  const [isOpen, setIsOpen] = useState(false)
   const isLoggedIn = !!email
+  const needsOnboarding = isLoggedIn && !isVolontario && !isAssociazione
 
   const chiudiMenu = () => setIsOpen(false)
 
@@ -31,7 +32,7 @@ export default function NavbarUI({
         
         {/* DASHBOARD DESKTOP (Invisibile su Mobile) */}
         <div className="hidden md:flex gap-6 items-center">
-          {isLoggedIn && (
+          {isLoggedIn && !needsOnboarding && (
             <>
               <Link href={dashboardLink} className="text-sm font-bold text-slate-600 hover:text-blue-600 transition-colors">
                 Dashboard
@@ -63,6 +64,12 @@ export default function NavbarUI({
                 Mio Profilo
               </Link>
             </>
+          )}
+
+          {needsOnboarding && (
+             <Link href="/onboarding" className="text-sm font-black text-amber-600 bg-amber-50 px-4 py-2 rounded-xl hover:bg-amber-100 transition-all border border-amber-100">
+                Completa il Profilo ⚠️
+             </Link>
           )}
         </div>
 
@@ -113,23 +120,30 @@ export default function NavbarUI({
           {isLoggedIn ? (
             <>
               <p className="text-xs font-black uppercase text-slate-400 tracking-widest mb-2 border-b border-slate-200 pb-2">Navigazione</p>
-              <Link href={dashboardLink} onClick={chiudiMenu} className="font-bold text-slate-700 py-2 text-lg">Dashboard</Link>
               
-              {isVolontario && (
+              {needsOnboarding ? (
+                <Link href="/onboarding" onClick={chiudiMenu} className="font-black text-amber-600 py-2 text-lg">Completa il Profilo ⚠️</Link>
+              ) : (
                 <>
-                  <Link href="/annunci" onClick={chiudiMenu} className="font-bold text-slate-700 py-2 text-lg">Esplora Annunci</Link>
-                  <Link href="/dashboard/volontario/candidature" onClick={chiudiMenu} className="font-black text-blue-600 py-2 text-lg">Le Mie Candidature 📭</Link>
+                  <Link href={dashboardLink} onClick={chiudiMenu} className="font-bold text-slate-700 py-2 text-lg">Dashboard</Link>
+                  
+                  {isVolontario && (
+                    <>
+                      <Link href="/annunci" onClick={chiudiMenu} className="font-bold text-slate-700 py-2 text-lg">Esplora Annunci</Link>
+                      <Link href="/dashboard/volontario/candidature" onClick={chiudiMenu} className="font-black text-blue-600 py-2 text-lg">Le Mie Candidature 📭</Link>
+                    </>
+                  )}
+
+                  {isAssociazione && (
+                    <>
+                      <Link href="/dashboard/associazione/candidature" onClick={chiudiMenu} className="font-black text-emerald-600 py-2 text-lg">Candidature Ricevute 🔔</Link>
+                      <Link href="/dashboard/associazione/posizioni/nuova" onClick={chiudiMenu} className="font-bold text-slate-700 py-2 text-lg">Nuovo Annuncio +</Link>
+                    </>
+                  )}
+
+                  <Link href="/profilo" onClick={chiudiMenu} className="font-bold text-slate-700 py-2 text-lg">Mio Profilo</Link>
                 </>
               )}
-
-              {isAssociazione && (
-                <>
-                  <Link href="/dashboard/associazione/candidature" onClick={chiudiMenu} className="font-black text-emerald-600 py-2 text-lg">Candidature Ricevute 🔔</Link>
-                  <Link href="/dashboard/associazione/posizioni/nuova" onClick={chiudiMenu} className="font-bold text-slate-700 py-2 text-lg">Nuovo Annuncio +</Link>
-                </>
-              )}
-
-              <Link href="/profilo" onClick={chiudiMenu} className="font-bold text-slate-700 py-2 text-lg">Mio Profilo</Link>
 
               <div className="mt-4 pt-4 border-t border-slate-200">
                 <p className="text-xs font-bold text-slate-500 mb-4 truncate">Loggato come: {email}</p>

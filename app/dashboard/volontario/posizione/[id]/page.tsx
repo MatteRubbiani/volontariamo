@@ -3,6 +3,8 @@ import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
 import { revalidatePath } from 'next/cache'
 import Link from 'next/link'
+// 1. IMPORTIAMO IL NOSTRO COMPONENTE MAGICO
+import TagBadge from '@/components/TagBadge'
 
 export default async function DettaglioPosizioneVolontario({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -27,6 +29,7 @@ export default async function DettaglioPosizioneVolontario({ params }: { params:
     .eq('id', id)
     .single()
 
+  // GESTIONE ERRORI CORRETTA E SEPARATA DAL CONTROLLO ESISTENZA
   if (error) {
     return (
       <div className="p-10 bg-red-50 text-red-600 min-h-screen max-w-4xl mx-auto mt-10 rounded-3xl">
@@ -135,20 +138,18 @@ export default async function DettaglioPosizioneVolontario({ params }: { params:
             </div>
           </div>
 
+          {/* 2. INSERIMENTO DEL TAG BADGE (con size="lg" per dargli più risalto visivo) */}
           {pos.tags && pos.tags.length > 0 && (
             <div className="mb-12">
               <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-4 block">Categorie</p>
-              <div className="flex flex-wrap gap-2">
+              <div className="flex flex-wrap gap-3">
                 {pos.tags.map((t: any) => (
-                  <span key={t.tag.name} className="px-5 py-2 bg-blue-50 border border-blue-100 text-blue-600 rounded-xl text-sm font-bold shadow-sm">
-                    #{t.tag.name}
-                  </span>
+                  <TagBadge key={t.tag.name} nome={t.tag.name} size="lg" />
                 ))}
               </div>
             </div>
           )}
 
-          {/* LA MAGIA SUL BOTTONE IN BASE ALLA CANDIDATURA */}
           <div className="pt-8 border-t border-slate-100 mt-auto">
             {!candidatura ? (
               <form action={inviaCandidatura}> 
