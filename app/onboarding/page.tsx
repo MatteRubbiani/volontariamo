@@ -3,7 +3,7 @@ import Link from 'next/link'
 export default function OnboardingPage() {
   return (
     <div className="min-h-screen bg-white flex flex-col items-center justify-center p-6 text-center">
-      <h1 className="text-4xl font-black mb-4">Chi sei, Capo?</h1>
+      <h1 className="text-4xl font-black mb-4">Chi sei?</h1>
       <p className="text-slate-500 mb-10">Scegli la tua strada. Questa scelta è permanente.</p>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6 w-full max-w-3xl">
         <Link href="/onboarding/volontario" className="p-10 border-2 border-blue-100 rounded-3xl hover:border-blue-500 hover:bg-blue-50 transition-all">

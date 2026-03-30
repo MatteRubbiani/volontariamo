@@ -54,9 +54,6 @@ export default function NavbarUI({
                   <Link href="/dashboard/associazione/candidature" className="text-sm font-black text-emerald-600 bg-emerald-50 px-4 py-2 rounded-xl hover:bg-emerald-100 transition-all border border-emerald-100">
                     Candidature Ricevute 🔔
                   </Link>
-                  <Link href="/dashboard/associazione/posizioni/nuova" className="text-sm font-bold text-slate-600 hover:text-blue-600 transition-colors">
-                    Nuovo Annuncio +
-                  </Link>
                 </>
               )}
 
@@ -137,7 +134,6 @@ export default function NavbarUI({
                   {isAssociazione && (
                     <>
                       <Link href="/dashboard/associazione/candidature" onClick={chiudiMenu} className="font-black text-emerald-600 py-2 text-lg">Candidature Ricevute 🔔</Link>
-                      <Link href="/dashboard/associazione/posizioni/nuova" onClick={chiudiMenu} className="font-bold text-slate-700 py-2 text-lg">Nuovo Annuncio +</Link>
                     </>
                   )}
 
