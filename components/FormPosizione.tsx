@@ -1,6 +1,8 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
+// IMPORTIAMO LA NOSTRA FUNZIONE MAGICA
+import { getTagColor } from '@/lib/tagColors'
 
 const GIORNI = [
   { etichetta: 'L', valore: 'Lunedì' },
@@ -13,7 +15,7 @@ const GIORNI = [
 ]
 
 export default function FormPosizione({ 
-  posizione, // Se c'è, siamo in modifica
+  posizione, 
   tagsDisponibili = [], 
   tagsSelezionati: tagsIniziali = [],
   salvaAction 
@@ -25,16 +27,12 @@ export default function FormPosizione({
 }) {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [tipo, setTipo] = useState<'una_tantum' | 'ricorrente'>(posizione?.tipo || 'una_tantum')
-  
-  // Pre-carichiamo i giorni se stiamo modificando una posizione ricorrente
   const [giorniSelezionati, setGiorniSelezionati] = useState<string[]>(posizione?.giorni_settimana || [])
-  
-  // Pre-carichiamo i tag
   const [tagSelezionati, setTagSelezionati] = useState<string[]>(tagsIniziali)
   
   const inputRef = useRef<HTMLInputElement>(null)
 
-  // --- LOGICA GOOGLE MAPS ---
+  // --- LOGICA GOOGLE MAPS (Invariata) ---
   useEffect(() => {
     const initAutocomplete = () => {
       const google = (window as any).google
@@ -84,7 +82,13 @@ export default function FormPosizione({
       <form 
         action={async (fd) => {
           setIsSubmitting(true)
-          await salvaAction(fd)
+          try {
+            await salvaAction(fd)
+            // FORZIAMO IL RELOAD PER AGGIORNARE NAVBAR E DASHBOARD
+            window.location.assign('/dashboard/associazione')
+          } catch (error) {
+            window.location.assign('/dashboard/associazione')
+          }
         }} 
         className="space-y-8 bg-white p-8 md:p-12 rounded-[3rem] border shadow-2xl"
       >
@@ -138,7 +142,6 @@ export default function FormPosizione({
                   </button>
                 ))}
               </div>
-              {/* Generiamo gli input nascosti per i giorni selezionati in modo che il server li riceva */}
               {giorniSelezionati.map(g => <input key={g} type="hidden" name="giorni_settimana" value={g} />)}
             </div>
           )}
@@ -165,7 +168,7 @@ export default function FormPosizione({
           </div>
         </div>
 
-        {/* 5. TAGS GESTITI DA REACT */}
+        {/* 5. TAGS GESTITI DA REACT CON COLORI DINAMICI */}
         <div className="space-y-4">
           <label className="text-[10px] font-black uppercase text-slate-400 ml-2 tracking-widest block">
             Categorie (Clicca per selezionare)
@@ -173,15 +176,18 @@ export default function FormPosizione({
           <div className="flex flex-wrap gap-3">
             {tagsDisponibili.map(t => {
               const isSelected = tagSelezionati.includes(t.id);
+              // PESCHIAMO IL COLORE DAL NOSTRO DIZIONARIO
+              const activeColorClass = getTagColor(t.name);
+              
               return (
                 <button 
                   key={t.id} 
                   type="button" 
                   onClick={() => toggleTag(t.id)}
-                  className={`px-6 py-3 rounded-2xl border-2 font-bold text-sm transition-all duration-200 block ${
+                  className={`px-6 py-3 rounded-2xl border-2 font-bold text-sm transition-all duration-300 block ${
                     isSelected 
-                      ? 'bg-blue-600 border-blue-600 text-white shadow-lg shadow-blue-200 scale-105' 
-                      : 'border-slate-100 bg-slate-50 text-slate-500 hover:border-blue-200'
+                      ? `${activeColorClass} shadow-lg scale-105` 
+                      : 'border-slate-100 bg-slate-50 text-slate-400 hover:border-slate-200'
                   }`}
                 >
                   #{t.name}
@@ -190,7 +196,6 @@ export default function FormPosizione({
             })}
           </div>
           
-          {/* Input nascosti per i tag */}
           {tagSelezionati.map(tId => (
             <input key={tId} type="hidden" name="tags" value={tId} />
           ))}
@@ -208,7 +213,6 @@ export default function FormPosizione({
 
       </form>
 
-      {/* FIX CSS GOOGLE */}
       <style jsx global>{`
         .pac-container {
           z-index: 99999 !important;
