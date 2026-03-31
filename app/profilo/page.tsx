@@ -2,6 +2,8 @@ import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
+// 1. Importiamo il componente per i tag colorati
+import TagBadge from '@/components/TagBadge'
 
 export default async function ProfiloPage() {
   const cookieStore = await cookies()
@@ -31,74 +33,74 @@ export default async function ProfiloPage() {
   if (!vol && !ass) redirect('/onboarding')
 
   return (
-    <div className="max-w-4xl mx-auto py-12 px-6">
-      <div className="bg-white rounded-3xl border shadow-sm p-8 md:p-12">
-        
-        {/* HEADER PROFILO */}
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-10 pb-10 border-b">
-          <div>
-            <span className="inline-block px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider mb-2 bg-slate-100 text-slate-600">
-              Profilo {vol ? 'Volontario' : 'Associazione'}
-            </span>
-            <h1 className="text-4xl font-black text-slate-900">
-              {vol ? vol.nome_completo : ass?.nome}
-            </h1>
-            <p className="text-slate-500">{user.email}</p>
-          </div>
+    <div className="min-h-screen bg-slate-50 pb-24">
+      <div className="max-w-4xl mx-auto py-12 px-6">
+        <div className="bg-white rounded-[3rem] border border-slate-100 shadow-xl p-8 md:p-12">
           
-          {/* AZIONI PROFILO */}
-          <div className="flex flex-wrap gap-3">
-            <Link 
-              href="/profilo/modifica"
-              className="px-6 py-2 border-2 border-blue-600 text-blue-600 rounded-xl text-sm font-bold hover:bg-blue-50 transition-colors"
-            >
-              Modifica Profilo
-            </Link>
-            <Link 
-              href={vol ? "/dashboard/volontario" : "/dashboard/associazione"}
-              className="px-6 py-2 bg-slate-900 text-white rounded-xl text-sm font-bold shadow-sm"
-            >
-              Vai alla Dashboard
-            </Link>
-          </div>
-        </div>
-
-        {/* CONTENUTO SPECIFICO */}
-        <div className="space-y-8">
-          {/* BIO / DESCRIZIONE */}
-          <div>
-            <h2 className="text-lg font-bold mb-3">Descrizione</h2>
-            <p className="text-slate-600 leading-relaxed italic">
-              "{vol ? (vol.bio || "Nessuna bio inserita") : ass?.descrizione}"
-            </p>
-          </div>
-
-          {/* TAGS (Solo per Volontari) */}
-          {vol && (
+          {/* HEADER PROFILO */}
+          <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 mb-10 pb-10 border-b border-slate-100">
             <div>
-              <h2 className="text-lg font-bold mb-4">I tuoi Interessi</h2>
-              <div className="flex flex-wrap gap-2">
-                {vol.tags && vol.tags.length > 0 ? (
-                  vol.tags.map((item: any) => (
-                    <span 
-                      key={item.tag.id} 
-                      className="px-4 py-2 bg-blue-50 text-blue-700 rounded-full text-sm font-semibold border border-blue-100"
-                    >
-                      #{item.tag.name}
-                    </span>
-                  ))
-                ) : (
-                  <p className="text-sm text-slate-400">Nessun tag selezionato.</p>
-                )}
-              </div>
+              <span className="inline-block px-4 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest mb-4 bg-slate-100 text-slate-500">
+                Profilo {vol ? 'Volontario' : 'Associazione'}
+              </span>
+              <h1 className="text-4xl md:text-5xl font-black text-slate-800 tracking-tighter">
+                {vol ? vol.nome_completo : ass?.nome}
+              </h1>
+              <p className="text-slate-500 font-medium mt-2">{user.email}</p>
             </div>
-          )}
+            
+            {/* AZIONI PROFILO */}
+            <div className="flex flex-wrap gap-3">
+              <Link 
+                href="/profilo/modifica"
+                className="px-6 py-3 border-2 border-slate-200 text-slate-600 rounded-2xl text-sm font-black hover:border-blue-600 hover:text-blue-600 transition-all active:scale-95"
+              >
+                MODIFICA PROFILO
+              </Link>
+              <Link 
+                href={vol ? "/dashboard/volontario" : "/dashboard/associazione"}
+                className="px-6 py-3 bg-blue-600 text-white rounded-2xl text-sm font-black shadow-lg shadow-blue-200 hover:bg-blue-700 hover:-translate-y-0.5 transition-all active:scale-95"
+              >
+                VAI ALLA DASHBOARD
+              </Link>
+            </div>
+          </div>
 
-          {/* DATA ISCRIZIONE */}
-          <div className="pt-6 border-t">
-            <p className="text-xs text-slate-400 italic">
-              Membro dal: {new Date(vol ? vol.created_at : ass?.created_at).toLocaleDateString('it-IT')}
-            </p>
+          {/* CONTENUTO SPECIFICO */}
+          <div className="space-y-10">
+            {/* BIO / DESCRIZIONE */}
+            <div className="bg-slate-50 p-6 md:p-8 rounded-3xl border border-slate-100">
+              <h2 className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-3">
+                {vol ? 'La tua Bio' : 'Descrizione Associazione'}
+              </h2>
+              <p className="text-slate-700 font-medium leading-relaxed text-lg">
+                {vol ? (vol.bio || "Nessuna bio inserita. Modifica il profilo per farti conoscere meglio dalle associazioni!") : ass?.descrizione}
+              </p>
+            </div>
+
+            {/* TAGS (Solo per Volontari) */}
+            {vol && (
+              <div>
+                <h2 className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-4">I tuoi Interessi</h2>
+                <div className="flex flex-wrap gap-3">
+                  {vol.tags && vol.tags.length > 0 ? (
+                    vol.tags.map((item: any) => (
+                      // 2. Usiamo il TagBadge invece del tag statico
+                      <TagBadge key={item.tag.id} nome={item.tag.name} size="md" />
+                    ))
+                  ) : (
+                    <p className="text-sm font-medium text-slate-400 italic">Nessun interesse selezionato.</p>
+                  )}
+                </div>
+              </div>
+            )}
+
+            {/* DATA ISCRIZIONE */}
+            <div className="pt-8 border-t border-slate-100">
+              <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest">
+                Membro dal {new Date(vol ? vol.created_at : ass?.created_at).toLocaleDateString('it-IT')}
+              </p>
+            </div>
           </div>
         </div>
       </div>
