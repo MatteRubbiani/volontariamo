@@ -20,13 +20,15 @@ export default async function ProfiloAssociazione({ params }: { params: Promise<
 
   if (!associazione) {
     return (
-      <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50">
-        <h1 className="text-2xl font-black text-slate-800 mb-4">Associazione non trovata 🕵️‍♂️</h1>
+      <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50 px-6 text-center">
+        <h1 className="text-2xl font-black text-slate-800 mb-2">Associazione non trovata</h1>
+        <p className="text-slate-500 mb-6">L'organizzazione cercata non è disponibile.</p>
         <Link href="/dashboard/volontario" className="text-blue-600 font-bold hover:underline">← Torna agli annunci</Link>
       </div>
     )
   }
 
+  // Manteniamo la tua query originale
   const { data: posizioniRaw } = await supabase
     .from('posizioni')
     .select('*, tags:posizione_tags(tag:tags(id, name))')
@@ -43,47 +45,47 @@ export default async function ProfiloAssociazione({ params }: { params: Promise<
   return (
     <div className="min-h-screen bg-slate-50 pb-24">
       
-      {/* HERO SECTION PREMIUM */}
-      <div className="bg-gradient-to-br from-blue-600 via-blue-700 to-indigo-800 text-white pt-10 pb-40 px-6 relative overflow-hidden">
-        {/* Sfondo decorativo */}
-        <div className="absolute top-0 right-0 -mt-20 -mr-20 w-96 h-96 bg-white opacity-5 rounded-full blur-3xl pointer-events-none"></div>
-        <div className="absolute bottom-0 left-10 w-72 h-72 bg-indigo-500 opacity-20 rounded-full blur-3xl pointer-events-none"></div>
+      {/* HERO SECTION PROFESSIONALE (Pulita, Navy/Slate) */}
+      <div className="bg-slate-900 text-white pt-10 pb-44 px-6 relative overflow-hidden">
+        <div className="absolute inset-0 opacity-10 pointer-events-none" style={{ backgroundImage: 'radial-gradient(#ffffff 0.5px, transparent 0.5px)', backgroundSize: '24px 24px' }}></div>
         
         <div className="max-w-5xl mx-auto relative z-10">
           
-          <Link href="/dashboard/volontario" className="inline-flex items-center gap-2 text-blue-100 hover:text-white font-bold mb-10 transition-colors bg-white/10 px-4 py-2 rounded-xl backdrop-blur-sm hover:bg-white/20 border border-white/5">
-            ← Torna agli annunci
+          <Link href="/dashboard/volontario" className="inline-flex items-center gap-2 text-slate-400 hover:text-white font-bold mb-10 transition-colors text-xs uppercase tracking-widest">
+            ← Torna alla ricerca
           </Link>
           
-          <div className="flex flex-col md:flex-row items-start md:items-center gap-8 mb-8">
-            <div className="w-28 h-28 shrink-0 bg-white rounded-[2rem] flex items-center justify-center text-blue-600 text-6xl font-black shadow-2xl transform -rotate-3 hover:rotate-0 transition-transform duration-300">
+          <div className="flex flex-col md:flex-row items-center md:items-end gap-6 md:gap-8 mb-8 text-center md:text-left">
+            <div className="w-24 h-24 md:w-32 md:h-32 shrink-0 bg-white rounded-[2rem] md:rounded-[2.5rem] flex items-center justify-center text-slate-900 text-5xl md:text-6xl font-black shadow-2xl border-4 border-slate-800/50 transition-transform hover:scale-105">
               {iniziale}
             </div>
-            <div className="flex-1">
-              <span className="bg-blue-400/30 text-blue-50 px-3 py-1.5 rounded-lg text-[10px] font-black tracking-widest uppercase mb-3 inline-block backdrop-blur-sm border border-blue-300/20">
+            <div className="flex-1 pb-1">
+              <span className="px-3 py-1 rounded-lg text-[10px] font-black tracking-widest uppercase bg-blue-600 text-white mb-3 inline-block shadow-lg shadow-blue-900/20">
                 Profilo Organizzazione
               </span>
-              <h1 className="text-4xl md:text-6xl font-black tracking-tighter leading-tight">
-                {associazione.nome || 'Associazione Non Definita'}
+              <h1 className="text-3xl md:text-6xl font-black tracking-tighter leading-tight">
+                {associazione.nome || 'Associazione'}
               </h1>
             </div>
           </div>
           
-          <p className="text-lg md:text-xl text-blue-100 max-w-3xl leading-relaxed font-medium">
-            {associazione.descirzione || "Questa associazione sta ancora preparando la sua bio ufficiale. Nel frattempo, puoi dare un'occhiata alle posizioni che ha aperto qui sotto!"}
+          <p className="text-base md:text-xl text-slate-300 max-w-3xl leading-relaxed font-medium mx-auto md:mx-0">
+            {associazione.descirzione || "Questa associazione sta ancora preparando la sua bio ufficiale. Scopri le posizioni attive qui sotto!"}
           </p>
           
-          {/* BADGES CONTATTI (Pills Stile Vetro) */}
+          {/* BADGES CONTATTI (Icone professionali al posto delle emoji) */}
           {(associazione.sito_web || associazione.citta) && (
-            <div className="flex flex-wrap gap-3 mt-8">
+            <div className="flex flex-wrap justify-center md:justify-start gap-3 mt-8">
               {associazione.citta && (
-                <span className="inline-flex items-center gap-2 px-5 py-3 rounded-xl bg-black/10 text-white text-sm font-bold backdrop-blur-sm border border-white/10 shadow-sm">
-                  📍 {associazione.citta}
-                </span>
+                <div className="flex items-center gap-2 px-4 py-2.5 rounded-xl bg-white/5 border border-white/10 text-slate-200 text-sm font-bold backdrop-blur-sm">
+                  <svg className="w-4 h-4 text-blue-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1115 0z" /></svg>
+                  {associazione.citta}
+                </div>
               )}
               {associazione.sito_web && (
-                <a href={associazione.sito_web} target="_blank" rel="noreferrer" className="inline-flex items-center gap-2 px-6 py-3 rounded-xl bg-white text-blue-700 text-sm font-black shadow-lg hover:scale-105 hover:shadow-xl hover:shadow-white/20 transition-all active:scale-95">
-                  🔗 Visita il Sito Web
+                <a href={associazione.sito_web} target="_blank" rel="noreferrer" className="flex items-center gap-2 px-5 py-2.5 rounded-xl bg-white text-slate-900 text-sm font-black shadow-lg hover:bg-blue-50 transition-all active:scale-95">
+                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M13.19 8.688a4.5 4.5 0 011.242 7.244l-4.5 4.5a4.5 4.5 0 01-6.364-6.364l1.757-1.757m13.35-.622l1.757-1.757a4.5 4.5 0 00-6.364-6.364l-4.5 4.5a4.5 4.5 0 001.242 7.244" /></svg>
+                  Sito Web
                 </a>
               )}
             </div>
@@ -91,30 +93,30 @@ export default async function ProfiloAssociazione({ params }: { params: Promise<
         </div>
       </div>
 
-      {/* CONTENITORE ANNUNCI (Overlapping più pronunciato) */}
-      <div className="max-w-5xl mx-auto px-6 -mt-24 relative z-20">
-        <div className="bg-white p-8 md:p-14 rounded-[3rem] shadow-[0_20px_60px_-15px_rgba(0,0,0,0.1)] border border-slate-100/50">
+      {/* SEZIONE ANNUNCI */}
+      <div className="max-w-5xl mx-auto px-4 md:px-6 -mt-20 relative z-20">
+        <div className="bg-white p-6 md:p-12 rounded-[2.5rem] md:rounded-[3.5rem] shadow-2xl border border-slate-100">
           
-          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-10 border-b border-slate-100 pb-6 gap-4">
-            <h2 className="text-3xl font-black text-slate-800 tracking-tighter">
+          <div className="flex items-center justify-between mb-10 border-b border-slate-50 pb-8">
+            <h2 className="text-2xl md:text-3xl font-black text-slate-900 tracking-tighter">
               Posizioni aperte
             </h2>
-            <span className="bg-slate-100 text-slate-500 px-5 py-2 rounded-full font-black text-lg border border-slate-200 shadow-inner">
+            <span className="bg-slate-50 text-blue-600 px-5 py-2 rounded-2xl font-black text-xl border border-slate-100">
               {posizioni?.length || 0}
             </span>
           </div>
           
           {posizioni && posizioni.length > 0 ? (
-            <div className="grid md:grid-cols-2 gap-8">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-8">
               {posizioni.map(p => (
                 <PosizioneCard key={p.id} posizione={p} ruolo="volontario" />
               ))}
             </div>
           ) : (
-            <div className="text-center py-20 bg-slate-50 rounded-3xl border-2 border-dashed border-slate-200">
-              <div className="text-5xl mb-4">📭</div>
-              <p className="font-black text-xl text-slate-700 mb-2">Nessun annuncio attivo</p>
-              <p className="font-medium text-slate-500">L'associazione non ha posizioni aperte al momento.</p>
+            <div className="text-center py-24 bg-slate-50/50 rounded-[2.5rem] border-2 border-dashed border-slate-200">
+              <svg className="w-12 h-12 text-slate-300 mx-auto mb-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M20 13V6a2 2 0 00-2-2H6a2 2 0 00-2 2v7m16 0v5a2 2 0 01-2 2H6a2 2 0 01-2-2v-5m16 0h-2.586a1 1 0 00-.707.293l-2.414 2.414a1 1 0 01-.707.293h-3.172a1 1 0 01-.707-.293l-2.414-2.414A1 1 0 006.586 13H4" /></svg>
+              <p className="font-black text-lg text-slate-700 mb-1">Nessun annuncio attivo</p>
+              <p className="font-medium text-slate-500 text-sm">Questa associazione non ha ricerche aperte al momento.</p>
             </div>
           )}
 
