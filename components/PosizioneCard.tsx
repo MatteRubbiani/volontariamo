@@ -1,7 +1,6 @@
 import Link from 'next/link'
 import TagBadge from '@/components/TagBadge'
 
-// 1. DEFINIAMO I TIPI FUORI DAL COMPONENTE PER NON FAR IMPAZZIRE TYPESCRIPT
 interface PosizioneCardProps {
   posizione: any;
   ruolo?: 'volontario' | 'associazione';
@@ -12,18 +11,21 @@ export default function PosizioneCard({
   posizione, 
   ruolo = 'volontario',
   competenzeVolontario = [] 
-}: PosizioneCardProps) { // <-- 2. APPLICHIAMO L'INTERFACCIA QUI
+}: PosizioneCardProps) { 
+  
+  // Creiamo un booleano pulito all'inizio così TypeScript non si confonde mai
+  const isAssociazione = ruolo === 'associazione'
 
   const formattaOra = (ora: string | null) => {
     if (!ora) return '--:--'
     return ora.substring(0, 5)
   }
 
-  const urlDestinazione = ruolo === 'associazione'
+  const urlDestinazione = isAssociazione
     ? `/dashboard/associazione/posizione/${posizione.id}/modifica`
     : `/dashboard/volontario/posizione/${posizione.id}`
 
-  const iconaAzione = ruolo === 'associazione' ? '✏️' : '→'
+  const iconaAzione = isAssociazione ? '✏️' : '→'
   
   const estraiCompetenze = () => {
     if (posizione.competenze) return posizione.competenze; 
@@ -80,24 +82,25 @@ export default function PosizioneCard({
         {/* PARTE BASSA (Ancorata al fondo grazie a mt-auto) */}
         <div className="mt-auto">
           
-          {/* 3. COMPETENZE (Margine ridotto mb-3 per stare vicino alla riga ma senza toccarla) */}
+          {/* 3. COMPETENZE */}
           {competenzeRichieste.length > 0 && (
             <div className="flex items-center gap-1.5 mb-3 w-full overflow-hidden">
               {competenzeRichieste.slice(0, 2).map((comp: any) => {
-                const isMatch = ruolo === 'associazione' || competenzeVolontario.includes(comp.id)
+                const isMatch = isAssociazione || competenzeVolontario.includes(comp.id)
                 
                 return (
                   <span 
                     key={comp.id} 
                     className={`inline-flex items-center gap-1 px-2 py-1 rounded-md text-[10px] font-bold uppercase tracking-wider border transition-all min-w-0 ${
-                      ruolo === 'associazione' 
+                      isAssociazione 
                         ? 'bg-slate-800 text-slate-100 border-slate-700'
                         : isMatch 
                           ? 'bg-blue-50 text-blue-700 border-blue-100'
                           : 'bg-slate-50 text-slate-500 border-slate-200'
                     }`}
                   >
-                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={isMatch || ruolo === 'associazione' ? 2.5 : 1.5} stroke="currentColor" className="w-3.5 h-3.5 flex-shrink-0">
+                    {/* TS ORA È FELICE: Usiamo solo isMatch per calcolare lo spessore dell'icona! */}
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={isMatch ? 2.5 : 1.5} stroke="currentColor" className="w-3.5 h-3.5 flex-shrink-0">
                       <path strokeLinecap="round" strokeLinejoin="round" d="M11.42 15.17L17.25 21A2.652 2.652 0 0021 17.25l-5.877-5.877M11.42 15.17l2.492-3.053c.217-.266.15-.665-.118-.9l-2.276-1.989a.678.678 0 00-.923.116l-2.43 2.956m-1.75 1.75l-2.956 2.43a.678.678 0 01-.923-.116l-1.989-2.276c-.244-.268-.177-.667.04-.9l2.492-3.053m1.75-1.75l-2.43-2.956a.678.678 0 01.116-.923l2.276-1.989c.234-.205.597-.176.804.068l3.053 3.515m-1.75 1.75l3.053-2.492c.266-.217.665-.15.9-.118l1.989 2.276c.205.234.176.597-.068.804l-2.956 2.43" />
                     </svg>
                     <span className="truncate">{comp.name}</span>
@@ -114,7 +117,7 @@ export default function PosizioneCard({
             </div>
           )}
 
-          {/* 4. INFO PRATICHE (Padding simmetrico py-5 e gap-3 per dare molto respiro) */}
+          {/* 4. INFO PRATICHE */}
           <div className="flex flex-col gap-3 py-5 border-t border-slate-100">
             <div className="flex items-center text-xs font-bold text-slate-500 min-w-0">
               <span className="w-5 text-center mr-2 text-base flex-shrink-0">📍</span> 
@@ -128,7 +131,7 @@ export default function PosizioneCard({
             </div>
           </div>
 
-          {/* FOOTER: TAGS (pt-5 allineato al padding delle info pratiche) */}
+          {/* FOOTER: TAGS */}
           <div className="flex items-center justify-between pt-5 border-t border-slate-100 w-full overflow-hidden">
             <div className="flex items-center gap-1.5 w-full">
               {posizione.tags && posizione.tags.length > 0 ? (
