@@ -2,18 +2,23 @@
 
 import { useState } from 'react'
 import { getTagColor } from '@/lib/tagColors'
+import CompetenzaSelector from './CompetenzaSelector' // <--- IMPORTIAMO IL SELETTORE
 
 export default function FormModificaProfilo({
   isVolontario,
   profilo,
   allTags = [],
   tagsIniziali = [],
+  allCompetenze = [],           // <--- NUOVA PROP
+  competenzeIniziali = [],      // <--- NUOVA PROP
   salvaAction
 }: {
   isVolontario: boolean
   profilo: any
   allTags?: any[]
   tagsIniziali?: string[]
+  allCompetenze?: any[]         // <--- NUOVA TIPO
+  competenzeIniziali?: string[] // <--- NUOVA TIPO
   salvaAction: (formData: FormData) => Promise<void>
 }) {
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -29,7 +34,6 @@ export default function FormModificaProfilo({
     setIsSubmitting(true)
     try {
       await salvaAction(formData)
-      // Hard reload per aggiornare Navbar e Profilo
       window.location.assign('/profilo')
     } catch (error) {
       window.location.assign('/profilo')
@@ -39,6 +43,8 @@ export default function FormModificaProfilo({
   return (
     <form action={handleSubmit} className="space-y-8 bg-white p-8 md:p-12 rounded-[3rem] shadow-xl border border-slate-100">
       <input type="hidden" name="role" value={isVolontario ? 'volontario' : 'associazione'} />
+      
+      {/* ... (Campi Nome e Bio rimangono invariati) ... */}
       
       <div className="space-y-2">
         <label className="text-[10px] font-black uppercase text-slate-400 ml-4 tracking-widest">
@@ -64,49 +70,43 @@ export default function FormModificaProfilo({
       </div>
 
       {isVolontario && (
-        <div className="space-y-4">
-          <label className="text-[10px] font-black uppercase text-slate-400 ml-4 tracking-widest block">
-            I tuoi Interessi (Clicca per selezionare)
-          </label>
-          <div className="flex flex-wrap gap-3">
-            {allTags.map(t => {
-              const isSelected = tagSelezionati.includes(t.id)
-              const activeColorClass = getTagColor(t.name)
-
-              return (
-                <button
-                  key={t.id}
-                  type="button"
-                  onClick={() => toggleTag(t.id)}
-                  className={`px-6 py-3 rounded-2xl border-2 font-bold text-sm transition-all duration-300 block ${
-                    isSelected
-                      ? `${activeColorClass} shadow-lg scale-105`
-                      : 'border-slate-100 bg-slate-50 text-slate-400 hover:border-slate-200'
-                  }`}
-                >
-                  #{t.name}
-                </button>
-              )
-            })}
+        <>
+          {/* SEZIONE TAG (IL CUORE) */}
+          <div className="space-y-4 pt-4">
+            <label className="text-[10px] font-black uppercase text-slate-400 ml-4 tracking-widest block">
+              Le cause che ti appassionano (Interessi)
+            </label>
+            <div className="flex flex-wrap gap-3">
+              {allTags.map(t => {
+                const isSelected = tagSelezionati.includes(t.id)
+                const activeColorClass = getTagColor(t.name)
+                return (
+                  <button key={t.id} type="button" onClick={() => toggleTag(t.id)}
+                    className={`px-6 py-3 rounded-2xl border-2 font-bold text-sm transition-all duration-300 block ${isSelected ? `${activeColorClass} shadow-lg scale-105` : 'border-slate-100 bg-slate-50 text-slate-400 hover:border-slate-200'}`}>
+                    #{t.name}
+                  </button>
+                )
+              })}
+            </div>
+            {tagSelezionati.map(id => <input key={id} type="hidden" name="tags" value={id} />)}
           </div>
-          
-          {/* Input nascosti per i tag in modo che arrivino al server */}
-          {tagSelezionati.map(id => (
-            <input key={id} type="hidden" name="tags" value={id} />
-          ))}
-        </div>
+
+          {/* SEZIONE COMPETENZE (LE MANI) - NUOVA! */}
+          <div className="space-y-4 pt-4 border-t border-slate-100">
+            <label className="text-[10px] font-black uppercase text-slate-400 ml-4 tracking-widest block">
+              I tuoi Superpoteri (Competenze Pratiche)
+            </label>
+            <CompetenzaSelector 
+              allCompetenze={allCompetenze} 
+              competenzeIniziali={competenzeIniziali} 
+            />
+          </div>
+        </>
       )}
 
+      {/* ... (Bottoni Salva e Annulla invariati) ... */}
       <div className="flex gap-4 pt-8 border-t border-slate-100">
-        <button 
-          type="submit" 
-          disabled={isSubmitting}
-          className={`flex-1 font-black text-lg py-5 rounded-[2rem] shadow-xl transition-all active:scale-[0.98] ${
-            isSubmitting 
-              ? 'bg-slate-400 text-white shadow-none cursor-not-allowed' 
-              : 'bg-blue-600 hover:bg-blue-700 text-white shadow-blue-200'
-          }`}
-        >
+        <button type="submit" disabled={isSubmitting} className={`flex-1 font-black text-lg py-5 rounded-[2rem] shadow-xl transition-all active:scale-[0.98] ${isSubmitting ? 'bg-slate-400 text-white shadow-none cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700 text-white shadow-blue-200'}`}>
           {isSubmitting ? 'SALVATAGGIO...' : 'SALVA MODIFICHE'}
         </button>
         <a href="/profilo" className="flex-1 bg-slate-100 hover:bg-slate-200 text-slate-600 text-center flex items-center justify-center font-black text-lg py-5 rounded-[2rem] transition-all">

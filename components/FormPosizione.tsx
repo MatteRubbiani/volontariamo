@@ -1,8 +1,9 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
-// IMPORTIAMO LA NOSTRA FUNZIONE MAGICA
 import { getTagColor } from '@/lib/tagColors'
+// 1. IMPORTIAMO IL NOSTRO SELETTORE DI COMPETENZE
+import CompetenzaSelector from './CompetenzaSelector'
 
 const GIORNI = [
   { etichetta: 'L', valore: 'Lunedì' },
@@ -18,11 +19,15 @@ export default function FormPosizione({
   posizione, 
   tagsDisponibili = [], 
   tagsSelezionati: tagsIniziali = [],
+  competenzeDisponibili = [],           // <--- NUOVA PROP
+  competenzeSelezionate = [],           // <--- NUOVA PROP
   salvaAction 
 }: { 
   posizione?: any
   tagsDisponibili?: any[]
   tagsSelezionati?: string[]
+  competenzeDisponibili?: any[]         // <--- NUOVO TIPO
+  competenzeSelezionate?: string[]      // <--- NUOVO TIPO
   salvaAction: (formData: FormData) => Promise<void>
 }) {
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -169,14 +174,13 @@ export default function FormPosizione({
         </div>
 
         {/* 5. TAGS GESTITI DA REACT CON COLORI DINAMICI */}
-        <div className="space-y-4">
+        <div className="space-y-4 pt-4 border-t border-slate-100">
           <label className="text-[10px] font-black uppercase text-slate-400 ml-2 tracking-widest block">
-            Categorie (Clicca per selezionare)
+            Ambito dell'annuncio (Categorie)
           </label>
           <div className="flex flex-wrap gap-3">
             {tagsDisponibili.map(t => {
               const isSelected = tagSelezionati.includes(t.id);
-              // PESCHIAMO IL COLORE DAL NOSTRO DIZIONARIO
               const activeColorClass = getTagColor(t.name);
               
               return (
@@ -199,6 +203,17 @@ export default function FormPosizione({
           {tagSelezionati.map(tId => (
             <input key={tId} type="hidden" name="tags" value={tId} />
           ))}
+        </div>
+
+        {/* 6. COMPETENZE RICHIESTE - NUOVA SEZIONE! */}
+        <div className="space-y-4 pt-6 border-t border-slate-100">
+          <label className="text-[10px] font-black uppercase text-slate-400 ml-2 tracking-widest block">
+            Competenze Richieste (Opzionale)
+          </label>
+          <CompetenzaSelector 
+            allCompetenze={competenzeDisponibili} 
+            competenzeIniziali={competenzeSelezionate} 
+          />
         </div>
 
         <button 

@@ -13,17 +13,22 @@ export default async function DashboardAssociazione() {
 
   const { data: { user } } = await supabase.auth.getUser()
   
-  // FONDAMENTALE: chiediamo a Supabase anche l'ID dei tag per la PosizioneCard
+  // FONDAMENTALE: chiediamo a Supabase sia i tag che le competenze!
   const { data: posizioniRaw } = await supabase
     .from('posizioni')
-    .select('*, tags:posizione_tags(tag:tags(id, name))')
+    .select(`
+      *, 
+      tags:posizione_tags(tag:tags(id, name)),
+      competenze:posizione_competenze(competenza:competenze(id, name))
+    `)
     .eq('associazione_id', user?.id)
     .order('created_at', { ascending: false })
 
-  // Riformattiamo i tag in modo che la PosizioneCard li legga facilmente come array di oggetti {id, name}
+  // Riformattiamo tutto in modo che la PosizioneCard legga array puliti {id, name}
   const posizioni = posizioniRaw?.map(p => ({
     ...p,
-    tags: p.tags?.map((t: any) => t.tag).filter(Boolean) // Estrae il tag saltando eventuali null
+    tags: p.tags?.map((t: any) => t.tag).filter(Boolean),
+    competenze: p.competenze?.map((c: any) => c.competenza).filter(Boolean) // LA NOVITÀ PER LE COMPETENZE!
   }))
 
   return (
@@ -36,7 +41,7 @@ export default async function DashboardAssociazione() {
           <p className="text-slate-500">Gestisci i tuoi annunci di volontariato attivi.</p>
         </div>
         
-        {/* IL TASTO AGGIUNGI (Con il nuovo path corretto) */}
+        {/* IL TASTO AGGIUNGI */}
         <Link 
           href="/dashboard/associazione/posizione/nuova" 
           className="bg-blue-600 text-white px-8 py-4 rounded-2xl font-black flex items-center gap-2 hover:bg-blue-700 transition-all shadow-lg shadow-blue-100"
@@ -56,7 +61,7 @@ export default async function DashboardAssociazione() {
           </div>
         ) : (
           posizioni?.map(p => (
-            // Passiamo ruolo="associazione" così la card sa di dover portare alla pagina di MODIFICA
+            // Passiamo ruolo="associazione" e i dati riformattati
             <PosizioneCard key={p.id} posizione={p} ruolo="associazione" />
           ))
         )}

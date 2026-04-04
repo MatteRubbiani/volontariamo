@@ -12,24 +12,28 @@ export default async function NuovaPosizionePage() {
     { cookies: { getAll() { return cookieStore.getAll() } } }
   )
 
-  // Recuperiamo tutti i tag possibili da mostrare nel form
-  const { data: allTags } = await supabase.from('tags').select('*')
+  // Scarichiamo in parallelo sia i tag (Interessi) che le competenze (Superpoteri)
+  const [ { data: allTags }, { data: allCompetenze } ] = await Promise.all([
+    supabase.from('tags').select('*').order('name'),
+    supabase.from('competenze').select('*').eq('is_official', true).order('name')
+  ])
 
   return (
-    <div className="max-w-4xl mx-auto py-12 px-6">
-      <div className="mb-8 flex items-center justify-between">
+    <div className="max-w-4xl mx-auto py-12 px-6 pb-24">
+      <div className="mb-10 flex items-center justify-between">
         <div>
-          <h1 className="text-4xl font-black text-slate-900">Pubblica Posizione</h1>
-          <p className="text-slate-500 mt-2">Crea un annuncio professionale per i tuoi volontari.</p>
+          <h1 className="text-4xl md:text-5xl font-black text-slate-800 tracking-tighter">Pubblica Posizione</h1>
+          <p className="text-slate-500 font-medium mt-2 text-lg">Crea un annuncio e trova i volontari perfetti.</p>
         </div>
-        <Link href="/dashboard/associazione" className="text-sm font-bold text-slate-400 hover:text-slate-800 transition-colors">
-          ← Annulla
+        <Link href="/dashboard/associazione" className="px-5 py-2.5 bg-slate-100 text-slate-600 rounded-xl text-sm font-black hover:bg-slate-200 transition-colors active:scale-95">
+          ← INDIETRO
         </Link>
       </div>
 
-      {/* Carichiamo il form passando i tag e l'azione di creazione */}
+      {/* Carichiamo il form passando i tag, le competenze e l'azione di creazione */}
       <FormPosizione 
         tagsDisponibili={allTags || []} 
+        competenzeDisponibili={allCompetenze || []}
         salvaAction={createPosizione} 
       />
     </div>

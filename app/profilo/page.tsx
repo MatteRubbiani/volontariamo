@@ -2,8 +2,8 @@ import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
-// 1. Importiamo il componente per i tag colorati
 import TagBadge from '@/components/TagBadge'
+import CompetenzaBadge from '@/components/CompetenzaBadge' // <--- IMPORTIAMO LE COMPETENZE
 
 export default async function ProfiloPage() {
   const cookieStore = await cookies()
@@ -16,10 +16,10 @@ export default async function ProfiloPage() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/auth/login')
 
-  // Cerchiamo i dati nelle due tabelle con i relativi tag
+  // QUERY POTENZIATA: Peschiamo Tag E Competenze!
   const { data: vol } = await supabase
     .from('volontari')
-    .select('*, tags:volontario_tags(tag:tags(id, name))')
+    .select('*, tags:volontario_tags(tag:tags(id, name)), competenze:volontario_competenze(competenza:competenze(id, name))')
     .eq('id', user.id)
     .single()
 
@@ -29,7 +29,6 @@ export default async function ProfiloPage() {
     .eq('id', user.id)
     .single()
 
-  // Se non ha nessuno dei due profili, rimandalo all'onboarding
   if (!vol && !ass) redirect('/onboarding')
 
   return (
@@ -78,20 +77,38 @@ export default async function ProfiloPage() {
               </p>
             </div>
 
-            {/* TAGS (Solo per Volontari) */}
+            {/* SEZIONI VOLONTARIO: TAG E COMPETENZE */}
             {vol && (
-              <div>
-                <h2 className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-4">I tuoi Interessi</h2>
-                <div className="flex flex-wrap gap-3">
-                  {vol.tags && vol.tags.length > 0 ? (
-                    vol.tags.map((item: any) => (
-                      // 2. Usiamo il TagBadge invece del tag statico
-                      <TagBadge key={item.tag.id} nome={item.tag.name} size="md" />
-                    ))
-                  ) : (
-                    <p className="text-sm font-medium text-slate-400 italic">Nessun interesse selezionato.</p>
-                  )}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
+                
+                {/* I TAG (IL CUORE) */}
+                <div>
+                  <h2 className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-4">I tuoi Interessi</h2>
+                  <div className="flex flex-wrap gap-3">
+                    {vol.tags && vol.tags.length > 0 ? (
+                      vol.tags.map((item: any) => (
+                        <TagBadge key={item.tag.id} nome={item.tag.name} size="md" />
+                      ))
+                    ) : (
+                      <p className="text-sm font-medium text-slate-400 italic">Nessun interesse selezionato.</p>
+                    )}
+                  </div>
                 </div>
+
+                {/* LE COMPETENZE (LE MANI) - NUOVA SEZIONE! */}
+                <div>
+                  <h2 className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-4">I tuoi Superpoteri</h2>
+                  <div className="flex flex-wrap gap-2.5">
+                    {vol.competenze && vol.competenze.length > 0 ? (
+                      vol.competenze.map((item: any) => (
+                        <CompetenzaBadge key={item.competenza.id} nome={item.competenza.name} />
+                      ))
+                    ) : (
+                      <p className="text-sm font-medium text-slate-400 italic">Nessuna competenza inserita.</p>
+                    )}
+                  </div>
+                </div>
+
               </div>
             )}
 

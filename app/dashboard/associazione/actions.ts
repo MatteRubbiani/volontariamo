@@ -34,6 +34,8 @@ export async function createPosizione(formData: FormData) {
   const ora_inizio = formData.get('ora_inizio') as string
   const ora_fine = formData.get('ora_fine') as string
   const selectedTags = formData.getAll('tags') as string[]
+  const selectedCompetenze = formData.getAll('competenze') as string[] // <--- RECUPERIAMO LE COMPETENZE
+
   const data_esatta = tipo === 'una_tantum' ? (formData.get('data_esatta') as string) : null
   const giorni_settimana = tipo === 'ricorrente' ? (formData.getAll('giorni_settimana') as string[]) : []
 
@@ -50,10 +52,20 @@ export async function createPosizione(formData: FormData) {
 
   if (posError) throw new Error("Errore salvataggio posizione: " + posError.message)
 
-  if (selectedTags.length > 0 && posizione) {
-    const tagsToInsert = selectedTags.map(tId => ({ posizione_id: posizione.id, tag_id: tId }))
-    const { error: tagError } = await supabase.from('posizione_tags').insert(tagsToInsert)
-    if (tagError) throw new Error("Errore salvataggio TAG: " + tagError.message)
+  if (posizione) {
+    // 1. Salvataggio Tag
+    if (selectedTags.length > 0) {
+      const tagsToInsert = selectedTags.map(tId => ({ posizione_id: posizione.id, tag_id: tId }))
+      const { error: tagError } = await supabase.from('posizione_tags').insert(tagsToInsert)
+      if (tagError) throw new Error("Errore salvataggio TAG: " + tagError.message)
+    }
+
+    // 2. Salvataggio Competenze (Novità!)
+    if (selectedCompetenze.length > 0) {
+      const compToInsert = selectedCompetenze.map(cId => ({ posizione_id: posizione.id, competenza_id: cId }))
+      const { error: compError } = await supabase.from('posizione_competenze').insert(compToInsert)
+      if (compError) throw new Error("Errore salvataggio COMPETENZE: " + compError.message)
+    }
   }
 
   revalidatePath('/dashboard/associazione')
@@ -61,7 +73,7 @@ export async function createPosizione(formData: FormData) {
   redirect('/dashboard/associazione')
 }
 
-// --- LA NUOVA FUNZIONE PER L'UPDATE ---
+// --- LA FUNZIONE PER L'UPDATE ---
 export async function updatePosizione(id: string, formData: FormData) {
   const supabase = await getSupabase()
   const { data: { user } } = await supabase.auth.getUser()
@@ -74,6 +86,8 @@ export async function updatePosizione(id: string, formData: FormData) {
   const ora_inizio = formData.get('ora_inizio') as string
   const ora_fine = formData.get('ora_fine') as string
   const selectedTags = formData.getAll('tags') as string[]
+  const selectedCompetenze = formData.getAll('competenze') as string[] // <--- RECUPERIAMO LE COMPETENZE
+
   const data_esatta = tipo === 'una_tantum' ? (formData.get('data_esatta') as string) : null
   const giorni_settimana = tipo === 'ricorrente' ? (formData.getAll('giorni_settimana') as string[]) : []
 
@@ -95,7 +109,17 @@ export async function updatePosizione(id: string, formData: FormData) {
   
   if (selectedTags.length > 0) {
     const tagsToInsert = selectedTags.map(tId => ({ posizione_id: id, tag_id: tId }))
-    await supabase.from('posizione_tags').insert(tagsToInsert)
+    const { error: tagError } = await supabase.from('posizione_tags').insert(tagsToInsert)
+    if (tagError) throw new Error("Errore aggiornamento TAG: " + tagError.message)
+  }
+
+  // 3. Resetta le competenze vecchie e inserisci le nuove (Novità!)
+  await supabase.from('posizione_competenze').delete().eq('posizione_id', id)
+  
+  if (selectedCompetenze.length > 0) {
+    const compToInsert = selectedCompetenze.map(cId => ({ posizione_id: id, competenza_id: cId }))
+    const { error: compError } = await supabase.from('posizione_competenze').insert(compToInsert)
+    if (compError) throw new Error("Errore aggiornamento COMPETENZE: " + compError.message)
   }
 
   revalidatePath('/dashboard/associazione')

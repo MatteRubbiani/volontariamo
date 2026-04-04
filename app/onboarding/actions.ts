@@ -1,56 +1,91 @@
 'use server'
+
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
-import { redirect } from 'next/navigation'
+import { revalidatePath } from 'next/cache'
 
-async function getSupabase() {
+export async function completeOnboarding(formData: FormData) {
   const cookieStore = await cookies()
-  return createServerClient(
+  const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     { cookies: { getAll() { return cookieStore.getAll() } } }
   )
-}
 
-export async function completeOnboarding(formData: FormData) {
-  const supabase = await getSupabase()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) redirect('/login')
+  // Verifichiamo chi è l'utente
+  const { data: { user }, error: authError } = await supabase.auth.getUser()
+  if (authError || !user) throw new Error("Utente non autenticato")
 
-  const role = formData.get('role') as string;
-  const userId = user.id;
+  const role = formData.get('role') as string
 
   if (role === 'volontario') {
-    // 1. Salviamo i dati base del volontario
-    await supabase.from('volontari').insert({
-      id: userId,
-      nome_completo: formData.get('nome'),
-      bio: formData.get('bio'),
-      email: user.email
-    });
+    const nome = formData.get('nome') as string
 
-    // 2. RECUPERIAMO I TAG (L'array di ID selezionati)
-    const selectedTags = formData.getAll('tags') as string[]; // Prende tutti i checkbox "tags"
-
-    if (selectedTags.length > 0) {
-      // Prepariamo i dati per la tabella di collegamento
-      const tagsToInsert = selectedTags.map(tagId => ({
-        volontario_id: userId,
-        tag_id: tagId
-      }));
-
-      // Inseriamo tutto in un colpo solo
-      await supabase.from('volontario_tags').insert(tagsToInsert);
+    // 1. Salviamo l'identità del volontario (con l'email obbligatoria)
+    const { error: volError } = await supabase
+      .from('volontari')
+      .upsert({ 
+        id: user.id, 
+        nome_completo: nome,
+        email: user.email
+      })
+      
+    if (volError) {
+      console.error("ERRORE DATABASE VOLONTARIO:", volError.message)
+      throw new Error(`Errore DB: ${volError.message}`)
     }
+
+    // 2. GESTIONE TAG (Il Cuore)
+    const tags = formData.getAll('tags') as string[]
     
-    redirect('/dashboard/volontario');
-  } else {
-    const { error } = await supabase.from('associazioni').insert({
-      id: user.id,
-      nome: formData.get('nome_ass'),
-      descrizione: formData.get('descrizione'),
-      email_contatto: user.email
-    })
-    if (!error) redirect('/dashboard/associazione')
+    // Puliamo eventuali salvataggi a metà precedenti
+    await supabase.from('volontario_tags').delete().eq('volontario_id', user.id)
+    
+    if (tags.length > 0) {
+      const tagInserts = tags.map(tagId => ({
+        volontario_id: user.id,
+        tag_id: tagId
+      }))
+      await supabase.from('volontario_tags').insert(tagInserts)
+    }
+
+    // 3. GESTIONE COMPETENZE (I Superpoteri)
+    const competenze = formData.getAll('competenze') as string[]
+    
+    // Pulizia di sicurezza
+    await supabase.from('volontario_competenze').delete().eq('volontario_id', user.id)
+    
+    if (competenze.length > 0) {
+      const compInserts = competenze.map(compId => ({
+        volontario_id: user.id,
+        competenza_id: compId
+      }))
+      const { error: compError } = await supabase.from('volontario_competenze').insert(compInserts)
+      
+      if (compError) {
+        console.error("Errore salvataggio competenze onboarding:", compError.message)
+      }
+    }
+
+  } else if (role === 'associazione') {
+    const nome = formData.get('nome') as string
+    
+    // Salviamo i dati base per l'associazione (con l'email obbligatoria)
+    const { error: assError } = await supabase
+      .from('associazioni')
+      .upsert({ 
+        id: user.id, 
+        nome: nome,
+        email: user.email
+      })
+      
+    if (assError) {
+      console.error("ERRORE DATABASE ASSOCIAZIONE:", assError.message)
+      throw new Error(`Errore DB: ${assError.message}`)
+    }
   }
+
+  // Svuotiamo la cache per far ricaricare i dati freschi
+  revalidatePath('/dashboard/volontario')
+  revalidatePath('/profilo')
 }

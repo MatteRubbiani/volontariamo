@@ -22,15 +22,16 @@ export default async function DashboardVolontario({
     redirect('/auth/login')
   }
 
-  // NUOVO STEP: Recuperiamo i tag di interesse del volontario dal DB
-  const { data: userTagsData } = await supabase
-    .from('volontario_tags')
-    .select('tag_id')
-    .eq('volontario_id', user.id)
+  // 2. Recuperiamo Tag e Competenze del Volontario (IL CUORE E LE MANI)
+  const [ { data: userTagsData }, { data: userCompData } ] = await Promise.all([
+    supabase.from('volontario_tags').select('tag_id').eq('volontario_id', user.id),
+    supabase.from('volontario_competenze').select('competenza_id').eq('volontario_id', user.id)
+  ])
   
   const userTagIds = userTagsData?.map(t => t.tag_id) || []
+  const userCompIds = userCompData?.map(c => c.competenza_id) || []
 
-  // 2. Risolviamo i parametri di ricerca
+  // 3. Risolviamo i parametri di ricerca
   const params = await searchParams
   const q = typeof params.q === 'string' ? params.q : ''
   const dove = typeof params.dove === 'string' ? params.dove : ''
@@ -40,13 +41,10 @@ export default async function DashboardVolontario({
   // Controlliamo se l'utente sta effettuando attivamente una ricerca
   const isSearching = Boolean(q || dove || tipo || tagFilter)
 
-  // 3. Recuperiamo TUTTI i tag per il menu a tendina
-  const { data: allTags } = await supabase
-    .from('tags')
-    .select('*')
-    .order('name')
+  // 4. Recuperiamo TUTTI i tag per il menu a tendina
+  const { data: allTags } = await supabase.from('tags').select('*').order('name')
 
-  // 4. LOGICA DI RICERCA A DUE STEP
+  // 5. LOGICA DI RICERCA A DUE STEP
   let skipQuery = false
   let validPosizioneIds: string[] | null = null
 
@@ -66,15 +64,19 @@ export default async function DashboardVolontario({
     }
   }
 
-  // 5. Query Principale
+  // 6. Query Principale POTENZIATA (Peschiamo anche le competenze!)
   let posizioniGrezze: any[] = []
   
   if (!skipQuery) {
     let query = supabase
       .from('posizioni')
-      .select(`*, posizione_tags(tag_id, tags(id, name))`)
+      .select(`
+        *, 
+        posizione_tags(tag_id, tags(id, name)),
+        posizione_competenze(competenza_id, competenze(id, name))
+      `)
       .order('created_at', { ascending: false })
-      .limit(100) // attenzione, ho limitato alle ultime 100 perchè tanto quelle vecchie non le vuole nessuno, da valutare
+      .limit(100)
 
     if (validPosizioneIds !== null && validPosizioneIds.length > 0) {
       query = query.in('id', validPosizioneIds)
@@ -99,7 +101,7 @@ export default async function DashboardVolontario({
     }
   }
 
-  // 6. Formattiamo i dati
+  // 7. Formattiamo i dati puliti per la Card
   const posizioni = posizioniGrezze.map((p: any) => ({
     id: p.id,
     titolo: p.titolo,
@@ -109,27 +111,31 @@ export default async function DashboardVolontario({
     ora_inizio: p.ora_inizio,
     ora_fine: p.ora_fine,
     quando: p.quando,
-    tags: p.posizione_tags?.map((pt: any) => pt.tags).filter((tag: any) => tag !== null) || []
+    tags: p.posizione_tags?.map((pt: any) => pt.tags).filter((tag: any) => tag !== null) || [],
+    competenze: p.posizione_competenze?.map((pc: any) => pc.competenze).filter((comp: any) => comp !== null) || []
   }))
 
-  // 7. LA MAGIA DEL MATCHING (Suddivisione tra Suggeriti e Normali)
+  // 8. LA MAGIA DEL SUPER MATCHING (Interessi + Competenze)
   let suggested: any[] = []
   let regular: any[] = posizioni
 
-  if (!isSearching && userTagIds.length > 0) {
-    // Calcoliamo lo score per ogni posizione
+  if (!isSearching && (userTagIds.length > 0 || userCompIds.length > 0)) {
+    // Calcoliamo lo score totale (Tag = 1 punto, Competenze = 2 punti)
     const scoredPositions = posizioni.map(p => {
-      const matchCount = p.tags.filter((t: any) => userTagIds.includes(t.id)).length
-      return { ...p, score: matchCount }
+      const tagMatch = p.tags.filter((t: any) => userTagIds.includes(t.id)).length
+      const compMatch = p.competenze.filter((c: any) => userCompIds.includes(c.id)).length
+      
+      const score = tagMatch + (compMatch * 2) // Le competenze valgono doppio!
+      return { ...p, score }
     })
 
-    // Ordiniamo in base a chi ha più tag in comune (ordine decrescente)
+    // Ordiniamo dal Match migliore in giù
     scoredPositions.sort((a, b) => b.score - a.score)
 
-    // Prendiamo i primi 3 che hanno almeno un tag in comune
+    // Suggeriamo i primi 3 che hanno almeno un punto
     suggested = scoredPositions.filter(p => p.score > 0).slice(0, 3)
     
-    // Tutti gli altri finiscono nella lista regolare
+    // Gli altri finiscono nella lista regolare
     const suggestedIds = suggested.map(s => s.id)
     regular = scoredPositions.filter(p => !suggestedIds.includes(p.id))
   }
@@ -138,13 +144,13 @@ export default async function DashboardVolontario({
     <div className="min-h-screen bg-slate-50 pb-20">
       
       {/* HEADER DELLA DASHBOARD */}
-      <div className="bg-blue-600 text-white pt-20 pb-16 px-6 md:px-12 rounded-b-[3rem] shadow-xl mb-10">
+      <div className="bg-blue-600 text-white pt-20 pb-16 px-6 md:px-12 rounded-b-[3rem] shadow-lg mb-10">
         <div className="max-w-6xl mx-auto">
-          <h1 className="text-4xl md:text-5xl font-black mb-4 tracking-tight">
-            Trova la tua missione 🎯
+          <h1 className="text-4xl md:text-5xl font-black mb-4 tracking-tighter">
+            Esplora le posizioni
           </h1>
           <p className="text-blue-100 text-lg md:text-xl max-w-2xl font-medium">
-            Esplora le posizioni aperte dalle associazioni e candidati per fare la differenza.
+            Trova l'attività perfetta per te in base alle tue competenze e ai tuoi interessi.
           </p>
         </div>
       </div>
@@ -157,29 +163,36 @@ export default async function DashboardVolontario({
         {/* ---------------- SEZIONE SUGGERITI ---------------- */}
         {!isSearching && suggested.length > 0 && (
           <div className="mb-12">
-            <h2 className="text-3xl font-black text-slate-800 mb-6 flex items-center gap-3">
-              Scelti per te 🎯 
-              <span className="text-sm font-bold bg-amber-100 text-amber-700 px-3 py-1 rounded-full uppercase tracking-widest">In evidenza</span>
+            <h2 className="text-2xl font-black text-slate-900 mb-6 flex items-center gap-3 tracking-tight">
+              Scelti per te
+              <span className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[10px] font-bold uppercase tracking-wider bg-emerald-50 text-emerald-700 border border-emerald-100 shadow-sm">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-3.5 h-3.5">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 13.5l10.5-11.25L12 10.5h8.25L9.75 21.75 12 13.5H3.75z" />
+                </svg>
+                Alto Match
+              </span>
             </h2>
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
               {suggested.map((posizione: any) => (
-                <PosizioneCard key={posizione.id} posizione={posizione} />
+                <PosizioneCard 
+                  key={posizione.id} 
+                  posizione={posizione} 
+                  competenzeVolontario={userCompIds} // <--- PASSAGGIO MAGIC!
+                />
               ))}
             </div>
           </div>
         )}
 
         {/* ---------------- SEZIONE TUTTI GLI ANNUNCI ---------------- */}
-        
-        {/* Intestazione condizionale basata sullo stato di ricerca */}
         <div className="mb-8 flex justify-between items-end">
           {isSearching ? (
-             <h2 className="text-2xl font-black text-slate-800">
+             <h2 className="text-2xl font-black text-slate-900 tracking-tight">
                {regular.length} {regular.length === 1 ? 'Risultato Trovato' : 'Risultati Trovati'}
              </h2>
           ) : (
             suggested.length > 0 && regular.length > 0 && (
-              <h2 className="text-2xl font-black text-slate-800 border-t border-slate-200 pt-10 w-full">
+              <h2 className="text-2xl font-black text-slate-900 border-t border-slate-200 pt-10 w-full tracking-tight">
                 Tutti gli altri annunci
               </h2>
             )
@@ -190,18 +203,24 @@ export default async function DashboardVolontario({
         {regular.length > 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
             {regular.map((posizione: any) => (
-              <PosizioneCard key={posizione.id} posizione={posizione} />
+              <PosizioneCard 
+                key={posizione.id} 
+                posizione={posizione} 
+                competenzeVolontario={userCompIds} // <--- PASSAGGIO MAGIC!
+              />
             ))}
           </div>
         ) : (
-          /* Messaggi di Errore / Vuoto gestiti in modo intelligente */
-          <div className="bg-white p-12 rounded-[3rem] text-center border-2 border-dashed border-slate-200 shadow-sm">
-            <span className="text-6xl block mb-4">🕵️‍♂️</span>
+          /* EMPTY STATE PROFESSIONALE */
+          <div className="bg-white p-16 rounded-[3rem] text-center border border-slate-100 shadow-sm flex flex-col items-center justify-center">
+            <svg className="w-16 h-16 text-slate-200 mb-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 14.25v-2.625a3.375 3.375 0 00-3.375-3.375h-1.5A1.125 1.125 0 0113.5 7.125v-1.5a3.375 3.375 0 00-3.375-3.375H8.25m5.231 13.481L15 17.25m-4.5-15H5.625c-.621 0-1.125.504-1.125 1.125v17.25c0 .621.504 1.125 1.125 1.125h12.75c.621 0 1.125-.504 1.125-1.125V11.25a9 9 0 00-9-9zm3.75 11.625a2.625 2.625 0 11-5.25 0 2.625 2.625 0 015.25 0z" />
+            </svg>
             <h3 className="text-xl font-black text-slate-800 mb-2">Nessuna posizione trovata</h3>
-            <p className="text-slate-500">
+            <p className="text-slate-500 font-medium max-w-sm mx-auto">
               {isSearching 
-                ? "Prova a rimuovere qualche filtro per vedere più risultati." 
-                : "Al momento non ci sono altri annunci da mostrarti."}
+                ? "Prova a modificare o rimuovere i filtri di ricerca per vedere più risultati." 
+                : "Al momento non ci sono annunci disponibili da mostrarti."}
             </p>
           </div>
         )}
