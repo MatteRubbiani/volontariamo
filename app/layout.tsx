@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { Geist } from "next/font/google";
 import { ThemeProvider } from "next-themes";
+import { Analytics } from "@vercel/analytics/react"; // <-- IMPORTA VERCEL ANALYTICS
 import "./globals.css";
 import Navbar from "@/components/Navbar"; // <-- IMPORTA LA NAVBAR
 
@@ -41,12 +42,16 @@ export default function RootLayout({
             </main>
           </div>
         </ThemeProvider>
+        
         {/* Carica lo script di Google Maps usando la chiave del file .env.local */}
         <script 
-  src={`https://maps.googleapis.com/maps/api/js?key=${process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}&libraries=places`} 
-  async 
-  defer
-></script>
+          src={`https://maps.googleapis.com/maps/api/js?key=${process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}&libraries=places`} 
+          async 
+          defer
+        ></script>
+
+        {/* Tracciamento Vercel Web Analytics */}
+        <Analytics />
       </body>
     </html>
   );
