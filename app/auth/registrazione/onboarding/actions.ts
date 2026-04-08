@@ -108,7 +108,7 @@ export async function completeOnboarding(formData: FormData) {
       .upsert({ 
         id: user.id, 
         nome: nome,
-        email: user.email,
+        email_contatto: user.email,
         descrizione: mission || null,
         sito_web: sitoWeb || null
       })
@@ -120,14 +120,14 @@ export async function completeOnboarding(formData: FormData) {
   } else if (role === 'impresa') {
     const nome = String(formData.get('nome') ?? '').trim()
     const mission = String(formData.get('mission') ?? '').trim()
-    const partitaIva = String(formData.get('partitaIva') ?? '').trim()
+    const partita_iva = String(formData.get('partitaIva') ?? '').trim()
     const tags = parseMultiValue(formData, 'tags')
 
     const payloadAttempts: Record<string, unknown>[] = [
-      { id: user.id, nome, email: user.email, mission: mission || null, partita_iva: partitaIva || null },
-      { id: user.id, nome_impresa: nome, email: user.email, mission: mission || null, partita_iva: partitaIva || null },
-      { id: user.id, ragione_sociale: nome, email: user.email, mission: mission || null, partita_iva: partitaIva || null },
-      { id: user.id, nome, email: user.email },
+      { id: user.id, nome, email_contatto: user.email, mission: mission || null, partita_iva: partita_iva || null },
+      { id: user.id, nome_impresa: nome, email_contatto: user.email, mission: mission || null, partita_iva: partita_iva || null },
+      { id: user.id, ragione_sociale: nome, email_contatto: user.email, mission: mission || null, partita_iva: partita_iva || null },
+      { id: user.id, nome, email: user.email, mission: mission || null, partita_iva: partita_iva || null },
     ]
 
     let impresaSaved = false
