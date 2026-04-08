@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { Geist } from "next/font/google";
 import { ThemeProvider } from "next-themes";
-import { Analytics } from "@vercel/analytics/react"; // <-- IMPORTA VERCEL ANALYTICS
+import { Analytics } from "@vercel/analytics/next"; // <-- IMPORTA VERCEL ANALYTICS
 import "./globals.css";
 import Navbar from "@/components/Navbar"; // <-- IMPORTA LA NAVBAR
 
