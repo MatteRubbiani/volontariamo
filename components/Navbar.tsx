@@ -15,12 +15,14 @@ export default async function Navbar() {
   // 1. Identifichiamo il ruolo dell'utente
   let isVolontario = false
   let isAssociazione = false
-  let dashboardLink = "/auth/registrazione/onboarding"
+  let isImpresa = false
+  let dashboardLink = "/app/onboarding"
 
   if (user) {
-    const [volRes, assRes] = await Promise.all([
+    const [volRes, assRes, impRes] = await Promise.all([
       supabase.from('volontari').select('id').eq('id', user.id).single(),
-      supabase.from('associazioni').select('id').eq('id', user.id).single()
+      supabase.from('associazioni').select('id').eq('id', user.id).single(),
+      supabase.from('imprese').select('id').eq('id', user.id).single()
     ])
 
     if (volRes.data) {
@@ -31,6 +33,10 @@ export default async function Navbar() {
       isAssociazione = true
       dashboardLink = "/app/associazione"
     }
+    if (impRes.data) {
+      isImpresa = true
+      dashboardLink = "/app/impresa"
+    }
   }
 
   // 2. Passiamo tutti i dati al componente visivo
@@ -39,6 +45,7 @@ export default async function Navbar() {
       email={user?.email}
       isVolontario={isVolontario}
       isAssociazione={isAssociazione}
+      isImpresa={isImpresa}
       dashboardLink={dashboardLink}
     />
   )

@@ -1,7 +1,5 @@
-"use client";
-
 import { cn } from "@/lib/utils";
-import { createClient } from "@/lib/supabase/client";
+import { signIn } from "@/app/auth/actions";
 import { Button } from "@/components/ui/button";
 import {
   Card,
@@ -13,41 +11,13 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import Link from "next/link";
-import { useState } from "react";
 
 export function LoginForm({
+  redirectTo,
+  errorMessage,
   className,
   ...props
-}: React.ComponentPropsWithoutRef<"div">) {
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const [error, setError] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
-
-  const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const supabase = createClient();
-    setIsLoading(true);
-    setError(null);
-
-    try {
-      const { error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      });
-      if (error) throw error;
-      
-      // LA SOLUZIONE DEFINITIVA:
-      // Forziamo il browser a ricaricare la pagina da zero per aggiornare i cookie e la Navbar
-      window.location.assign("/");
-      
-    } catch (error: unknown) {
-      setError(error instanceof Error ? error.message : "An error occurred");
-    } finally {
-      setIsLoading(false);
-    }
-  };
-
+}: React.ComponentPropsWithoutRef<"div"> & { redirectTo?: string; errorMessage?: string }) {
   return (
     <div className={cn("flex flex-col gap-6", className)} {...props}>
       <Card>
@@ -58,7 +28,8 @@ export function LoginForm({
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <form onSubmit={handleLogin}>
+          <form action={signIn}>
+            <input type="hidden" name="redirectTo" value={redirectTo || ""} />
             <div className="flex flex-col gap-6">
               <div className="grid gap-2">
                 <Label htmlFor="email">Email</Label>
@@ -67,8 +38,7 @@ export function LoginForm({
                   type="email"
                   placeholder="m@example.com"
                   required
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
+                  name="email"
                 />
               </div>
               <div className="grid gap-2">
@@ -85,19 +55,18 @@ export function LoginForm({
                   id="password"
                   type="password"
                   required
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
+                  name="password"
                 />
               </div>
-              {error && <p className="text-sm text-red-500">{error}</p>}
-              <Button type="submit" className="w-full" disabled={isLoading}>
-                {isLoading ? "Logging in..." : "Login"}
+              {errorMessage && <p className="text-sm text-red-500">{errorMessage}</p>}
+              <Button type="submit" className="w-full">
+                Login
               </Button>
             </div>
             <div className="mt-4 text-center text-sm">
               Don&apos;t have an account?{" "}
               <Link
-                href="/auth/registrazione"
+                href={redirectTo ? `/auth/registrazione?redirectTo=${encodeURIComponent(redirectTo)}` : "/auth/registrazione"}
                 className="underline underline-offset-4"
               >
                 Sign up

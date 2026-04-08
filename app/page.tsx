@@ -1,48 +1,50 @@
-export const dynamic = 'force-dynamic'; // Ora funzionerà perché abbiamo toccato il config
+export const dynamic = 'force-dynamic'
 
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
 
+type UserRole = 'volontario' | 'associazione' | 'impresa' | null
+
 export default async function Index() {
   const cookieStore = await cookies()
-  
-  // Controlliamo le chiavi PRIMA di darle a Supabase
-  const url = process.env.NEXT_PUBLIC_SUPABASE_URL
-  const key = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    { cookies: { getAll() { return cookieStore.getAll() } } }
+  )
 
-  if (!url || !key) {
-    return (
-      <div className="p-20 border-4 border-red-500 bg-red-50">
-        <h1 className="text-red-700 font-bold text-2xl">⚠️ Errore Chiavi Supabase</h1>
-        <p className="mt-4">Il server non legge il file <b>.env.local</b>.</p>
-        <p className="text-sm mt-2">Assicurati che sia nella cartella principale (accanto a package.json) e non dentro "app".</p>
-      </div>
-    )
+  const { data: { session } } = await supabase.auth.getSession()
+  if (!session) redirect('/esplora')
+
+  const userId = session.user.id
+  let role: UserRole = null
+
+  // Preferred path: single profile table with role
+  const { data: profile } = await supabase
+    .from('profili')
+    .select('role')
+    .eq('id', userId)
+    .maybeSingle()
+
+  role = (profile?.role as UserRole | undefined) ?? null
+
+  // Fallback path: infer role from role-specific tables
+  if (!role) {
+    const [{ data: vol }, { data: ass }, { data: imp }] = await Promise.all([
+      supabase.from('volontari').select('id').eq('id', userId).maybeSingle(),
+      supabase.from('associazioni').select('id').eq('id', userId).maybeSingle(),
+      supabase.from('imprese').select('id').eq('id', userId).maybeSingle(),
+    ])
+
+    if (vol) role = 'volontario'
+    else if (ass) role = 'associazione'
+    else if (imp) role = 'impresa'
   }
 
-  const supabase = createServerClient(url, key, {
-    cookies: { getAll() { return cookieStore.getAll() } }
-  })
+  if (role === 'volontario') redirect('/app/volontario')
+  if (role === 'associazione') redirect('/app/associazione')
+  if (role === 'impresa') redirect('/app/impresa')
 
-  const { data: { user } } = await supabase.auth.getUser()
-
-  if (!user) {
-    return (
-      <div className="min-h-screen flex flex-col items-center justify-center space-y-4">
-        <h1 className="text-4xl font-bold">Volontariamo 🤝</h1>
-        <a href="/sign-in" className="bg-blue-600 text-white px-6 py-2 rounded-xl">Accedi per iniziare</a>
-      </div>
-    )
-  }
-
-  // Se è loggato, facciamo lo smistamento
-  const { data: vol } = await supabase.from('volontari').select('id').eq('id', user.id).single()
-  const { data: ass } = await supabase.from('associazioni').select('id').eq('id', user.id).single()
-
-  if (!vol && !ass) redirect('/auth/registrazione/onboarding')
-  if (vol) redirect('/app/volontario')
-  if (ass) redirect('/app/associazione')
-
-  return null
+  redirect('/app/onboarding')
 }

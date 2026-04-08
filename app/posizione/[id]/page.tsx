@@ -1,4 +1,5 @@
 import { createServerClient } from '@supabase/ssr'
+import { createClient } from '@supabase/supabase-js'
 import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
 import { revalidatePath } from 'next/cache'
@@ -8,17 +9,21 @@ import CompetenzaBadge from '@/components/CompetenzaBadge'
 
 export default async function DettaglioPosizioneVolontario({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
+  const publicSupabase = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  )
   const cookieStore = await cookies()
-  const supabase = createServerClient(
+  const authSupabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     { cookies: { getAll() { return cookieStore.getAll() } } }
   )
 
-  const { data: { user } } = await supabase.auth.getUser()
+  const { data: { user } } = await authSupabase.auth.getUser()
 
   const { data: userCompData } = user
-    ? await supabase
+    ? await authSupabase
         .from('volontario_competenze')
         .select('competenza_id')
         .eq('volontario_id', user.id)
@@ -26,7 +31,7 @@ export default async function DettaglioPosizioneVolontario({ params }: { params:
   
   const competenzeVolontario = userCompData?.map(c => c.competenza_id) || []
 
-  const { data: pos, error } = await supabase
+  const { data: pos, error } = await publicSupabase
     .from('posizioni')
     .select(`
       *,
@@ -40,7 +45,7 @@ export default async function DettaglioPosizioneVolontario({ params }: { params:
   if (error || !pos) redirect('/esplora')
 
   const { data: candidatura } = user
-    ? await supabase
+    ? await authSupabase
         .from('candidature')
         .select('*')
         .eq('posizione_id', id)
@@ -193,8 +198,8 @@ export default async function DettaglioPosizioneVolontario({ params }: { params:
             {/* ACTION AREA */}
             <div className="mt-10">
               {!user ? (
-                <Link href="/auth/login" className="block w-full text-center bg-slate-900 hover:bg-slate-800 text-white font-black py-5 md:py-6 rounded-2xl md:rounded-[2rem] text-lg md:text-xl transition-all active:scale-[0.97]">
-                  Accedi per candidarti
+                <Link href={`/auth/login?redirectTo=${encodeURIComponent(`/posizione/${id}`)}`} className="block w-full text-center bg-slate-900 hover:bg-slate-800 text-white font-black py-5 md:py-6 rounded-2xl md:rounded-[2rem] text-lg md:text-xl transition-all active:scale-[0.97]">
+                  Accedi per candidarti 🚀
                 </Link>
               ) : !candidatura ? (
                 <form action={inviaCandidatura}> 

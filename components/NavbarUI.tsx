@@ -8,16 +8,18 @@ export default function NavbarUI({
   email,
   isVolontario,
   isAssociazione,
+  isImpresa,
   dashboardLink
 }: {
   email?: string
   isVolontario: boolean
   isAssociazione: boolean
+  isImpresa: boolean
   dashboardLink: string
 }) {
   const [isOpen, setIsOpen] = useState(false)
   const isLoggedIn = !!email
-  const needsOnboarding = isLoggedIn && !isVolontario && !isAssociazione
+  const needsOnboarding = isLoggedIn && !isVolontario && !isAssociazione && !isImpresa
 
   const chiudiMenu = () => setIsOpen(false)
   const userInitial = email ? email.charAt(0).toUpperCase() : 'U'
@@ -55,7 +57,7 @@ export default function NavbarUI({
           )}
 
           {needsOnboarding && (
-             <Link href="/auth/registrazione/onboarding" className="text-sm font-bold text-amber-600 bg-amber-50 px-4 py-1.5 rounded-full hover:bg-amber-100 transition-colors">
+             <Link href="/app/onboarding" className="text-sm font-bold text-amber-600 bg-amber-50 px-4 py-1.5 rounded-full hover:bg-amber-100 transition-colors">
                 Completa il Profilo ⚠️
              </Link>
           )}
@@ -126,7 +128,7 @@ export default function NavbarUI({
           {isLoggedIn ? (
             <>
               {needsOnboarding ? (
-                <Link href="/auth/registrazione/onboarding" onClick={chiudiMenu} className="font-black text-amber-600 py-3 text-lg border-b border-slate-100">Completa il Profilo ⚠️</Link>
+                <Link href="/app/onboarding" onClick={chiudiMenu} className="font-black text-amber-600 py-3 text-lg border-b border-slate-100">Completa il Profilo ⚠️</Link>
               ) : (
                 <>
                   <Link href={dashboardLink} onClick={chiudiMenu} className="font-bold text-slate-600 hover:text-slate-900 py-3 text-lg border-b border-slate-50">Dashboard</Link>

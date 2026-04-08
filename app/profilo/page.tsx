@@ -29,7 +29,13 @@ export default async function ProfiloPage() {
     .eq('id', user.id)
     .single()
 
-  if (!vol && !ass) redirect('/auth/registrazione/onboarding')
+  const { data: imp } = await supabase
+    .from('imprese')
+    .select('*')
+    .eq('id', user.id)
+    .single()
+
+  if (!vol && !ass && !imp) redirect('/app/onboarding')
 
   return (
     <div className="min-h-screen bg-slate-50 pb-24">
@@ -57,7 +63,7 @@ export default async function ProfiloPage() {
                 MODIFICA PROFILO
               </Link>
               <Link 
-                href={vol ? "/app/volontario" : "/app/associazione"}
+                href={vol ? "/app/volontario" : ass ? "/app/associazione" : "/app/impresa"}
                 className="px-6 py-3 bg-blue-600 text-white rounded-2xl text-sm font-black shadow-lg shadow-blue-200 hover:bg-blue-700 hover:-translate-y-0.5 transition-all active:scale-95"
               >
                 VAI ALLA DASHBOARD

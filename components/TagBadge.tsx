@@ -18,7 +18,7 @@ export default function TagBadge({ nome, size = 'md', className = '' }: TagBadge
 
   return (
     <span 
-      className={`inline-flex items-center font-bold border shadow-sm rounded-xl transition-all ${sizeClasses[size]} ${colorClasses} ${className}`}
+      className={`inline-flex items-center whitespace-nowrap max-w-full truncate font-bold border shadow-sm rounded-xl transition-all ${sizeClasses[size]} ${colorClasses} ${className}`}
     >
       #{nome}
     </span>
