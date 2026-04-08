@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import Link from 'next/link'
+import { HeartHandshake } from 'lucide-react'
 import { logout } from '@/app/auth/actions'
 
 export default function NavbarUI({
@@ -30,8 +31,11 @@ export default function NavbarUI({
       <div className="py-3 px-6 md:px-8 flex justify-between items-center max-w-7xl mx-auto">
         
         {/* LOGO */}
-        <Link href="/" onClick={chiudiMenu} className="text-2xl font-black text-blue-600 tracking-tighter hover:opacity-80 transition-opacity">
-          VOLONTARIAMO
+        <Link href="/" onClick={chiudiMenu} className="group transition-opacity hover:opacity-90">
+          <div className="flex items-center gap-2">
+            <HeartHandshake className="h-7 w-7 text-blue-600 transition-colors group-hover:text-blue-700" />
+            <span className="text-xl font-black tracking-tight text-slate-900">Volontariamo</span>
+          </div>
         </Link>
         
         {/* CENTRO: NAVIGAZIONE DESKTOP (Invisibile su Mobile) */}

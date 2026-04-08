@@ -13,6 +13,9 @@ export const metadata: Metadata = {
   metadataBase: new URL(defaultUrl),
   title: "Volontariamo 🤝", // <-- PERSONALIZZIAMO IL TITOLO
   description: "La piattaforma per connettere volontari e associazioni",
+  icons: {
+    icon: '/icon',
+  },
 };
 
 const geistSans = Geist({

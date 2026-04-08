@@ -1,8 +1,19 @@
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
+import { redirect } from 'next/navigation'
 import PosizioneCard from '@/components/PosizioneCard'
+import { getUserWithRole } from '@/lib/auth'
 
 export default async function EsploraPage() {
+  const { user, role } = await getUserWithRole()
+
+  if (user) {
+    if (role === 'volontario') redirect('/app/volontario')
+    if (role === 'associazione') redirect('/app/associazione')
+    if (role === 'impresa') redirect('/app/impresa')
+    redirect('/app/onboarding')
+  }
+
   const cookieStore = await cookies()
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,

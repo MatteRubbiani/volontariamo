@@ -12,14 +12,15 @@ export async function getUserWithRole() {
   )
 
   const {
-    data: { session },
-  } = await supabase.auth.getSession()
+    data: { user },
+    error,
+  } = await supabase.auth.getUser()
 
-  if (!session) {
-    return { session: null, user: null, role: null as UserRole }
+  if (error || !user) {
+    return { user: null, role: null as UserRole }
   }
 
-  const userId = session.user.id
+  const userId = user.id
   let role: UserRole = null
 
   const { data: profile } = await supabase
@@ -42,5 +43,5 @@ export async function getUserWithRole() {
     else if (imp) role = 'impresa'
   }
 
-  return { session, user: session.user, role }
+  return { user, role }
 }

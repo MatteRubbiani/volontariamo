@@ -6,9 +6,9 @@ export default async function ImpresaLayout({
 }: {
   children: React.ReactNode
 }) {
-  const { session, role } = await getUserWithRole()
+  const { user, role } = await getUserWithRole()
 
-  if (!session) redirect('/auth/login')
+  if (!user) redirect('/auth/login')
   if (!role) redirect('/app/onboarding')
 
   if (role === 'volontario') redirect('/app/volontario')

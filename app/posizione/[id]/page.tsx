@@ -3,9 +3,62 @@ import { createClient } from '@supabase/supabase-js'
 import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
 import { revalidatePath } from 'next/cache'
+import type { Metadata, ResolvingMetadata } from 'next'
 import Link from 'next/link'
 import TagBadge from '@/components/TagBadge'
 import CompetenzaBadge from '@/components/CompetenzaBadge'
+
+export async function generateMetadata(
+  { params }: { params: Promise<{ id: string }> },
+  parent: ResolvingMetadata
+): Promise<Metadata> {
+  await parent
+  const resolvedParams = await params
+
+  const supabase = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  )
+
+  const { data: posizione } = await supabase
+    .from('posizioni')
+    .select('titolo, descrizione, associazione:associazioni(nome)')
+    .eq('id', resolvedParams.id)
+    .maybeSingle()
+
+  if (!posizione) {
+    return {
+      title: 'Posizione non trovata | Volontariamo',
+      description: 'Questa posizione non e disponibile oppure non esiste.',
+      openGraph: {
+        title: 'Posizione non trovata | Volontariamo',
+        description: 'Questa posizione non e disponibile oppure non esiste.',
+        type: 'website',
+        siteName: 'Volontariamo',
+      },
+    }
+  }
+
+  const nomeAssociazione =
+    (Array.isArray((posizione as any).associazione) ? (posizione as any).associazione[0]?.nome : (posizione as any).associazione?.nome) ||
+    'Associazione'
+  const title = `${posizione.titolo} presso ${nomeAssociazione} | Volontariamo`
+  const description = (posizione.descrizione || '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 160)
+
+  return {
+    title,
+    description,
+    openGraph: {
+      title,
+      description,
+      type: 'website',
+      siteName: 'Volontariamo',
+    },
+  }
+}
 
 export default async function DettaglioPosizioneVolontario({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params

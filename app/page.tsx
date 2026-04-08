@@ -14,10 +14,13 @@ export default async function Index() {
     { cookies: { getAll() { return cookieStore.getAll() } } }
   )
 
-  const { data: { session } } = await supabase.auth.getSession()
-  if (!session) redirect('/esplora')
+  const {
+    data: { user },
+    error,
+  } = await supabase.auth.getUser()
+  if (error || !user) redirect('/esplora')
 
-  const userId = session.user.id
+  const userId = user.id
   let role: UserRole = null
 
   // Preferred path: single profile table with role
