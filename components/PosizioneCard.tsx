@@ -22,8 +22,8 @@ export default function PosizioneCard({
   }
 
   const urlDestinazione = isAssociazione
-    ? `/dashboard/associazione/posizione/${posizione.id}/modifica`
-    : `/dashboard/volontario/posizione/${posizione.id}`
+    ? `/app/associazione/posizione/${posizione.id}/modifica`
+    : `/posizione/${posizione.id}`
 
   const iconaAzione = isAssociazione ? '✏️' : '→'
   

@@ -90,9 +90,9 @@ export default function FormPosizione({
           try {
             await salvaAction(fd)
             // FORZIAMO IL RELOAD PER AGGIORNARE NAVBAR E DASHBOARD
-            window.location.assign('/dashboard/associazione')
+            window.location.assign('/app/associazione')
           } catch (error) {
-            window.location.assign('/dashboard/associazione')
+            window.location.assign('/app/associazione')
           }
         }} 
         className="space-y-8 bg-white p-8 md:p-12 rounded-[3rem] border shadow-2xl"

@@ -41,13 +41,13 @@ export default function NavbarUI({
               </Link>
 
               {isVolontario && (
-                <Link href="/dashboard/volontario/candidature" className="text-sm font-bold text-slate-500 hover:text-slate-900 transition-colors">
+                <Link href="/app/volontario/candidature" className="text-sm font-bold text-slate-500 hover:text-slate-900 transition-colors">
                   Le Mie Candidature
                 </Link>
               )}
 
               {isAssociazione && (
-                <Link href="/dashboard/associazione/candidature" className="text-sm font-bold text-slate-500 hover:text-slate-900 transition-colors">
+                <Link href="/app/associazione/candidature" className="text-sm font-bold text-slate-500 hover:text-slate-900 transition-colors">
                   Candidature Ricevute
                 </Link>
               )}
@@ -55,7 +55,7 @@ export default function NavbarUI({
           )}
 
           {needsOnboarding && (
-             <Link href="/onboarding" className="text-sm font-bold text-amber-600 bg-amber-50 px-4 py-1.5 rounded-full hover:bg-amber-100 transition-colors">
+             <Link href="/auth/registrazione/onboarding" className="text-sm font-bold text-amber-600 bg-amber-50 px-4 py-1.5 rounded-full hover:bg-amber-100 transition-colors">
                 Completa il Profilo ⚠️
              </Link>
           )}
@@ -94,7 +94,7 @@ export default function NavbarUI({
             ) : (
               <div className="flex items-center gap-2">
                 <Link href="/auth/login" className="text-sm font-bold text-slate-600 px-4 py-2 hover:text-blue-600 transition-colors">Accedi</Link>
-                <Link href="/auth/sign-up" className="text-sm font-black bg-slate-900 text-white px-5 py-2.5 rounded-xl hover:bg-slate-800 transition-all active:scale-95">
+                <Link href="/auth/registrazione" className="text-sm font-black bg-slate-900 text-white px-5 py-2.5 rounded-xl hover:bg-slate-800 transition-all active:scale-95">
                   Unisciti
                 </Link>
               </div>
@@ -126,17 +126,17 @@ export default function NavbarUI({
           {isLoggedIn ? (
             <>
               {needsOnboarding ? (
-                <Link href="/onboarding" onClick={chiudiMenu} className="font-black text-amber-600 py-3 text-lg border-b border-slate-100">Completa il Profilo ⚠️</Link>
+                <Link href="/auth/registrazione/onboarding" onClick={chiudiMenu} className="font-black text-amber-600 py-3 text-lg border-b border-slate-100">Completa il Profilo ⚠️</Link>
               ) : (
                 <>
                   <Link href={dashboardLink} onClick={chiudiMenu} className="font-bold text-slate-600 hover:text-slate-900 py-3 text-lg border-b border-slate-50">Dashboard</Link>
                   
                   {isVolontario && (
-                    <Link href="/dashboard/volontario/candidature" onClick={chiudiMenu} className="font-bold text-slate-600 hover:text-slate-900 py-3 text-lg border-b border-slate-50">Le Mie Candidature</Link>
+                    <Link href="/app/volontario/candidature" onClick={chiudiMenu} className="font-bold text-slate-600 hover:text-slate-900 py-3 text-lg border-b border-slate-50">Le Mie Candidature</Link>
                   )}
 
                   {isAssociazione && (
-                    <Link href="/dashboard/associazione/candidature" onClick={chiudiMenu} className="font-bold text-slate-600 hover:text-slate-900 py-3 text-lg border-b border-slate-50">Candidature Ricevute</Link>
+                    <Link href="/app/associazione/candidature" onClick={chiudiMenu} className="font-bold text-slate-600 hover:text-slate-900 py-3 text-lg border-b border-slate-50">Candidature Ricevute</Link>
                   )}
 
                   <Link href="/profilo" onClick={chiudiMenu} className="font-bold text-slate-600 hover:text-slate-900 py-3 text-lg">Mio Profilo</Link>
@@ -165,7 +165,7 @@ export default function NavbarUI({
               <Link href="/auth/login" onClick={chiudiMenu} className="w-full text-center font-bold text-slate-700 bg-slate-50 border border-slate-200 py-4 rounded-xl active:scale-95 transition-transform">
                 Accedi
               </Link>
-              <Link href="/auth/sign-up" onClick={chiudiMenu} className="w-full text-center font-black text-white bg-slate-900 py-4 rounded-xl active:scale-95 transition-transform">
+              <Link href="/auth/registrazione" onClick={chiudiMenu} className="w-full text-center font-black text-white bg-slate-900 py-4 rounded-xl active:scale-95 transition-transform">
                 Unisciti Ora
               </Link>
             </div>

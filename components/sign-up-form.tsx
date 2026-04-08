@@ -52,7 +52,7 @@ export function SignUpForm({
       // 🪄 LA MAGIA È QUI: Forza Next.js a rileggere i cookie e ri-renderizzare la Navbar!
       router.refresh();
       
-      router.push("/"); // da rimettere /auth/sign-up-success appena rimettiamo la conferma della mail
+      router.push("/"); // da rimettere /auth/registrazione-success appena rimettiamo la conferma della mail
     } catch (error: unknown) {
       setError(error instanceof Error ? error.message : "An error occurred");
     } finally {

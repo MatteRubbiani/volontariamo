@@ -15,7 +15,7 @@ export default async function Navbar() {
   // 1. Identifichiamo il ruolo dell'utente
   let isVolontario = false
   let isAssociazione = false
-  let dashboardLink = "/onboarding"
+  let dashboardLink = "/auth/registrazione/onboarding"
 
   if (user) {
     const [volRes, assRes] = await Promise.all([
@@ -25,11 +25,11 @@ export default async function Navbar() {
 
     if (volRes.data) {
       isVolontario = true
-      dashboardLink = "/dashboard/volontario"
+      dashboardLink = "/app/volontario"
     }
     if (assRes.data) {
       isAssociazione = true
-      dashboardLink = "/dashboard/associazione"
+      dashboardLink = "/app/associazione"
     }
   }
 

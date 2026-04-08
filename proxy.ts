@@ -15,7 +15,7 @@ export async function proxy(request: NextRequest) {
 
   const signupAliases = ['/register', '/signup', '/sign-up']
   if (signupAliases.includes(pathname)) {
-    return NextResponse.redirect(new URL('/auth/sign-up', request.url))
+    return NextResponse.redirect(new URL('/auth/registrazione', request.url))
   }
 
   // --- 2. CONFIGURAZIONE SUPABASE ---
@@ -37,7 +37,13 @@ export async function proxy(request: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser()
 
   // --- 3. ZONE PUBBLICHE ---
-  const isPublicPage = pathname === '/' || pathname.startsWith('/annunci') || pathname.startsWith('/auth')
+  const isPublicPage =
+    pathname === '/' ||
+    pathname.startsWith('/annunci') ||
+    pathname.startsWith('/auth') ||
+    pathname.startsWith('/esplora') ||
+    pathname.startsWith('/posizione') ||
+    pathname.startsWith('/associazione')
   if (isPublicPage) return response
 
   // --- 4. LOGICA PER UTENTI LOGGATI ---
@@ -46,16 +52,16 @@ export async function proxy(request: NextRequest) {
     const { data: ass } = await supabase.from('associazioni').select('id').eq('id', user.id).single()
 
     // Se non ha un ruolo e non è già in onboarding, obbligalo ad andarci
-    if (!vol && !ass && !pathname.startsWith('/onboarding')) {
-      return NextResponse.redirect(new URL('/onboarding', request.url))
+    if (!vol && !ass && !pathname.startsWith('/auth/registrazione/onboarding')) {
+      return NextResponse.redirect(new URL('/auth/registrazione/onboarding', request.url))
     }
 
     // PROTEZIONE NO-MISCHIONI
-    if (vol && pathname.startsWith('/dashboard/associazione')) {
-      return NextResponse.redirect(new URL('/dashboard/volontario', request.url))
+    if (vol && pathname.startsWith('/app/associazione')) {
+      return NextResponse.redirect(new URL('/app/volontario', request.url))
     }
-    if (ass && pathname.startsWith('/dashboard/volontario')) {
-      return NextResponse.redirect(new URL('/dashboard/associazione', request.url))
+    if (ass && pathname.startsWith('/app/volontario')) {
+      return NextResponse.redirect(new URL('/app/associazione', request.url))
     }
   }
 

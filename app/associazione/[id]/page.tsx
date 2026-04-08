@@ -23,7 +23,7 @@ export default async function ProfiloAssociazione({ params }: { params: Promise<
       <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50 px-6 text-center">
         <h1 className="text-2xl font-black text-slate-800 mb-2">Associazione non trovata</h1>
         <p className="text-slate-500 mb-6">L'organizzazione cercata non è disponibile.</p>
-        <Link href="/dashboard/volontario" className="text-blue-600 font-bold hover:underline">← Torna agli annunci</Link>
+        <Link href="/app/volontario" className="text-blue-600 font-bold hover:underline">← Torna agli annunci</Link>
       </div>
     )
   }
@@ -51,7 +51,7 @@ export default async function ProfiloAssociazione({ params }: { params: Promise<
         
         <div className="max-w-5xl mx-auto relative z-10">
           
-          <Link href="/dashboard/volontario" className="inline-flex items-center gap-2 text-slate-400 hover:text-white font-bold mb-10 transition-colors text-xs uppercase tracking-widest">
+          <Link href="/app/volontario" className="inline-flex items-center gap-2 text-slate-400 hover:text-white font-bold mb-10 transition-colors text-xs uppercase tracking-widest">
             ← Torna alla ricerca
           </Link>
           

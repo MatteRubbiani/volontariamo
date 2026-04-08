@@ -40,9 +40,9 @@ export default async function Index() {
   const { data: vol } = await supabase.from('volontari').select('id').eq('id', user.id).single()
   const { data: ass } = await supabase.from('associazioni').select('id').eq('id', user.id).single()
 
-  if (!vol && !ass) redirect('/onboarding')
-  if (vol) redirect('/dashboard/volontario')
-  if (ass) redirect('/dashboard/associazione')
+  if (!vol && !ass) redirect('/auth/registrazione/onboarding')
+  if (vol) redirect('/app/volontario')
+  if (ass) redirect('/app/associazione')
 
   return null
 }

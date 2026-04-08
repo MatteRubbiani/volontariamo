@@ -97,7 +97,7 @@ export function LoginForm({
             <div className="mt-4 text-center text-sm">
               Don&apos;t have an account?{" "}
               <Link
-                href="/auth/sign-up"
+                href="/auth/registrazione"
                 className="underline underline-offset-4"
               >
                 Sign up
