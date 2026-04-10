@@ -17,6 +17,10 @@ type FormState = {
   cognome: string
   sitoWeb: string
   partitaIva: string
+  citta: string
+  indirizzoSede: string
+  fasciaDipendenti: string
+  emailContatto: string
   mission: string
   tags: string[]
   competenze: string[]
@@ -43,6 +47,10 @@ export default function OnboardingForm({ redirectTo }: OnboardingFormProps) {
     cognome: '',
     sitoWeb: '',
     partitaIva: '',
+    citta: '',
+    indirizzoSede: '',
+    fasciaDipendenti: '',
+    emailContatto: '',
     mission: '',
     tags: [],
     competenze: [],
@@ -106,6 +114,10 @@ export default function OnboardingForm({ redirectTo }: OnboardingFormProps) {
           <input type="hidden" name="cognome" value={formData.cognome} />
           <input type="hidden" name="sitoWeb" value={formData.sitoWeb} />
           <input type="hidden" name="partitaIva" value={formData.partitaIva} />
+          <input type="hidden" name="citta" value={formData.citta} />
+          <input type="hidden" name="indirizzoSede" value={formData.indirizzoSede} />
+          <input type="hidden" name="fasciaDipendenti" value={formData.fasciaDipendenti} />
+          <input type="hidden" name="emailContatto" value={formData.emailContatto} />
           <input type="hidden" name="mission" value={formData.mission} />
           {formData.tags.map((tagId) => (
             <input key={`tag-${tagId}`} type="hidden" name="tags" value={tagId} />
@@ -152,16 +164,15 @@ export default function OnboardingForm({ redirectTo }: OnboardingFormProps) {
                 <p className="mt-2 text-slate-600">Compila le informazioni base per il profilo {selectedRole.title.toLowerCase()}.</p>
               </div>
 
-              <div className="grid gap-4 md:grid-cols-2">
-                <input
-                  type="text"
-                  placeholder={role === 'volontario' ? 'Nome' : role === 'associazione' ? 'Nome Associazione' : 'Nome Impresa'}
-                  value={formData.nome}
-                  onChange={(e) => setFormData((prev) => ({ ...prev, nome: e.target.value }))}
-                  className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 font-medium outline-none transition-colors focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-500/10"
-                />
-
-                {role === 'volontario' ? (
+              {role === 'volontario' && (
+                <div className="grid gap-4 md:grid-cols-2">
+                  <input
+                    type="text"
+                    placeholder="Nome"
+                    value={formData.nome}
+                    onChange={(e) => setFormData((prev) => ({ ...prev, nome: e.target.value }))}
+                    className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 font-medium outline-none transition-colors focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-500/10"
+                  />
                   <input
                     type="text"
                     placeholder="Cognome"
@@ -169,7 +180,18 @@ export default function OnboardingForm({ redirectTo }: OnboardingFormProps) {
                     onChange={(e) => setFormData((prev) => ({ ...prev, cognome: e.target.value }))}
                     className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 font-medium outline-none transition-colors focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-500/10"
                   />
-                ) : role === 'associazione' ? (
+                </div>
+              )}
+
+              {role === 'associazione' && (
+                <div className="grid gap-4 md:grid-cols-2">
+                  <input
+                    type="text"
+                    placeholder="Nome Associazione"
+                    value={formData.nome}
+                    onChange={(e) => setFormData((prev) => ({ ...prev, nome: e.target.value }))}
+                    className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 font-medium outline-none transition-colors focus:border-green-500 focus:bg-white focus:ring-4 focus:ring-green-500/10"
+                  />
                   <input
                     type="url"
                     placeholder="Sito web (opzionale)"
@@ -177,16 +199,66 @@ export default function OnboardingForm({ redirectTo }: OnboardingFormProps) {
                     onChange={(e) => setFormData((prev) => ({ ...prev, sitoWeb: e.target.value }))}
                     className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 font-medium outline-none transition-colors focus:border-green-500 focus:bg-white focus:ring-4 focus:ring-green-500/10"
                   />
-                ) : (
+                </div>
+              )}
+
+              {role === 'impresa' && (
+                <div className="grid gap-4 md:grid-cols-2">
                   <input
                     type="text"
-                    placeholder="Partita IVA (opzionale)"
+                    placeholder="Ragione Sociale"
+                    value={formData.nome}
+                    onChange={(e) => setFormData((prev) => ({ ...prev, nome: e.target.value }))}
+                    className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 font-medium outline-none transition-colors focus:border-violet-500 focus:bg-white focus:ring-4 focus:ring-violet-500/10"
+                  />
+                  <input
+                    type="text"
+                    placeholder="Partita IVA"
                     value={formData.partitaIva}
                     onChange={(e) => setFormData((prev) => ({ ...prev, partitaIva: e.target.value }))}
                     className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 font-medium outline-none transition-colors focus:border-violet-500 focus:bg-white focus:ring-4 focus:ring-violet-500/10"
                   />
-                )}
-              </div>
+                  <input
+                    type="email"
+                    placeholder="Email di contatto"
+                    value={formData.emailContatto}
+                    onChange={(e) => setFormData((prev) => ({ ...prev, emailContatto: e.target.value }))}
+                    className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 font-medium outline-none transition-colors focus:border-violet-500 focus:bg-white focus:ring-4 focus:ring-violet-500/10"
+                  />
+                  <input
+                    type="url"
+                    placeholder="Sito web"
+                    value={formData.sitoWeb}
+                    onChange={(e) => setFormData((prev) => ({ ...prev, sitoWeb: e.target.value }))}
+                    className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 font-medium outline-none transition-colors focus:border-violet-500 focus:bg-white focus:ring-4 focus:ring-violet-500/10"
+                  />
+                  <input
+                    type="text"
+                    placeholder="Città"
+                    value={formData.citta}
+                    onChange={(e) => setFormData((prev) => ({ ...prev, citta: e.target.value }))}
+                    className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 font-medium outline-none transition-colors focus:border-violet-500 focus:bg-white focus:ring-4 focus:ring-violet-500/10"
+                  />
+                  <input
+                    type="text"
+                    placeholder="Indirizzo Sede"
+                    value={formData.indirizzoSede}
+                    onChange={(e) => setFormData((prev) => ({ ...prev, indirizzoSede: e.target.value }))}
+                    className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 font-medium outline-none transition-colors focus:border-violet-500 focus:bg-white focus:ring-4 focus:ring-violet-500/10"
+                  />
+                  <select
+                    value={formData.fasciaDipendenti}
+                    onChange={(e) => setFormData((prev) => ({ ...prev, fasciaDipendenti: e.target.value }))}
+                    className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 font-medium outline-none transition-colors focus:border-violet-500 focus:bg-white focus:ring-4 focus:ring-violet-500/10 md:col-span-2"
+                  >
+                    <option value="">Seleziona grandezza...</option>
+                    <option value="1-10">1-10</option>
+                    <option value="11-50">11-50</option>
+                    <option value="51-250">51-250</option>
+                    <option value="250+">250+</option>
+                  </select>
+                </div>
+              )}
 
               <div className="flex gap-3">
                 <button type="button" onClick={() => setStep(1)} className="w-1/3 rounded-xl bg-slate-100 py-3 font-bold text-slate-700 transition-colors hover:bg-slate-200">
@@ -211,7 +283,7 @@ export default function OnboardingForm({ redirectTo }: OnboardingFormProps) {
                 <p className="mt-2 text-slate-600">Miglioriamo il matching con le informazioni giuste.</p>
               </div>
 
-              {role === 'volontario' ? (
+              {role === 'volontario' && (
                 <>
                   <div>
                     <p className="mb-3 text-xs font-black uppercase tracking-widest text-slate-500">Cause di interesse (tags)</p>
@@ -259,7 +331,9 @@ export default function OnboardingForm({ redirectTo }: OnboardingFormProps) {
                     </div>
                   </div>
                 </>
-              ) : (
+              )}
+
+              {role === 'associazione' && (
                 <>
                   <div>
                     <label className="mb-2 block text-xs font-black uppercase tracking-widest text-slate-500">Mission</label>
@@ -294,6 +368,18 @@ export default function OnboardingForm({ redirectTo }: OnboardingFormProps) {
                     </div>
                   </div>
                 </>
+              )}
+
+              {role === 'impresa' && (
+                <div>
+                  <label className="mb-2 block text-xs font-black uppercase tracking-widest text-slate-500">Mission</label>
+                  <textarea
+                    value={formData.mission}
+                    onChange={(e) => setFormData((prev) => ({ ...prev, mission: e.target.value }))}
+                    placeholder="Racconta mission, obiettivi e impatto"
+                    className="h-28 w-full resize-none rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 font-medium outline-none transition-colors focus:border-slate-500 focus:bg-white focus:ring-4 focus:ring-slate-500/10"
+                  />
+                </div>
               )}
 
               <div className="flex gap-3 pt-6">

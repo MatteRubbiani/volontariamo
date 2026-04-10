@@ -121,30 +121,30 @@ export async function completeOnboarding(formData: FormData) {
     const nome = String(formData.get('nome') ?? '').trim()
     const mission = String(formData.get('mission') ?? '').trim()
     const partita_iva = String(formData.get('partitaIva') ?? '').trim()
+    const citta = String(formData.get('citta') ?? '').trim()
+    const indirizzo_sede = String(formData.get('indirizzoSede') ?? '').trim()
+    const fascia_dipendenti = String(formData.get('fasciaDipendenti') ?? '').trim()
+    const sito_web = String(formData.get('sitoWeb') ?? '').trim()
+    const email_contatto = String(formData.get('emailContatto') ?? '').trim()
     const tags = parseMultiValue(formData, 'tags')
 
-    const payloadAttempts: Record<string, unknown>[] = [
-      { id: user.id, nome, email_contatto: user.email, mission: mission || null, partita_iva: partita_iva || null },
-      { id: user.id, nome_impresa: nome, email_contatto: user.email, mission: mission || null, partita_iva: partita_iva || null },
-      { id: user.id, ragione_sociale: nome, email_contatto: user.email, mission: mission || null, partita_iva: partita_iva || null },
-      { id: user.id, nome, email: user.email, mission: mission || null, partita_iva: partita_iva || null },
-    ]
+    const { error: impError } = await supabase
+      .from('imprese')
+      .upsert({
+        id: user.id,
+        ragione_sociale: nome,
+        partita_iva: partita_iva || null,
+        mission: mission || null,
+        citta: citta || null,
+        indirizzo_sede: indirizzo_sede || null,
+        fascia_dipendenti: fascia_dipendenti || null,
+        sito_web: sito_web || null,
+        email_contatto: email_contatto || user.email || null,
+      })
 
-    let impresaSaved = false
-    let lastErrorMessage = 'Profilo impresa non salvato'
-
-    for (const payload of payloadAttempts) {
-      const { error: impError } = await supabase.from('imprese').upsert(payload)
-      if (!impError) {
-        impresaSaved = true
-        break
-      }
-      lastErrorMessage = impError.message
-    }
-
-    if (!impresaSaved) {
-      console.error('ERRORE DATABASE IMPRESA:', lastErrorMessage)
-      throw new Error(`Errore DB: ${lastErrorMessage}`)
+    if (impError) {
+      console.error('ERRORE DATABASE IMPRESA:', impError.message)
+      throw new Error(`Errore DB: ${impError.message}`)
     }
 
     await supabase.from('impresa_tags').delete().eq('impresa_id', user.id)

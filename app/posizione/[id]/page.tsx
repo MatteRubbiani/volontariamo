@@ -28,13 +28,13 @@ export async function generateMetadata(
 
   if (!posizione) {
     return {
-      title: 'Posizione non trovata | Volontariamo',
+      title: 'Posizione non trovata | Volontariando',
       description: 'Questa posizione non e disponibile oppure non esiste.',
       openGraph: {
-        title: 'Posizione non trovata | Volontariamo',
+        title: 'Posizione non trovata | Volontariando',
         description: 'Questa posizione non e disponibile oppure non esiste.',
         type: 'website',
-        siteName: 'Volontariamo',
+        siteName: 'Volontariando',
       },
     }
   }
@@ -42,7 +42,7 @@ export async function generateMetadata(
   const nomeAssociazione =
     (Array.isArray((posizione as any).associazione) ? (posizione as any).associazione[0]?.nome : (posizione as any).associazione?.nome) ||
     'Associazione'
-  const title = `${posizione.titolo} presso ${nomeAssociazione} | Volontariamo`
+  const title = `${posizione.titolo} presso ${nomeAssociazione} | Volontariando`
   const description = (posizione.descrizione || '')
     .replace(/\s+/g, ' ')
     .trim()
@@ -55,7 +55,7 @@ export async function generateMetadata(
       title,
       description,
       type: 'website',
-      siteName: 'Volontariamo',
+      siteName: 'Volontariando',
     },
   }
 }

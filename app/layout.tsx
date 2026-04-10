@@ -11,7 +11,7 @@ const defaultUrl = process.env.VERCEL_URL
 
 export const metadata: Metadata = {
   metadataBase: new URL(defaultUrl),
-  title: "Volontariamo 🤝", // <-- PERSONALIZZIAMO IL TITOLO
+  title: "Volontariando", // <-- PERSONALIZZIAMO IL TITOLO
   description: "La piattaforma per connettere volontari e associazioni",
   icons: {
     icon: '/icon',

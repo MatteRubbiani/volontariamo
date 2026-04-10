@@ -34,7 +34,7 @@ export default function NavbarUI({
         <Link href="/" onClick={chiudiMenu} className="group transition-opacity hover:opacity-90">
           <div className="flex items-center gap-2">
             <HeartHandshake className="h-7 w-7 text-blue-600 transition-colors group-hover:text-blue-700" />
-            <span className="text-xl font-black tracking-tight text-slate-900">Volontariamo</span>
+            <span className="text-xl font-black tracking-tight text-slate-900">Volontariando</span>
           </div>
         </Link>
         
