@@ -4,6 +4,7 @@ import { ThemeProvider } from "next-themes";
 import { Analytics } from "@vercel/analytics/next"; // <-- IMPORTA VERCEL ANALYTICS
 import "./globals.css";
 import Navbar from "@/components/Navbar"; // <-- IMPORTA LA NAVBAR
+import FeedbackButton from "@/components/FeedbackButton"; // <-- IMPORTA IL BOTTONE FEEDBACK
 
 const defaultUrl = process.env.VERCEL_URL
   ? `https://${process.env.VERCEL_URL}`
@@ -55,6 +56,9 @@ export default function RootLayout({
 
         {/* Tracciamento Vercel Web Analytics */}
         <Analytics />
+
+        {/* Bottone Flottante per i Feedback (Mobile Friendly) */}
+        <FeedbackButton />
       </body>
     </html>
   );
