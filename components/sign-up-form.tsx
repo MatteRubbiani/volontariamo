@@ -50,6 +50,22 @@ export function SignUpForm({
                   name="password"
                 />
               </div>
+
+              {/* INIZIO SEZIONE PRIVACY POLICY */}
+              <div className="flex items-start space-x-3 mt-1">
+                <input
+                  type="checkbox"
+                  id="privacy"
+                  name="privacy"
+                  required
+                  className="mt-0.5 h-4 w-4 shrink-0 cursor-pointer rounded border-gray-300 text-slate-900 focus:ring-slate-900"
+                />
+                <Label htmlFor="privacy" className="text-sm font-normal text-muted-foreground leading-snug cursor-pointer">
+                  Ho letto e accetto i <Link href="/terms" className="text-foreground underline hover:text-primary">Termini di Servizio</Link> e la <Link href="/privacy" className="text-foreground underline hover:text-primary">Privacy Policy</Link>.
+                </Label>
+              </div>
+              {/* FINE SEZIONE PRIVACY POLICY */}
+
               {errorMessage && <p className="text-sm text-red-500">{errorMessage}</p>}
               <Button type="submit" className="w-full">
                 Sign up

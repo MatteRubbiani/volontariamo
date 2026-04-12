@@ -1,18 +1,10 @@
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
-import { redirect } from 'next/navigation'
 import PosizioneCard from '@/components/PosizioneCard'
-import { getUserWithRole } from '@/lib/auth'
 
 export default async function EsploraPage() {
-  const { user, role } = await getUserWithRole()
-
-  if (user) {
-    if (role === 'volontario') redirect('/app/volontario')
-    if (role === 'associazione') redirect('/app/associazione')
-    if (role === 'impresa') redirect('/app/impresa')
-    redirect('/app/onboarding')
-  }
+  // Il middleware (proxy.ts) gestisce i redirect per gli utenti autenticati
+  // Questa pagina è pubblica e visibile anche a utenti non autenticati
 
   const cookieStore = await cookies()
   const supabase = createServerClient(

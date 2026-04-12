@@ -20,28 +20,15 @@ export async function getUserWithRole() {
     return { user: null, role: null as UserRole }
   }
 
-  const userId = user.id
-  let role: UserRole = null
-
+  // Singola fonte di verità: la tabella hub "profili"
+  // Il middleware (proxy.ts) garantisce che se siamo qui, l'utente ha una riga in profili
   const { data: profile } = await supabase
     .from('profili')
-    .select('role')
-    .eq('id', userId)
+    .select('ruolo')
+    .eq('id', user.id)
     .maybeSingle()
 
-  role = (profile?.role as UserRole | undefined) ?? null
-
-  if (!role) {
-    const [{ data: vol }, { data: ass }, { data: imp }] = await Promise.all([
-      supabase.from('volontari').select('id').eq('id', userId).maybeSingle(),
-      supabase.from('associazioni').select('id').eq('id', userId).maybeSingle(),
-      supabase.from('imprese').select('id').eq('id', userId).maybeSingle(),
-    ])
-
-    if (vol) role = 'volontario'
-    else if (ass) role = 'associazione'
-    else if (imp) role = 'impresa'
-  }
+  const role = (profile?.ruolo as UserRole | undefined) ?? null
 
   return { user, role }
 }

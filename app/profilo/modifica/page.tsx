@@ -11,22 +11,22 @@ export default async function ModificaProfilo() {
 
   const { data: { user } } = await supabase.auth.getUser()
   
-  // Modifica qui: peschiamo sia i tags che le competenze del volontario!
+  // Carica dati volontario con tags e competenze
   const { data: vol } = await supabase
     .from('volontari')
     .select('*, tags:volontario_tags(tag_id), competenze:volontario_competenze(competenza_id)')
     .eq('id', user?.id)
-    .single()
+    .maybeSingle()
     
-  const { data: ass } = await supabase.from('associazioni').select('*').eq('id', user?.id).single()
-  const { data: allTags } = await supabase.from('tags').select('*').order('name')
+  // Carica dati associazione (con TUTTI i campi)
+  const { data: ass } = await supabase.from('associazioni').select('*').eq('id', user?.id).maybeSingle()
   
-  // Peschiamo tutte le competenze (per ora mostriamo solo quelle ufficiali)
+  const { data: allTags } = await supabase.from('tags').select('*').order('name')
   const { data: allCompetenze } = await supabase.from('competenze').select('*').eq('is_official', true).order('name')
 
   const isVol = !!vol
   const currentTags = vol?.tags?.map((t: any) => t.tag_id) || []
-  const currentCompetenze = vol?.competenze?.map((c: any) => c.competenza_id) || [] // Estraiamo gli ID delle competenze
+  const currentCompetenze = vol?.competenze?.map((c: any) => c.competenza_id) || []
   
   const profiloData = isVol ? vol : ass
 
@@ -39,8 +39,8 @@ export default async function ModificaProfilo() {
         profilo={profiloData}
         allTags={allTags || []}
         tagsIniziali={currentTags}
-        allCompetenze={allCompetenze || []}         // Passiamo la lista
-        competenzeIniziali={currentCompetenze}      // Passiamo quelle già scelte
+        allCompetenze={allCompetenze || []}
+        competenzeIniziali={currentCompetenze}
         salvaAction={updateProfilo}
       />
     </div>

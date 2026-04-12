@@ -12,7 +12,6 @@ export async function updateProfilo(formData: FormData) {
     { cookies: { getAll() { return cookieStore.getAll() } } }
   )
 
-  // Controllo utente
   const { data: { user }, error: authError } = await supabase.auth.getUser()
   if (authError || !user) throw new Error("Non autorizzato")
 
@@ -21,7 +20,7 @@ export async function updateProfilo(formData: FormData) {
   const bio = formData.get('bio') as string
 
   if (role === 'volontario') {
-    // 1. Aggiorniamo i dati base del profilo (Nome e Bio)
+    // 1. Update dati base volontario
     const { error: updateError } = await supabase
       .from('volontari')
       .update({ nome_completo: nome, bio: bio })
@@ -29,14 +28,10 @@ export async function updateProfilo(formData: FormData) {
 
     if (updateError) throw new Error("Errore aggiornamento profilo")
 
-    // 2. GESTIONE TAG (Interessi)
-    // Peschiamo i tag dal form interattivo
+    // 2. Gestione TAG
     const tags = formData.getAll('tags') as string[]
-    
-    // Facciamo piazza pulita dei vecchi tag
     await supabase.from('volontario_tags').delete().eq('volontario_id', user.id)
     
-    // Se ha selezionato dei tag, li inseriamo tutti in un colpo solo
     if (tags.length > 0) {
       const tagInserts = tags.map(tagId => ({
         volontario_id: user.id,
@@ -45,14 +40,10 @@ export async function updateProfilo(formData: FormData) {
       await supabase.from('volontario_tags').insert(tagInserts)
     }
 
-    // 3. GESTIONE COMPETENZE (Superpoteri)
-    // Peschiamo le competenze dal form
+    // 3. Gestione COMPETENZE
     const competenze = formData.getAll('competenze') as string[]
-    
-    // Facciamo piazza pulita delle vecchie competenze
     await supabase.from('volontario_competenze').delete().eq('volontario_id', user.id)
     
-    // Inseriamo le nuove competenze
     if (competenze.length > 0) {
       const compInserts = competenze.map(compId => ({
         volontario_id: user.id,
@@ -62,16 +53,31 @@ export async function updateProfilo(formData: FormData) {
     }
 
   } else if (role === 'associazione') {
-    // Aggiorniamo l'associazione
+    // Upsert per le associazioni con TUTTI i campi
     const { error } = await supabase
       .from('associazioni')
-      .update({ nome: nome, descrizione: bio })
-      .eq('id', user.id)
+      .upsert({
+        id: user.id,
+        nome: nome,
+        descrizione: bio, // Mappa 'bio' del form a 'descrizione' del DB
+        forma_giuridica: formData.get('forma_giuridica') as string || null,
+        codice_fiscale: formData.get('codice_fiscale') as string || null,
+        citta: formData.get('citta') as string || null,
+        indirizzo_sede: formData.get('indirizzo_sede') as string || null,
+        telefono: formData.get('telefono') as string || null,
+        email_contatto: formData.get('email_contatto') as string || null,
+        nome_referente: formData.get('nome_referente') as string || null,
+        sito_web: formData.get('sito_web') as string || null,
+        profili_social: formData.get('profili_social') as string || null,
+      }, {
+        onConflict: 'id'
+      })
 
-    if (error) throw new Error("Errore aggiornamento associazione")
+    if (error) throw new Error(`Errore aggiornamento associazione: ${error.message}`)
   }
 
-  // Svuotiamo la cache per far vedere subito le modifiche all'utente
+  // Invalida la cache per far vedere subito le modifiche
   revalidatePath('/profilo')
   revalidatePath('/profilo/modifica')
+  revalidatePath('/', 'layout') // Invalida anche la Navbar
 }

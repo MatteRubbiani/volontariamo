@@ -1,8 +1,9 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
+// Esportazione pulita e diretta. Esattamente come vuole il tuo setup.
 export async function proxy(request: NextRequest) {
-  let response = NextResponse.next({
+  let supabaseResponse = NextResponse.next({
     request,
   })
 
@@ -16,9 +17,9 @@ export async function proxy(request: NextRequest) {
         },
         setAll(cookiesToSet) {
           cookiesToSet.forEach(({ name, value }) => request.cookies.set(name, value))
-          response = NextResponse.next({ request })
+          supabaseResponse = NextResponse.next({ request })
           cookiesToSet.forEach(({ name, value, options }) => {
-            response.cookies.set(name, value, options)
+            supabaseResponse.cookies.set(name, value, options)
           })
         },
       },
@@ -33,38 +34,50 @@ export async function proxy(request: NextRequest) {
   const isAppRoute = pathname.startsWith('/app')
   const isAuthRoute = pathname.startsWith('/auth')
 
+  // Salviamo i cookie di Supabase anche quando facciamo redirect
+  const redirectWithCookies = (url: URL) => {
+    const redirectResponse = NextResponse.redirect(url)
+    supabaseResponse.cookies.getAll().forEach((cookie) => {
+      redirectResponse.cookies.set(cookie.name, cookie.value)
+    })
+    return redirectResponse
+  }
+
   if (isAppRoute && !user) {
-    return NextResponse.redirect(new URL('/auth/login', request.url))
+    return redirectWithCookies(new URL('/auth/login', request.url))
   }
 
   if (user) {
-    const [{ data: volontario }, { data: associazione }, { data: impresa }] = await Promise.all([
-      supabase.from('volontari').select('id').eq('id', user.id).maybeSingle(),
-      supabase.from('associazioni').select('id').eq('id', user.id).maybeSingle(),
-      supabase.from('imprese').select('id').eq('id', user.id).maybeSingle(),
-    ])
+    // SINGOLA QUERY ALLA TABELLA HUB
+    const { data: profilo } = await supabase
+      .from('profili')
+      .select('ruolo')
+      .eq('id', user.id)
+      .maybeSingle()
 
-    const hasCompletedOnboarding = Boolean(volontario || associazione || impresa)
+    const hasCompletedOnboarding = !!profilo 
     const isOnboardingRoute = pathname.startsWith('/app/onboarding')
 
+    // CONTROLLO 1: Se NON ha finito e sta girando altrove, mandalo all'onboarding
     if (!hasCompletedOnboarding && !isOnboardingRoute) {
       const onboardingUrl = new URL('/app/onboarding', request.url)
-      if (!pathname.startsWith('/auth')) {
+      if (!isAuthRoute) {
         const currentPath = `${pathname}${request.nextUrl.search}`
         if (currentPath && currentPath !== '/') {
           onboardingUrl.searchParams.set('redirectTo', currentPath)
         }
       }
-      return NextResponse.redirect(onboardingUrl)
+      return redirectWithCookies(onboardingUrl)
     }
 
-    if (isAuthRoute) {
-      const destination = hasCompletedOnboarding ? '/app/volontario' : '/app/onboarding'
-      return NextResponse.redirect(new URL(destination, request.url))
+    // CONTROLLO 2: Se HA FINITO e prova ad andare su Login o su Onboarding
+    if (hasCompletedOnboarding && (isAuthRoute || isOnboardingRoute)) {
+      const ruoloDestinazione = profilo?.ruolo || 'volontario'
+      return redirectWithCookies(new URL(`/app/${ruoloDestinazione}`, request.url))
     }
   }
 
-  return response
+  return supabaseResponse
 }
 
 export const config = {

@@ -1,6 +1,6 @@
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
-import NavbarUI from './NavbarUI' // Importiamo la grafica!
+import NavbarUI from './NavbarUI'
 
 export default async function Navbar() {
   const cookieStore = await cookies()
@@ -12,40 +12,31 @@ export default async function Navbar() {
 
   const { data: { user } } = await supabase.auth.getUser()
 
-  // 1. Identifichiamo il ruolo dell'utente
-  let isVolontario = false
-  let isAssociazione = false
-  let isImpresa = false
+  // Singola query alla tabella hub "profili" per determinare il ruolo
+  // Questo è molto più effeciente che fare 3 query separate!
   let dashboardLink = "/app/onboarding"
+  let ruolo: string | null = null
 
   if (user) {
-    const [volRes, assRes, impRes] = await Promise.all([
-      supabase.from('volontari').select('id').eq('id', user.id).single(),
-      supabase.from('associazioni').select('id').eq('id', user.id).single(),
-      supabase.from('imprese').select('id').eq('id', user.id).single()
-    ])
+    const { data: profilo } = await supabase
+      .from('profili')
+      .select('ruolo')
+      .eq('id', user.id)
+      .maybeSingle()
 
-    if (volRes.data) {
-      isVolontario = true
-      dashboardLink = "/app/volontario"
-    }
-    if (assRes.data) {
-      isAssociazione = true
-      dashboardLink = "/app/associazione"
-    }
-    if (impRes.data) {
-      isImpresa = true
-      dashboardLink = "/app/impresa"
+    if (profilo?.ruolo) {
+      ruolo = profilo.ruolo
+      dashboardLink = `/app/${ruolo}`
     }
   }
 
-  // 2. Passiamo tutti i dati al componente visivo
+  // Converti il ruolo in flag boolean per compatibilità con NavbarUI
   return (
     <NavbarUI 
       email={user?.email}
-      isVolontario={isVolontario}
-      isAssociazione={isAssociazione}
-      isImpresa={isImpresa}
+      isVolontario={ruolo === 'volontario'}
+      isAssociazione={ruolo === 'associazione'}
+      isImpresa={ruolo === 'impresa'}
       dashboardLink={dashboardLink}
     />
   )

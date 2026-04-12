@@ -1,0 +1,35 @@
+
+
+ho droppato colonna nome completo in volontari
+
+ho droppato colonna email dei volontari
+
+
+-- 1. Crea la tabella profili (L'Hub Centrale)
+CREATE TABLE public.profili (
+  id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  ruolo TEXT NOT NULL CHECK (ruolo IN ('volontario', 'associazione', 'impresa')),
+  created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
+  
+  -- Imposta l'ID come chiave primaria
+  PRIMARY KEY (id)
+);
+
+-- 2. Abilita la Sicurezza (Row Level Security)
+ALTER TABLE public.profili ENABLE ROW LEVEL SECURITY;
+
+-- 3. Crea le Policy di Sicurezza
+-- Permette a un utente loggato di leggere SOLO il proprio ruolo
+CREATE POLICY "Gli utenti possono vedere il proprio profilo"
+  ON public.profili FOR SELECT
+  USING ( auth.uid() = id );
+
+-- Permette alla Server Action di inserire il ruolo durante l'onboarding
+CREATE POLICY "Gli utenti possono inserire il proprio profilo"
+  ON public.profili FOR INSERT
+  WITH CHECK ( auth.uid() = id );
+
+-- (Opzionale) Permette all'utente di cambiare ruolo in futuro
+CREATE POLICY "Gli utenti possono aggiornare il proprio profilo"
+  ON public.profili FOR UPDATE
+  USING ( auth.uid() = id );
