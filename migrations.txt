@@ -33,3 +33,30 @@ CREATE POLICY "Gli utenti possono inserire il proprio profilo"
 CREATE POLICY "Gli utenti possono aggiornare il proprio profilo"
   ON public.profili FOR UPDATE
   USING ( auth.uid() = id );
+
+
+
+
+
+
+  -- 1. Crea la tabella ponte
+CREATE TABLE public.associazione_tags (
+  associazione_id UUID NOT NULL REFERENCES public.associazioni(id) ON DELETE CASCADE,
+  tag_id UUID NOT NULL REFERENCES public.tags(id) ON DELETE CASCADE,
+  
+  -- La chiave primaria composita evita che la stessa associazione inserisca due volte lo stesso tag
+  PRIMARY KEY (associazione_id, tag_id)
+);
+
+-- 2. Abilita la sicurezza RLS
+ALTER TABLE public.associazione_tags ENABLE ROW LEVEL SECURITY;
+
+-- 3. Policy: Chiunque (o qualsiasi utente loggato) può vedere i tag
+CREATE POLICY "Tutti possono vedere i tag delle associazioni"
+  ON public.associazione_tags FOR SELECT
+  USING ( true );
+
+-- 4. Policy: Solo l'associazione proprietaria può inserire, modificare o eliminare i propri tag
+CREATE POLICY "Le associazioni possono gestire solo i propri tag"
+  ON public.associazione_tags FOR ALL
+  USING ( auth.uid() = associazione_id );

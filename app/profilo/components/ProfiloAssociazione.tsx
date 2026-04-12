@@ -86,15 +86,20 @@ export default function ProfiloAssociazione({ data, email }: { data: any, email:
               </div>
             </div>
 
-            {/* SEZIONE TAGS (Se li hai salvati come array nel DB) */}
+            {/* SEZIONE TAGS - Allineata allo standard Supabase */}
             {data.tags && data.tags.length > 0 && (
               <div className="pt-6 border-t border-slate-100">
                 <h2 className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-4">Settori di Interesse</h2>
                 <div className="flex flex-wrap gap-3">
-                  {/* Nota: se i tag sono un array di stringhe, adatta il map. Se sono relazioni, usa data.tags.map come nel volontario */}
-                  {data.tags.map((tagId: string, i: number) => (
-                     <TagBadge key={i} nome={`Tag ID: ${tagId}`} size="md" /> 
-                  ))}
+                  {data.tags.map((item: any, i: number) => {
+                    // Estraiamo il tag vero e proprio dall'oggetto di join
+                    const tag = item.tag;
+                    if (!tag) return null; // Fallback di sicurezza
+                    
+                    return (
+                      <TagBadge key={tag.id || i} nome={tag.name} size="md" /> 
+                    )
+                  })}
                 </div>
               </div>
             )}

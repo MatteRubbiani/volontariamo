@@ -181,38 +181,38 @@ export default function FormModificaProfilo({
         </>
       )}
 
-      {/* SEZIONE TAG VOLONTARIO */}
-      {isVolontario && (
-        <>
-          <div className="border-t-2 border-slate-100 pt-8">
-            <h2 className="text-sm font-black uppercase tracking-widest text-slate-500 mb-6 px-4">
-              ❤️ Le tue Passioni
-            </h2>
-            <div className="flex flex-wrap gap-3">
-              {allTags.map(t => {
-                const isSelected = tagSelezionati.includes(t.id)
-                const activeColorClass = getTagColor(t.name)
-                return (
-                  <button key={t.id} type="button" onClick={() => toggleTag(t.id)}
-                    className={`px-6 py-3 rounded-2xl border-2 font-bold text-sm transition-all duration-300 ${isSelected ? `${activeColorClass} shadow-lg scale-105` : 'border-slate-100 bg-slate-50 text-slate-400 hover:border-slate-200'}`}>
-                    #{t.name}
-                  </button>
-                )
-              })}
-            </div>
-            {tagSelezionati.map(id => <input key={id} type="hidden" name="tags" value={id} />)}
-          </div>
+      {/* SEZIONE TAGS COMUNE A ENTRAMBI I RUOLI */}
+      <div className="border-t-2 border-slate-100 pt-8">
+        <h2 className="text-sm font-black uppercase tracking-widest text-slate-500 mb-6 px-4">
+          {isVolontario ? '❤️ Le tue Passioni' : '🎯 Aree di Intervento'}
+        </h2>
+        <div className="flex flex-wrap gap-3">
+          {allTags.map(t => {
+            const isSelected = tagSelezionati.includes(t.id)
+            const activeColorClass = getTagColor(t.name)
+            return (
+              <button key={t.id} type="button" onClick={() => toggleTag(t.id)}
+                className={`px-6 py-3 rounded-2xl border-2 font-bold text-sm transition-all duration-300 ${isSelected ? `${activeColorClass} shadow-lg scale-105` : 'border-slate-100 bg-slate-50 text-slate-400 hover:border-slate-200'}`}>
+                #{t.name}
+              </button>
+            )
+          })}
+        </div>
+        {/* Input nascosti che inviano i dati alla Server Action */}
+        {tagSelezionati.map(id => <input key={id} type="hidden" name="tags" value={id} />)}
+      </div>
 
-          <div className="border-t-2 border-slate-100 pt-8">
-            <h2 className="text-sm font-black uppercase tracking-widest text-slate-500 mb-6 px-4">
-              💪 I Tuoi Superpoteri
-            </h2>
-            <CompetenzaSelector 
-              allCompetenze={allCompetenze} 
-              competenzeIniziali={competenzeIniziali} 
-            />
-          </div>
-        </>
+      {/* SEZIONE COMPETENZE SOLO PER VOLONTARI */}
+      {isVolontario && (
+        <div className="border-t-2 border-slate-100 pt-8">
+          <h2 className="text-sm font-black uppercase tracking-widest text-slate-500 mb-6 px-4">
+            💪 I Tuoi Superpoteri
+          </h2>
+          <CompetenzaSelector 
+            allCompetenze={allCompetenze} 
+            competenzeIniziali={competenzeIniziali} 
+          />
+        </div>
       )}
 
       {/* PULSANTI AZIONE */}

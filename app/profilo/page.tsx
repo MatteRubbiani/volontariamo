@@ -38,7 +38,7 @@ export default async function ProfiloPage() {
   if (role === 'associazione') {
     const { data: ass } = await supabase
       .from('associazioni')
-      .select('*')
+      .select('*, tags:associazione_tags(tag:tags(id, name))')
       .eq('id', user.id)
       .single()
     return <ProfiloAssociazione data={ass!} email={user.email!} />

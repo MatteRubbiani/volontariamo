@@ -53,7 +53,7 @@ export async function updateProfilo(formData: FormData) {
     }
 
   } else if (role === 'associazione') {
-    // Upsert per le associazioni con TUTTI i campi
+    // 1. Upsert per le associazioni con TUTTI i campi
     const { error } = await supabase
       .from('associazioni')
       .upsert({
@@ -74,10 +74,25 @@ export async function updateProfilo(formData: FormData) {
       })
 
     if (error) throw new Error(`Errore aggiornamento associazione: ${error.message}`)
+
+    // 2. Gestione TAG Associazione
+    const tags = formData.getAll('tags') as string[]
+    
+    // Pulizia dei vecchi tag
+    await supabase.from('associazione_tags').delete().eq('associazione_id', user.id)
+    
+    // Inserimento dei nuovi tag se presenti
+    if (tags.length > 0) {
+      const tagInserts = tags.map(tagId => ({
+        associazione_id: user.id,
+        tag_id: tagId
+      }))
+      await supabase.from('associazione_tags').insert(tagInserts)
+    }
   }
 
-  // Invalida la cache per far vedere subito le modifiche
+  // Invalida la cache per far vedere subito le modifiche su tutto il sito
   revalidatePath('/profilo')
   revalidatePath('/profilo/modifica')
-  revalidatePath('/', 'layout') // Invalida anche la Navbar
+  revalidatePath('/', 'layout') // Invalida anche la Navbar e il resto dell'App
 }

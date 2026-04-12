@@ -15,10 +15,17 @@ export async function completeOnboarding(formData: FormData) {
 
   // --- LOGICA VOLONTARIO ---
   if (role === 'volontario') {
-    const { error: volError } = await supabase.from('volontari').insert({
+    // Usiamo UPSERT e mappiamo tutti i nuovi campi (usando lo snake_case per il DB)
+    const { error: volError } = await supabase.from('volontari').upsert({
       id: user.id,
       nome: formData.get('nome'),
       cognome: formData.get('cognome'),
+      telefono: formData.get('telefono') || null,
+      bio: formData.get('bio') || null,
+      data_nascita: formData.get('dataNascita') || null,
+      sesso: formData.get('sesso') || null,
+      citta_residenza: formData.get('cittaResidenza') || null,
+      grado_istruzione: formData.get('gradoIstruzione') || null,
     })
 
     if (volError) throw new Error(`Errore creazione Volontario: ${volError.message}`)
@@ -31,7 +38,7 @@ export async function completeOnboarding(formData: FormData) {
         volontario_id: user.id,
         tag_id: tagId
       }))
-      const { error: tagRelError } = await supabase.from('volontario_tags').insert(tagsToInsert)
+      const { error: tagRelError } = await supabase.from('volontario_tags').upsert(tagsToInsert)
       if (tagRelError) console.error("Errore inserimento tags:", tagRelError.message)
     }
 
@@ -40,14 +47,14 @@ export async function completeOnboarding(formData: FormData) {
         volontario_id: user.id,
         competenza_id: compId
       }))
-      const { error: compRelError } = await supabase.from('volontario_competenze').insert(compToInsert)
+      const { error: compRelError } = await supabase.from('volontario_competenze').upsert(compToInsert)
       if (compRelError) console.error("Errore inserimento competenze:", compRelError.message)
     }
   } 
 
   // --- LOGICA ASSOCIAZIONE ---
   else if (role === 'associazione') {
-    const { error: assError } = await supabase.from('associazioni').insert({
+    const { error: assError } = await supabase.from('associazioni').upsert({
       id: user.id,
       nome: formData.get('nome'),
       forma_giuridica: formData.get('formaGiuridica') || null,
@@ -70,13 +77,14 @@ export async function completeOnboarding(formData: FormData) {
         associazione_id: user.id,
         tag_id: tagId
       }))
-      await supabase.from('associazione_tags').insert(assTagsToInsert)
+      // Usiamo upsert anche qui per sicurezza
+      await supabase.from('associazione_tags').upsert(assTagsToInsert)
     }
   }
 
   // --- LOGICA IMPRESA ---
   else if (role === 'impresa') {
-    const { error: impError } = await supabase.from('imprese').insert({
+    const { error: impError } = await supabase.from('imprese').upsert({
       id: user.id,
       ragione_sociale: formData.get('nome'),
       partita_iva: formData.get('partitaIva'),
@@ -91,7 +99,7 @@ export async function completeOnboarding(formData: FormData) {
   }
 
   // FINALIZZAZIONE: Scrivi nella tabella Hub "profili"
-  const { error: profiloError } = await supabase.from('profili').insert({
+  const { error: profiloError } = await supabase.from('profili').upsert({
     id: user.id,
     ruolo: role
   })
@@ -102,7 +110,6 @@ export async function completeOnboarding(formData: FormData) {
   }
 
   // 🔄 INVALIDAZIONE CACHE: Forza il refresh della Navbar e dei layout
-  // Questo assicura che dopo il redirect, il middleware e i componenti server vedano subito i dati aggiornati
   revalidatePath('/', 'layout')
 
   // Redirect pulito verso la dashboard dell'utente
