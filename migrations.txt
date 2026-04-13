@@ -124,3 +124,111 @@ ALTER TABLE public.inviti_impresa ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Gestione inviti impresa"
   ON public.inviti_impresa FOR ALL
   USING ( auth.uid() = impresa_id );
+
+
+
+
+  -- Permettiamo a chiunque (anche non loggato) di vedere un invito 
+-- SOLO SE conosce il token esatto.
+CREATE POLICY "Lettura inviti tramite token" 
+  ON public.inviti_impresa FOR SELECT 
+  TO anon, authenticated 
+  USING (true);
+
+
+
+
+  -- Permetti a un utente loggato di CREARE la sua riga profilo
+-- solo se l'ID della riga è uguale al suo ID di login
+CREATE POLICY "Inserimento profilo personale"
+ON public.volontari
+FOR INSERT
+TO authenticated
+WITH CHECK (auth.uid() = id);
+
+-- Permetti a un utente loggato di VEDERE il proprio profilo
+CREATE POLICY "Visualizzazione profilo personale"
+ON public.volontari
+FOR SELECT
+TO authenticated
+USING (auth.uid() = id);
+
+
+
+
+CREATE OR REPLACE FUNCTION accetta_invito_sicuro(token_invito TEXT)
+RETURNS BOOLEAN
+LANGUAGE plpgsql
+SECURITY DEFINER -- ECCO LA MAGIA: Esegue questa funzione bypassando le RLS
+SET search_path = public
+AS $$
+DECLARE
+  v_user_id UUID;
+  v_invito_id UUID;
+  v_impresa_id UUID;
+BEGIN
+  -- 1. Chi sta chiamando la funzione?
+  v_user_id := auth.uid();
+  IF v_user_id IS NULL THEN
+    RAISE EXCEPTION 'Devi essere loggato per accettare un invito.';
+  END IF;
+
+  -- 2. Cerca il token (Seleziona e blocca la riga per evitare doppie accettazioni simultanee)
+  SELECT id, impresa_id INTO v_invito_id, v_impresa_id
+  FROM inviti_impresa
+  WHERE token = token_invito AND stato = 'in_attesa'
+  FOR UPDATE; 
+
+  IF v_invito_id IS NULL THEN
+    RAISE EXCEPTION 'Link non valido o già utilizzato.';
+  END IF;
+
+  -- 3. Inserisci il dipendente (se esiste già, fallirà grazie ai vincoli del DB)
+  INSERT INTO impresa_dipendenti (impresa_id, volontario_id, stato, ruolo_aziendale)
+  VALUES (v_impresa_id, v_user_id, 'attivo', 'dipendente');
+
+  -- 4. Brucia il token
+  UPDATE inviti_impresa SET stato = 'accettato' WHERE id = v_invito_id;
+
+  RETURN TRUE;
+END;
+$$;
+
+
+
+CREATE OR REPLACE FUNCTION accetta_invito_sicuro(token_invito TEXT)
+RETURNS BOOLEAN
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = public
+AS $$
+DECLARE
+  v_user_id UUID;
+  v_invito_id UUID;
+  v_impresa_id UUID;
+BEGIN
+  v_user_id := auth.uid();
+  IF v_user_id IS NULL THEN
+    RAISE EXCEPTION 'Devi essere loggato per accettare un invito.';
+  END IF;
+
+  -- AGGIUNTO IL CAST ::uuid QUI SOTTO
+  SELECT id, impresa_id INTO v_invito_id, v_impresa_id
+  FROM inviti_impresa
+  WHERE token = token_invito::uuid AND stato = 'in_attesa'
+  FOR UPDATE; 
+
+  IF v_invito_id IS NULL THEN
+    RAISE EXCEPTION 'Link non valido o già utilizzato.';
+  END IF;
+
+  -- Inserimento del dipendente
+  INSERT INTO impresa_dipendenti (impresa_id, volontario_id, stato, ruolo_aziendale)
+  VALUES (v_impresa_id, v_user_id, 'attivo', 'dipendente');
+
+  -- Brucia il token
+  UPDATE inviti_impresa SET stato = 'accettato' WHERE id = v_invito_id;
+
+  RETURN TRUE;
+END;
+$$;
