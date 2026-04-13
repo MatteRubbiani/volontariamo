@@ -3,6 +3,7 @@
 import { useWorkspace } from '@/lib/context/WorkspaceContext'
 import PosizioneCard from '@/components/PosizioneCard'
 import FiltriRicerca from '@/components/FiltriRicerca'
+import { useEffect } from 'react'
 
 // Mock dati per dashboard privata
 const mockOreVolate = 24
@@ -35,9 +36,11 @@ export function VolontarioDashboard({
   const { workspace, setWorkspace, hasAziendale } = useWorkspace()
 
   // Se è la prima volta e ha un'azienda, facciamo settare il context
-  if (hasAziendale && !workspace) {
-    setWorkspace('privato')
-  }
+useEffect(() => {
+    if (hasAziendale && !workspace) {
+      setWorkspace('privato')
+    }
+  }, [hasAziendale, workspace, setWorkspace])
 
   // ===== DASHBOARD PRIVATA =====
   if (workspace === 'privato') {

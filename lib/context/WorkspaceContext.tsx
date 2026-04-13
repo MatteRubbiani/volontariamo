@@ -2,40 +2,50 @@
 
 import { createContext, useContext, useState, ReactNode } from 'react'
 
-export type WorkspaceType = 'privato' | 'aziendale'
+// 1. Definiamo i tipi in modo chiaro
+type WorkspaceType = 'privato' | 'aziendale' | null
 
 interface WorkspaceContextType {
   workspace: WorkspaceType
-  setWorkspace: (workspace: WorkspaceType) => void
+  setWorkspace: (w: WorkspaceType) => void
   hasAziendale: boolean
-  setHasAziendale: (has: boolean) => void
 }
 
+// 2. Creiamo il context
 const WorkspaceContext = createContext<WorkspaceContextType | undefined>(undefined)
 
-export function WorkspaceProvider({ children, initialHasAziendale = false }: { children: ReactNode; initialHasAziendale?: boolean }) {
-  const [workspace, setWorkspace] = useState<WorkspaceType>('privato')
-  const [hasAziendale, setHasAziendale] = useState(initialHasAziendale)
+// 3. Il Provider
+export function WorkspaceProvider({ 
+  children, 
+  initialHasAziendale 
+}: { 
+  children: ReactNode, 
+  initialHasAziendale: boolean 
+}) {
+  const [workspace, setWorkspace] = useState<WorkspaceType>(null)
 
   return (
-    <WorkspaceContext.Provider value={{ workspace, setWorkspace, hasAziendale, setHasAziendale }}>
+    <WorkspaceContext.Provider value={{ 
+      workspace, 
+      setWorkspace, 
+      hasAziendale: initialHasAziendale 
+    }}>
       {children}
     </WorkspaceContext.Provider>
   )
 }
 
-
-export function useWorkspace() {
+// 4. L'hook con il "Salvavita" tipizzato a prova di bomba
+export function useWorkspace(): WorkspaceContextType {
   const context = useContext(WorkspaceContext)
   
-  // IL SALVAVITA: Se la Navbar viene caricata in pagine senza il Provider (es. HR, Login),
-  // invece di "esplodere", le diciamo semplicemente di far finta che non ci sia nessuna azienda.
   if (context === undefined) {
+    // Forziamo il tipo di ritorno per evitare il "never"
     return { 
-      workspace: 'privato' as const, 
+      workspace: 'privato', 
       setWorkspace: () => {}, 
       hasAziendale: false 
-    }
+    } as WorkspaceContextType
   }
   
   return context

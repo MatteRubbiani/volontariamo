@@ -61,9 +61,12 @@ export default function NavbarUI({
                 Dashboard
               </Link>
               {isVolontario && (
-                <Link href="/app/volontario/candidature" className={`text-sm font-bold transition-colors ${textColor}`}>
-                  {isAziendale ? 'Iniziative Team' : 'Le Mie Candidature'}
-                </Link>
+                <Link 
+  href={isAziendale ? "/app/volontario/iniziative-team" : "/app/volontario/candidature"} 
+  className={`text-sm font-bold transition-colors ${textColor}`}
+>
+  {isAziendale ? 'Iniziative Team' : 'Le Mie Candidature'}
+</Link>
               )}
             </>
           )}

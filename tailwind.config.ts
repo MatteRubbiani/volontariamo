@@ -59,30 +59,32 @@ export default {
         sm: "calc(var(--radius) - 4px)",
       },
       // 🚨 AGGIUNGI QUESTO BLOCCO 👇
-      keyframes: {
-      // Un'apparizione vellutata della sfocatura
-      'blur-in': {
-        '0%': { filter: 'blur(0px)', opacity: '0' },
-        '50%': { filter: 'blur(12px)', opacity: '1' },
-        '100%': { filter: 'blur(0px)', opacity: '0' },
+     extend: {
+    keyframes: {
+      // Fade in/out dell'overlay totale (dura 3s)
+      'overlay-fade': {
+        '0%': { opacity: '0' },
+        '10%': { opacity: '1' }, // Entra più solennemente
+        '90%': { opacity: '1' }, // Resta fisso e opaco per la maggior parte del tempo
+        '100%': { opacity: '0' }, // Esce sfumando dolcemente
       },
-      // Una linea di luce ultra-veloce che pulisce lo schermo
-      'shimmer-sweep': {
-        '0%': { transform: 'translateX(-100%) skewX(-15deg)' },
-        '100%': { transform: 'translateX(200%) skewX(-15deg)' },
+      // Riempimento della barra di caricamento (coordinata con la fase opaca)
+      'progress-fill': {
+        '0%': { width: '0%' },
+        '100%': { width: '100%' },
       },
-      // Uno zoom leggerissimo del contenuto
-      'scale-pulse': {
-        '0%': { transform: 'scale(1)' },
-        '50%': { transform: 'scale(0.98)' },
-        '100%': { transform: 'scale(1)' },
+      // Rotazione lenta per l'ingranaggio
+      'spin-slow': {
+        '0%': { transform: 'rotate(0deg)' },
+        '100%': { transform: 'rotate(360deg)' },
       }
     },
     animation: {
-      'blur-in': 'blur-in 1.2s cubic-bezier(0.4, 0, 0.2, 1) forwards',
-      'shimmer': 'shimmer-sweep 0.6s ease-in-out forwards',
-      'content-pulse': 'scale-pulse 0.5s cubic-bezier(0.4, 0, 0.2, 1) forwards',
+      'overlay-fade': 'overlay-fade 3s cubic-bezier(0.4, 0, 0.2, 1) forwards',
+      'progress-fill': 'progress-fill 2.5s cubic-bezier(0.4, 0, 0.2, 1) forwards', // Finisce poco prima della scomparsa
+      'spin-slow': 'spin-slow 3s linear infinite',
     }
+  }
     },
   },
   plugins: [require("tailwindcss-animate")],
