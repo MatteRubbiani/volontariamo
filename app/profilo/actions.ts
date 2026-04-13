@@ -89,6 +89,32 @@ export async function updateProfilo(formData: FormData) {
       }))
       await supabase.from('associazione_tags').insert(tagInserts)
     }
+    
+  } else if (role === 'impresa') {
+    // 1. Upsert per le imprese con TUTTI i campi corporate
+    const { error } = await supabase
+      .from('imprese')
+      .upsert({
+        id: user.id,
+        ragione_sociale: nome, // Mappato dal campo "nome" generico del form
+        forma_giuridica: formData.get('forma_giuridica') as string || null,
+        partita_iva: formData.get('partita_iva') as string || null,
+        codice_fiscale: formData.get('codice_fiscale') as string || null,
+        settore_attivita: formData.get('settore_attivita') as string || null,
+        fascia_dipendenti: formData.get('fascia_dipendenti') as string || null,
+        indirizzo_sede: formData.get('indirizzo_sede') as string || null,
+        area_operativa: formData.get('area_operativa') as string || null,
+        nome_referente: formData.get('nome_referente') as string || null,
+        sito_web: formData.get('sito_web') as string || null,
+        profili_social: formData.get('profili_social') as string || null,
+        obiettivi_esg: formData.get('obiettivi_esg') as string || null,
+        valori_cause: formData.get('valori_cause') as string || null,
+        tipologia_impatto: formData.get('tipologia_impatto') as string || null,
+      }, {
+        onConflict: 'id'
+      })
+
+    if (error) throw new Error(`Errore aggiornamento impresa: ${error.message}`)
   }
 
   // Invalida la cache per far vedere subito le modifiche su tutto il sito

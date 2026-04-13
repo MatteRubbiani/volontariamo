@@ -18,11 +18,11 @@ type FormState = {
   cognome: string
   sitoWeb: string
   partitaIva: string
-  citta: string
+  citta: string // Rimane per le associazioni
   indirizzoSede: string
   fasciaDipendenti: string
-  emailContatto: string
-  mission: string
+  emailContatto: string // Rimane per le associazioni
+  mission: string // Rimane per le associazioni
   tags: string[]
   competenze: string[]
   formaGiuridica: string
@@ -30,12 +30,17 @@ type FormState = {
   telefono: string
   nomeReferente: string
   profiliSocial: string
-  // NUOVI CAMPI VOLONTARIO (Allineati al DB)
   bio: string
   dataNascita: string
   sesso: string
   cittaResidenza: string
   gradoIstruzione: string
+  // NUOVI CAMPI IMPRESA (Allineati al DB)
+  settoreAttivita: string
+  areaOperativa: string
+  valoriCause: string
+  obiettiviEsg: string
+  tipologiaImpatto: string
 }
 
 type TagRecord = { id: string; name: string }
@@ -77,7 +82,12 @@ export default function OnboardingForm({ redirectTo }: OnboardingFormProps) {
     dataNascita: '',
     sesso: '',
     cittaResidenza: '',
-    gradoIstruzione: ''
+    gradoIstruzione: '',
+    settoreAttivita: '',
+    areaOperativa: '',
+    valoriCause: '',
+    obiettiviEsg: '',
+    tipologiaImpatto: ''
   })
 
   useEffect(() => {
@@ -107,7 +117,6 @@ export default function OnboardingForm({ redirectTo }: OnboardingFormProps) {
     })
   }
 
-  // VALIDAZIONE: Per il volontario ora chiediamo almeno Nome e Cognome per proseguire
   const canGoStep3 = role === 'volontario' 
     ? formData.nome.trim().length > 1 && formData.cognome.trim().length > 1
     : formData.nome.trim().length > 1;
@@ -129,7 +138,6 @@ export default function OnboardingForm({ redirectTo }: OnboardingFormProps) {
           action={async (fd) => {
             setIsSubmitting(true)
             try {
-              // Refresh client-side per il sync istantaneo della Navbar
               router.refresh()
               await completeOnboarding(fd)
             } catch (error: any) {
@@ -143,7 +151,7 @@ export default function OnboardingForm({ redirectTo }: OnboardingFormProps) {
           }}
           className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm md:p-10"
         >
-          {/* CAMPI NASCOSTI AGGIORNATI PER VOLONTARIO */}
+          {/* CAMPI NASCOSTI COMUNI/MISTI */}
           <input type="hidden" name="role" value={role} />
           <input type="hidden" name="redirectTo" value={redirectTo} />
           <input type="hidden" name="nome" value={formData.nome} />
@@ -155,7 +163,6 @@ export default function OnboardingForm({ redirectTo }: OnboardingFormProps) {
           <input type="hidden" name="cittaResidenza" value={formData.cittaResidenza} />
           <input type="hidden" name="gradoIstruzione" value={formData.gradoIstruzione} />
           
-          {/* CAMPI ALTRI RUOLI */}
           <input type="hidden" name="sitoWeb" value={formData.sitoWeb} />
           <input type="hidden" name="partitaIva" value={formData.partitaIva} />
           <input type="hidden" name="citta" value={formData.citta} />
@@ -167,6 +174,13 @@ export default function OnboardingForm({ redirectTo }: OnboardingFormProps) {
           <input type="hidden" name="codiceFiscale" value={formData.codiceFiscale} />
           <input type="hidden" name="nomeReferente" value={formData.nomeReferente} />
           <input type="hidden" name="profiliSocial" value={formData.profiliSocial} />
+
+          {/* NUOVI CAMPI NASCOSTI IMPRESA */}
+          <input type="hidden" name="settoreAttivita" value={formData.settoreAttivita} />
+          <input type="hidden" name="areaOperativa" value={formData.areaOperativa} />
+          <input type="hidden" name="valoriCause" value={formData.valoriCause} />
+          <input type="hidden" name="obiettiviEsg" value={formData.obiettiviEsg} />
+          <input type="hidden" name="tipologiaImpatto" value={formData.tipologiaImpatto} />
           
           {formData.tags.map((tagId) => (
             <input key={`tag-${tagId}`} type="hidden" name="tags" value={tagId} />
@@ -189,11 +203,7 @@ export default function OnboardingForm({ redirectTo }: OnboardingFormProps) {
                     <button
                       key={item.id}
                       type="button"
-                      onClick={(e) => {
-                        e.preventDefault();
-                        setRole(item.id)
-                        setStep(2)
-                      }}
+                      onClick={(e) => { e.preventDefault(); setRole(item.id); setStep(2); }}
                       className={`rounded-2xl border p-5 text-left transition-all duration-200 ${
                         active ? 'border-slate-900 bg-slate-900 text-white shadow-lg scale-[1.02]' : 'border-slate-200 bg-white text-slate-800 hover:border-slate-400 hover:bg-slate-50'
                       }`}
@@ -212,31 +222,27 @@ export default function OnboardingForm({ redirectTo }: OnboardingFormProps) {
           {step === 2 && (
             <div className="space-y-6">
               <div>
-                <h2 className="text-3xl font-black tracking-tight text-slate-900">Dati personali</h2>
-                <p className="mt-2 text-slate-600">Raccontaci chi sei per personalizzare la tua esperienza.</p>
+                <h2 className="text-3xl font-black tracking-tight text-slate-900">Dati anagrafici</h2>
+                <p className="mt-2 text-slate-600">Inserisci i dati principali della tua organizzazione o profilo.</p>
               </div>
 
+              {/* ... Volontario e Associazione invariati ... */}
               {role === 'volontario' && (
                 <div className="grid gap-4 md:grid-cols-2">
                   <input type="text" placeholder="Nome *" value={formData.nome} onChange={(e) => setFormData((prev) => ({ ...prev, nome: e.target.value }))} className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 font-medium outline-none focus:border-blue-500 focus:bg-white" />
                   <input type="text" placeholder="Cognome *" value={formData.cognome} onChange={(e) => setFormData((prev) => ({ ...prev, cognome: e.target.value }))} className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 font-medium outline-none focus:border-blue-500 focus:bg-white" />
-                  
                   <input type="tel" placeholder="Telefono" value={formData.telefono} onChange={(e) => setFormData((prev) => ({ ...prev, telefono: e.target.value }))} className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 font-medium outline-none focus:border-blue-500 focus:bg-white" />
-                  
                   <select value={formData.sesso} onChange={(e) => setFormData((prev) => ({ ...prev, sesso: e.target.value }))} className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 font-medium outline-none focus:border-blue-500 focus:bg-white">
                     <option value="">Genere</option>
                     <option value="M">Maschio</option>
                     <option value="F">Femmina</option>
                     <option value="Altro">Altro / Preferisco non dirlo</option>
                   </select>
-
                   <div className="space-y-1">
                     <label className="text-[10px] font-bold uppercase text-slate-400 ml-1">Data di Nascita</label>
                     <input type="date" value={formData.dataNascita} onChange={(e) => setFormData((prev) => ({ ...prev, dataNascita: e.target.value }))} className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 font-medium outline-none focus:border-blue-500 focus:bg-white" />
                   </div>
-
                   <input type="text" placeholder="Città di Residenza" value={formData.cittaResidenza} onChange={(e) => setFormData((prev) => ({ ...prev, cittaResidenza: e.target.value }))} className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 font-medium outline-none focus:border-blue-500 focus:bg-white mt-auto" />
-
                   <select value={formData.gradoIstruzione} onChange={(e) => setFormData((prev) => ({ ...prev, gradoIstruzione: e.target.value }))} className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 font-medium outline-none focus:border-blue-500 focus:bg-white md:col-span-2">
                     <option value="">Grado di Istruzione</option>
                     <option value="Scuola Media">Scuola Media</option>
@@ -248,7 +254,6 @@ export default function OnboardingForm({ redirectTo }: OnboardingFormProps) {
                 </div>
               )}
 
-              {/* ... (Codice per Associazione e Impresa rimane invariato) ... */}
               {role === 'associazione' && (
                 <div className="grid gap-4 md:grid-cols-2">
                   <input type="text" placeholder="Nome Associazione *" value={formData.nome} onChange={(e) => setFormData((prev) => ({ ...prev, nome: e.target.value }))} className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 font-medium outline-none focus:border-green-500 focus:bg-white" />
@@ -261,12 +266,22 @@ export default function OnboardingForm({ redirectTo }: OnboardingFormProps) {
                 </div>
               )}
 
+              {/* NUOVI CAMPI IMPRESA (Step 2) */}
               {role === 'impresa' && (
                 <div className="grid gap-4 md:grid-cols-2">
-                  <input type="text" placeholder="Ragione Sociale *" value={formData.nome} onChange={(e) => setFormData((prev) => ({ ...prev, nome: e.target.value }))} className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 font-medium outline-none focus:border-violet-500 focus:bg-white" />
+                  <input type="text" placeholder="Ragione Sociale *" value={formData.nome} onChange={(e) => setFormData((prev) => ({ ...prev, nome: e.target.value }))} className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 font-medium outline-none focus:border-violet-500 focus:bg-white md:col-span-2" />
+                  <input type="text" placeholder="Forma Giuridica (es. Srl, SpA, Srl SB)" value={formData.formaGiuridica} onChange={(e) => setFormData((prev) => ({ ...prev, formaGiuridica: e.target.value }))} className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 font-medium outline-none focus:border-violet-500 focus:bg-white" />
                   <input type="text" placeholder="Partita IVA" value={formData.partitaIva} onChange={(e) => setFormData((prev) => ({ ...prev, partitaIva: e.target.value }))} className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 font-medium outline-none focus:border-violet-500 focus:bg-white" />
-                  <input type="text" placeholder="Città" value={formData.citta} onChange={(e) => setFormData((prev) => ({ ...prev, citta: e.target.value }))} className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 font-medium outline-none focus:border-violet-500 focus:bg-white" />
-                  <select value={formData.fasciaDipendenti} onChange={(e) => setFormData((prev) => ({ ...prev, fasciaDipendenti: e.target.value }))} className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 font-medium outline-none focus:border-violet-500 focus:bg-white md:col-span-2"><option value="">Grandezza...</option><option value="1-10">1-10</option><option value="11-50">11-50</option><option value="51-250">51-250</option><option value="250+">250+</option></select>
+                  <input type="text" placeholder="Codice Fiscale" value={formData.codiceFiscale} onChange={(e) => setFormData((prev) => ({ ...prev, codiceFiscale: e.target.value }))} className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 font-medium outline-none focus:border-violet-500 focus:bg-white" />
+                  <input type="text" placeholder="Settore di Attività" value={formData.settoreAttivita} onChange={(e) => setFormData((prev) => ({ ...prev, settoreAttivita: e.target.value }))} className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 font-medium outline-none focus:border-violet-500 focus:bg-white" />
+                  <input type="text" placeholder="Indirizzo Sede Legale" value={formData.indirizzoSede} onChange={(e) => setFormData((prev) => ({ ...prev, indirizzoSede: e.target.value }))} className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 font-medium outline-none focus:border-violet-500 focus:bg-white" />
+                  <select value={formData.fasciaDipendenti} onChange={(e) => setFormData((prev) => ({ ...prev, fasciaDipendenti: e.target.value }))} className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 font-medium outline-none focus:border-violet-500 focus:bg-white">
+                    <option value="">Fascia Dipendenti...</option>
+                    <option value="1-10">1-10</option>
+                    <option value="11-50">11-50</option>
+                    <option value="51-250">51-250</option>
+                    <option value="250+">250+</option>
+                  </select>
                 </div>
               )}
 
@@ -277,57 +292,52 @@ export default function OnboardingForm({ redirectTo }: OnboardingFormProps) {
             </div>
           )}
 
-          {/* STEP 3: BIO, INTERESSI E COMPETENZE */}
+          {/* STEP 3: PROFILO PUBBLICO / IMPATTO */}
           {step === 3 && (
             <div className="space-y-6">
               <div>
-                <h2 className="text-3xl font-black tracking-tight text-slate-900">Il tuo profilo pubblico</h2>
+                <h2 className="text-3xl font-black tracking-tight text-slate-900">
+                  {role === 'impresa' ? 'Il tuo Profilo di Impatto' : 'Il tuo profilo pubblico'}
+                </h2>
                 <p className="mt-2 text-slate-600">Completa le informazioni per farti conoscere.</p>
               </div>
 
+              {/* ... Volontario e Associazione invariati ... */}
               {role === 'volontario' && (
-                <>
-                  <div className="space-y-2">
-                    <label className="text-[10px] font-bold uppercase text-slate-400 ml-1">Raccontaci qualcosa di te (Bio)</label>
-                    <textarea 
-                      placeholder="Scrivi qui una breve presentazione..." 
-                      value={formData.bio} 
-                      onChange={(e) => setFormData((prev) => ({ ...prev, bio: e.target.value }))} 
-                      className="w-full h-28 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 font-medium outline-none focus:border-blue-500 focus:bg-white resize-none"
-                    />
-                  </div>
-
-                  <div>
-                    <p className="mb-3 text-[10px] font-bold uppercase tracking-widest text-slate-400">Cause di interesse (tags)</p>
-                    <div className="flex flex-wrap gap-3">
-                      {tagsCatalog.map((tag) => {
-                        const active = formData.tags.includes(tag.id)
-                        return (
-                          <button key={tag.id} type="button" onClick={(e) => { e.preventDefault(); toggleMulti('tags', tag.id); }} className={`rounded-xl transition-all duration-200 ${active ? 'scale-105 ring-2 ring-blue-500 ring-offset-2 opacity-100' : 'grayscale opacity-50 hover:grayscale-0 hover:opacity-100'}`}>
-                            <TagBadge nome={tag.name} size="md" />
-                          </button>
-                        )
-                      })}
-                    </div>
-                  </div>
-
-                  <div className="pt-4">
-                    <p className="mb-3 text-[10px] font-bold uppercase tracking-widest text-slate-400">Le tue Competenze</p>
-                    <div className="flex flex-wrap gap-3">
-                      {competenzeCatalog.map((comp) => {
-                        const active = formData.competenze.includes(comp.id)
-                        return (
-                          <button key={comp.id} type="button" onClick={(e) => { e.preventDefault(); toggleMulti('competenze', comp.id); }} className={`rounded-lg transition-all duration-200 ${active ? 'scale-105 ring-2 ring-slate-800 ring-offset-2 opacity-100' : 'grayscale opacity-50 hover:grayscale-0 hover:opacity-100'}`}>
-                            <CompetenzaBadge nome={comp.name} />
-                          </button>
-                        )
-                      })}
-                    </div>
-                  </div>
-                </>
+                 <>
+                 <div className="space-y-2">
+                   <label className="text-[10px] font-bold uppercase text-slate-400 ml-1">Raccontaci qualcosa di te (Bio)</label>
+                   <textarea placeholder="Scrivi qui una breve presentazione..." value={formData.bio} onChange={(e) => setFormData((prev) => ({ ...prev, bio: e.target.value }))} className="w-full h-28 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 font-medium outline-none focus:border-blue-500 focus:bg-white resize-none" />
+                 </div>
+                 <div>
+                   <p className="mb-3 text-[10px] font-bold uppercase tracking-widest text-slate-400">Cause di interesse (tags)</p>
+                   <div className="flex flex-wrap gap-3">
+                     {tagsCatalog.map((tag) => {
+                       const active = formData.tags.includes(tag.id)
+                       return (
+                         <button key={tag.id} type="button" onClick={(e) => { e.preventDefault(); toggleMulti('tags', tag.id); }} className={`rounded-xl transition-all duration-200 ${active ? 'scale-105 ring-2 ring-blue-500 ring-offset-2 opacity-100' : 'grayscale opacity-50 hover:grayscale-0 hover:opacity-100'}`}>
+                           <TagBadge nome={tag.name} size="md" />
+                         </button>
+                       )
+                     })}
+                   </div>
+                 </div>
+                 <div className="pt-4">
+                   <p className="mb-3 text-[10px] font-bold uppercase tracking-widest text-slate-400">Le tue Competenze</p>
+                   <div className="flex flex-wrap gap-3">
+                     {competenzeCatalog.map((comp) => {
+                       const active = formData.competenze.includes(comp.id)
+                       return (
+                         <button key={comp.id} type="button" onClick={(e) => { e.preventDefault(); toggleMulti('competenze', comp.id); }} className={`rounded-lg transition-all duration-200 ${active ? 'scale-105 ring-2 ring-slate-800 ring-offset-2 opacity-100' : 'grayscale opacity-50 hover:grayscale-0 hover:opacity-100'}`}>
+                           <CompetenzaBadge nome={comp.name} />
+                         </button>
+                       )
+                     })}
+                   </div>
+                 </div>
+               </>
               )}
 
-              {/* ... (Codice per Associazione e Impresa rimane invariato) ... */}
               {role === 'associazione' && (
                 <>
                   <input type="text" placeholder="Nome Referente" value={formData.nomeReferente} onChange={(e) => setFormData((prev) => ({ ...prev, nomeReferente: e.target.value }))} className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 font-medium outline-none focus:border-green-500 focus:bg-white mb-4" />
@@ -336,8 +346,23 @@ export default function OnboardingForm({ redirectTo }: OnboardingFormProps) {
                 </>
               )}
 
+              {/* NUOVI CAMPI IMPRESA (Step 3) */}
               {role === 'impresa' && (
-                <textarea value={formData.mission} onChange={(e) => setFormData((prev) => ({ ...prev, mission: e.target.value }))} placeholder="Mission..." className="w-full h-28 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 font-medium outline-none focus:border-violet-500 focus:bg-white resize-none" />
+                <div className="space-y-4">
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <input type="text" placeholder="Nome Referente Aziendale" value={formData.nomeReferente} onChange={(e) => setFormData((prev) => ({ ...prev, nomeReferente: e.target.value }))} className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 font-medium outline-none focus:border-violet-500 focus:bg-white" />
+                    <input type="text" placeholder="Area Operativa (es. Nord Italia, Globale)" value={formData.areaOperativa} onChange={(e) => setFormData((prev) => ({ ...prev, areaOperativa: e.target.value }))} className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 font-medium outline-none focus:border-violet-500 focus:bg-white" />
+                  </div>
+                  
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <input type="text" placeholder="Sito Web (es. www.azienda.com)" value={formData.sitoWeb} onChange={(e) => setFormData((prev) => ({ ...prev, sitoWeb: e.target.value }))} className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 font-medium outline-none focus:border-violet-500 focus:bg-white" />
+                    <input type="text" placeholder="Link Social (es. LinkedIn)" value={formData.profiliSocial} onChange={(e) => setFormData((prev) => ({ ...prev, profiliSocial: e.target.value }))} className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 font-medium outline-none focus:border-violet-500 focus:bg-white" />
+                  </div>
+
+                  <textarea value={formData.obiettiviEsg} onChange={(e) => setFormData((prev) => ({ ...prev, obiettiviEsg: e.target.value }))} placeholder="Descrivi gli Obiettivi ESG della tua azienda..." className="w-full h-24 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 font-medium outline-none focus:border-violet-500 focus:bg-white resize-none" />
+                  <textarea value={formData.valoriCause} onChange={(e) => setFormData((prev) => ({ ...prev, valoriCause: e.target.value }))} placeholder="Quali valori e cause sociali sostenete?" className="w-full h-24 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 font-medium outline-none focus:border-violet-500 focus:bg-white resize-none" />
+                  <textarea value={formData.tipologiaImpatto} onChange={(e) => setFormData((prev) => ({ ...prev, tipologiaImpatto: e.target.value }))} placeholder="Che tipo di impatto volete generare? (es. donazioni, volontariato aziendale...)" className="w-full h-24 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 font-medium outline-none focus:border-violet-500 focus:bg-white resize-none" />
+                </div>
               )}
 
               <div className="flex gap-3 pt-6">

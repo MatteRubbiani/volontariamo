@@ -13,49 +13,63 @@ export default async function ModificaProfilo() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/auth/login')
   
-  // 1. Carica dati volontario con tags e competenze
-  const { data: vol } = await supabase
-    .from('volontari')
-    .select('*, tags:volontario_tags(tag_id), competenze:volontario_competenze(competenza_id)')
+  // 1. IL NUOVO STANDARD: Chiediamo all'Hub chi abbiamo davanti
+  const { data: hub } = await supabase
+    .from('profili')
+    .select('ruolo')
     .eq('id', user.id)
     .maybeSingle()
-    
-  // 2. Carica dati associazione con i NUOVI TAGS collegati
-  const { data: ass } = await supabase
-    .from('associazioni')
-    .select('*, tags:associazione_tags(tag_id)')
-    .eq('id', user.id)
-    .maybeSingle()
+
+  if (!hub || !hub.ruolo) redirect('/app/onboarding')
   
+  const role = hub.ruolo
+  let profiloData = null
+  let currentTags: string[] = []
+  let currentCompetenze: string[] = []
+
+  // 2. Query chirurgica in base al ruolo esatto
+  if (role === 'volontario') {
+    const { data: vol } = await supabase
+      .from('volontari')
+      .select('*, tags:volontario_tags(tag_id), competenze:volontario_competenze(competenza_id)')
+      .eq('id', user.id)
+      .single()
+    profiloData = vol
+    currentTags = vol?.tags?.map((t: any) => t.tag_id) || []
+    currentCompetenze = vol?.competenze?.map((c: any) => c.competenza_id) || []
+    
+  } else if (role === 'associazione') {
+    const { data: ass } = await supabase
+      .from('associazioni')
+      .select('*, tags:associazione_tags(tag_id)')
+      .eq('id', user.id)
+      .single()
+    profiloData = ass
+    currentTags = ass?.tags?.map((t: any) => t.tag_id) || []
+    
+  } else if (role === 'impresa') {
+    const { data: imp } = await supabase
+      .from('imprese')
+      .select('*')
+      .eq('id', user.id)
+      .single()
+    profiloData = imp
+    // Niente tags relazionali per le imprese per il momento!
+  }
+
+  // Fallback di sicurezza
+  if (!profiloData) redirect('/app/onboarding')
+
   // 3. Carica i cataloghi generali per i menu a tendina
   const { data: allTags } = await supabase.from('tags').select('*').order('name')
   const { data: allCompetenze } = await supabase.from('competenze').select('*').eq('is_official', true).order('name')
-
-  // 4. Capiamo chi abbiamo davanti e formattiamo i dati in modo pulito
-  const isVol = !!vol
-  const isAss = !!ass
-  const profiloData = isVol ? vol : ass
-  
-  // Fallback di sicurezza: se non c'è né l'uno né l'altro, torna all'onboarding
-  if (!profiloData) redirect('/app/onboarding')
-
-  // 5. Estrazione intelligente dei Tag (funziona per entrambi!)
-  let currentTags: string[] = []
-  if (isVol && vol.tags) {
-    currentTags = vol.tags.map((t: any) => t.tag_id)
-  } else if (isAss && ass.tags) {
-    currentTags = ass.tags.map((t: any) => t.tag_id)
-  }
-
-  // Le competenze per ora ce l'ha solo il volontario
-  const currentCompetenze = vol?.competenze?.map((c: any) => c.competenza_id) || []
 
   return (
     <div className="max-w-2xl mx-auto py-12 px-6 pb-24">
       <h1 className="text-4xl font-black mb-10 text-slate-800 tracking-tight">Modifica Profilo</h1>
       
       <FormModificaProfilo 
-        isVolontario={isVol}
+        ruolo={role} // <-- ATTENZIONE QUI: Non passiamo più un booleano, ma il ruolo esatto!
         profilo={profiloData}
         allTags={allTags || []}
         tagsIniziali={currentTags}

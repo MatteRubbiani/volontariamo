@@ -6,7 +6,7 @@ import { getTagColor } from '@/lib/tagColors'
 import CompetenzaSelector from './CompetenzaSelector'
 
 export default function FormModificaProfilo({
-  isVolontario,
+  ruolo,
   profilo,
   allTags = [],
   tagsIniziali = [],
@@ -14,7 +14,7 @@ export default function FormModificaProfilo({
   competenzeIniziali = [],
   salvaAction
 }: {
-  isVolontario: boolean
+  ruolo: string
   profilo: any
   allTags?: any[]
   tagsIniziali?: string[]
@@ -25,6 +25,10 @@ export default function FormModificaProfilo({
   const router = useRouter()
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [tagSelezionati, setTagSelezionati] = useState<string[]>(tagsIniziali)
+
+  const isVolontario = ruolo === 'volontario'
+  const isAssociazione = ruolo === 'associazione'
+  const isImpresa = ruolo === 'impresa'
 
   const toggleTag = (id: string) => {
     setTagSelezionati(prev => 
@@ -62,9 +66,24 @@ export default function FormModificaProfilo({
     </div>
   )
 
+  // Textarea utility per le imprese (e non solo)
+  const TextareaField = ({ label, name, defaultValue = '', placeholder = '' }: any) => (
+    <div className="space-y-2">
+      <label className="text-[10px] font-black uppercase text-slate-400 ml-4 tracking-widest">
+        {label}
+      </label>
+      <textarea 
+        name={name}
+        defaultValue={defaultValue}
+        placeholder={placeholder}
+        className="w-full p-4 bg-slate-50 border-2 border-slate-50 rounded-2xl focus:border-blue-500 focus:bg-white outline-none font-medium h-28 transition-all resize-none" 
+      />
+    </div>
+  )
+
   return (
     <form onSubmit={handleSubmit} className="space-y-8 bg-white p-8 md:p-12 rounded-3xl shadow-xl border border-slate-100">
-      <input type="hidden" name="role" value={isVolontario ? 'volontario' : 'associazione'} />
+      <input type="hidden" name="role" value={ruolo} />
       
       {/* SEZIONE INFORMAZIONI BASE */}
       <div>
@@ -74,133 +93,129 @@ export default function FormModificaProfilo({
         
         <div className="space-y-6">
           <InputField 
-            label={isVolontario ? 'Nome Completo' : 'Nome Associazione'}
+            label={isVolontario ? 'Nome Completo' : isAssociazione ? 'Nome Associazione' : 'Ragione Sociale'}
             name="nome"
-            defaultValue={isVolontario ? profilo?.nome_completo : profilo?.nome}
+            defaultValue={isVolontario ? profilo?.nome_completo : isImpresa ? profilo?.ragione_sociale : profilo?.nome}
             required
           />
 
-          <div className="space-y-2">
-            <label className="text-[10px] font-black uppercase text-slate-400 ml-4 tracking-widest">
-              {isVolontario ? 'Bio Personale' : 'Descrizione Associazione'}
-            </label>
-            <textarea 
+          {!isImpresa && (
+            <TextareaField 
+              label={isVolontario ? 'Bio Personale' : 'Descrizione Associazione'}
               name="bio"
               defaultValue={isVolontario ? profilo?.bio : profilo?.descrizione}
-              className="w-full p-4 bg-slate-50 border-2 border-slate-50 rounded-2xl focus:border-blue-500 focus:bg-white outline-none font-medium h-32 transition-all" 
             />
-          </div>
+          )}
         </div>
       </div>
 
       {/* SEZIONE CAMPI SPECIFICI ASSOCIAZIONE */}
-      {!isVolontario && (
+      {isAssociazione && (
         <>
           <div className="border-t-2 border-slate-100 pt-8">
-            <h2 className="text-sm font-black uppercase tracking-widest text-slate-500 mb-6 px-4">
-              🏢 Dati Legali
-            </h2>
-            
+            <h2 className="text-sm font-black uppercase tracking-widest text-slate-500 mb-6 px-4">🏢 Dati Legali</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <InputField 
-                label="Forma Giuridica"
-                name="forma_giuridica"
-                defaultValue={profilo?.forma_giuridica}
-              />
-              <InputField 
-                label="Codice Fiscale"
-                name="codice_fiscale"
-                defaultValue={profilo?.codice_fiscale}
-              />
+              <InputField label="Forma Giuridica" name="forma_giuridica" defaultValue={profilo?.forma_giuridica} />
+              <InputField label="Codice Fiscale" name="codice_fiscale" defaultValue={profilo?.codice_fiscale} />
             </div>
           </div>
-
           <div className="border-t-2 border-slate-100 pt-8">
-            <h2 className="text-sm font-black uppercase tracking-widest text-slate-500 mb-6 px-4">
-              📍 Sede
-            </h2>
-            
+            <h2 className="text-sm font-black uppercase tracking-widest text-slate-500 mb-6 px-4">📍 Sede</h2>
             <div className="space-y-6">
-              <InputField 
-                label="Città"
-                name="citta"
-                defaultValue={profilo?.citta}
-              />
-              <InputField 
-                label="Indirizzo Sede"
-                name="indirizzo_sede"
-                defaultValue={profilo?.indirizzo_sede}
-              />
+              <InputField label="Città" name="citta" defaultValue={profilo?.citta} />
+              <InputField label="Indirizzo Sede" name="indirizzo_sede" defaultValue={profilo?.indirizzo_sede} />
             </div>
           </div>
-
           <div className="border-t-2 border-slate-100 pt-8">
-            <h2 className="text-sm font-black uppercase tracking-widest text-slate-500 mb-6 px-4">
-              📞 Contatti
-            </h2>
-            
+            <h2 className="text-sm font-black uppercase tracking-widest text-slate-500 mb-6 px-4">📞 Contatti</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <InputField 
-                label="Telefono"
-                name="telefono"
-                defaultValue={profilo?.telefono}
-              />
-              <InputField 
-                label="Email Contatto"
-                name="email_contatto"
-                type="email"
-                defaultValue={profilo?.email_contatto}
-              />
-              <InputField 
-                label="Nome Referente"
-                name="nome_referente"
-                defaultValue={profilo?.nome_referente}
-              />
+              <InputField label="Telefono" name="telefono" defaultValue={profilo?.telefono} />
+              <InputField label="Email Contatto" name="email_contatto" type="email" defaultValue={profilo?.email_contatto} />
+              <InputField label="Nome Referente" name="nome_referente" defaultValue={profilo?.nome_referente} />
             </div>
           </div>
-
           <div className="border-t-2 border-slate-100 pt-8">
-            <h2 className="text-sm font-black uppercase tracking-widest text-slate-500 mb-6 px-4">
-              🔗 Canali Online
-            </h2>
-            
+            <h2 className="text-sm font-black uppercase tracking-widest text-slate-500 mb-6 px-4">🔗 Canali Online</h2>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <InputField 
-                label="Sito Web"
-                name="sito_web"
-                type="url"
-                defaultValue={profilo?.sito_web}
-              />
-              <InputField 
-                label="Profili Social"
-                name="profili_social"
-                defaultValue={profilo?.profili_social}
-              />
+              <InputField label="Sito Web" name="sito_web" type="url" defaultValue={profilo?.sito_web} />
+              <InputField label="Profili Social" name="profili_social" defaultValue={profilo?.profili_social} />
             </div>
           </div>
         </>
       )}
 
-      {/* SEZIONE TAGS COMUNE A ENTRAMBI I RUOLI */}
-      <div className="border-t-2 border-slate-100 pt-8">
-        <h2 className="text-sm font-black uppercase tracking-widest text-slate-500 mb-6 px-4">
-          {isVolontario ? '❤️ Le tue Passioni' : '🎯 Aree di Intervento'}
-        </h2>
-        <div className="flex flex-wrap gap-3">
-          {allTags.map(t => {
-            const isSelected = tagSelezionati.includes(t.id)
-            const activeColorClass = getTagColor(t.name)
-            return (
-              <button key={t.id} type="button" onClick={() => toggleTag(t.id)}
-                className={`px-6 py-3 rounded-2xl border-2 font-bold text-sm transition-all duration-300 ${isSelected ? `${activeColorClass} shadow-lg scale-105` : 'border-slate-100 bg-slate-50 text-slate-400 hover:border-slate-200'}`}>
-                #{t.name}
-              </button>
-            )
-          })}
+      {/* SEZIONE CAMPI SPECIFICI IMPRESA */}
+      {isImpresa && (
+        <>
+          <div className="border-t-2 border-slate-100 pt-8">
+            <h2 className="text-sm font-black uppercase tracking-widest text-slate-500 mb-6 px-4">🏢 Dati Corporate</h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <InputField label="Forma Giuridica (es. Srl, SpA)" name="forma_giuridica" defaultValue={profilo?.forma_giuridica} />
+              <InputField label="Partita IVA" name="partita_iva" defaultValue={profilo?.partita_iva} />
+              <InputField label="Codice Fiscale" name="codice_fiscale" defaultValue={profilo?.codice_fiscale} />
+              <InputField label="Settore di Attività" name="settore_attivita" defaultValue={profilo?.settore_attivita} />
+              <div className="space-y-2">
+                <label className="text-[10px] font-black uppercase text-slate-400 ml-4 tracking-widest">Fascia Dipendenti</label>
+                <select name="fascia_dipendenti" defaultValue={profilo?.fascia_dipendenti || ''} className="w-full p-4 bg-slate-50 border-2 border-slate-50 rounded-2xl focus:border-blue-500 focus:bg-white outline-none font-medium transition-all appearance-none">
+                  <option value="">Seleziona...</option>
+                  <option value="1-10">1-10</option>
+                  <option value="11-50">11-50</option>
+                  <option value="51-250">51-250</option>
+                  <option value="250+">250+</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          <div className="border-t-2 border-slate-100 pt-8">
+            <h2 className="text-sm font-black uppercase tracking-widest text-slate-500 mb-6 px-4">📍 Sede & Operatività</h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <InputField label="Indirizzo Sede Legale" name="indirizzo_sede" defaultValue={profilo?.indirizzo_sede} />
+              <InputField label="Area Operativa" name="area_operativa" defaultValue={profilo?.area_operativa} />
+              <InputField label="Referente Aziendale" name="nome_referente" defaultValue={profilo?.nome_referente} />
+            </div>
+          </div>
+
+          <div className="border-t-2 border-slate-100 pt-8">
+            <h2 className="text-sm font-black uppercase tracking-widest text-slate-500 mb-6 px-4">🔗 Canali Online</h2>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <InputField label="Sito Web" name="sito_web" type="url" defaultValue={profilo?.sito_web} />
+              <InputField label="Profili Social" name="profili_social" defaultValue={profilo?.profili_social} />
+            </div>
+          </div>
+
+          <div className="border-t-2 border-slate-100 pt-8">
+            <h2 className="text-sm font-black uppercase tracking-widest text-slate-500 mb-6 px-4">🌍 Profilo di Impatto (ESG)</h2>
+            <div className="space-y-6">
+              <TextareaField label="Obiettivi ESG" name="obiettivi_esg" defaultValue={profilo?.obiettivi_esg} placeholder="Descrivi gli obiettivi ambientali, sociali e di governance..." />
+              <TextareaField label="Valori & Cause" name="valori_cause" defaultValue={profilo?.valori_cause} placeholder="Quali cause vi stanno più a cuore?" />
+              <TextareaField label="Tipologia di Impatto" name="tipologia_impatto" defaultValue={profilo?.tipologia_impatto} placeholder="Donazioni, volontariato aziendale, partnership..." />
+            </div>
+          </div>
+        </>
+      )}
+
+      {/* SEZIONE TAGS (Solo per Volontario e Associazione) */}
+      {(isVolontario || isAssociazione) && (
+        <div className="border-t-2 border-slate-100 pt-8">
+          <h2 className="text-sm font-black uppercase tracking-widest text-slate-500 mb-6 px-4">
+            {isVolontario ? '❤️ Le tue Passioni' : '🎯 Aree di Intervento'}
+          </h2>
+          <div className="flex flex-wrap gap-3">
+            {allTags.map(t => {
+              const isSelected = tagSelezionati.includes(t.id)
+              const activeColorClass = getTagColor(t.name)
+              return (
+                <button key={t.id} type="button" onClick={() => toggleTag(t.id)}
+                  className={`px-6 py-3 rounded-2xl border-2 font-bold text-sm transition-all duration-300 ${isSelected ? `${activeColorClass} shadow-lg scale-105` : 'border-slate-100 bg-slate-50 text-slate-400 hover:border-slate-200'}`}>
+                  #{t.name}
+                </button>
+              )
+            })}
+          </div>
+          {tagSelezionati.map(id => <input key={id} type="hidden" name="tags" value={id} />)}
         </div>
-        {/* Input nascosti che inviano i dati alla Server Action */}
-        {tagSelezionati.map(id => <input key={id} type="hidden" name="tags" value={id} />)}
-      </div>
+      )}
 
       {/* SEZIONE COMPETENZE SOLO PER VOLONTARI */}
       {isVolontario && (

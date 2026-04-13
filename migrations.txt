@@ -60,3 +60,45 @@ CREATE POLICY "Tutti possono vedere i tag delle associazioni"
 CREATE POLICY "Le associazioni possono gestire solo i propri tag"
   ON public.associazione_tags FOR ALL
   USING ( auth.uid() = associazione_id );
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+  -- 1. Creazione della tabella ponte per gestire il team aziendale
+CREATE TABLE public.impresa_dipendenti (
+  impresa_id UUID NOT NULL REFERENCES public.imprese(id) ON DELETE CASCADE,
+  volontario_id UUID NOT NULL REFERENCES public.volontari(id) ON DELETE CASCADE,
+  stato text NOT NULL DEFAULT 'in_attesa' CHECK (stato IN ('in_attesa', 'attivo')),
+  ruolo_aziendale text NOT NULL DEFAULT 'dipendente' CHECK (ruolo_aziendale IN ('dipendente', 'hr_manager')),
+  created_at timestamp with time zone NOT NULL DEFAULT timezone('utc'::text, now()),
+  
+  -- La Primary Key composita evita che lo stesso dipendente venga inserito due volte nella stessa azienda
+  PRIMARY KEY (impresa_id, volontario_id)
+);
+
+-- 2. Sicurezza (Row Level Security) per proteggere la privacy
+ALTER TABLE public.impresa_dipendenti ENABLE ROW LEVEL SECURITY;
+
+-- Le imprese possono vedere e gestire solo le righe del proprio team
+CREATE POLICY "Le imprese gestiscono i propri dipendenti"
+  ON public.impresa_dipendenti FOR ALL
+  USING ( auth.uid() = impresa_id );
+
+-- I volontari possono vedere solo se stessi all'interno delle aziende
+CREATE POLICY "I volontari vedono le proprie affiliazioni"
+  ON public.impresa_dipendenti FOR SELECT
+  USING ( auth.uid() = volontario_id );
+
+-- 3. La "Magia ESG": aggiungiamo la colonna opzionale alle candidature
+ALTER TABLE public.candidature
+ADD COLUMN impresa_sponsor_id UUID REFERENCES public.imprese(id) ON DELETE SET NULL;

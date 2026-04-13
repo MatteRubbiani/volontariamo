@@ -87,13 +87,19 @@ export async function completeOnboarding(formData: FormData) {
     const { error: impError } = await supabase.from('imprese').upsert({
       id: user.id,
       ragione_sociale: formData.get('nome'),
-      partita_iva: formData.get('partitaIva'),
-      citta: formData.get('citta'),
-      indirizzo_sede: formData.get('indirizzoSede'),
-      email_contatto: formData.get('emailContatto'),
+      forma_giuridica: formData.get('formaGiuridica') || null,
+      partita_iva: formData.get('partitaIva') || null,
+      codice_fiscale: formData.get('codiceFiscale') || null,
+      indirizzo_sede: formData.get('indirizzoSede') || null,
       sito_web: formData.get('sitoWeb') || null,
-      fascia_dipendenti: formData.get('fasciaDipendenti'),
-      mission: formData.get('mission'),
+      profili_social: formData.get('profiliSocial') || null,
+      nome_referente: formData.get('nomeReferente') || null,
+      settore_attivita: formData.get('settoreAttivita') || null,
+      fascia_dipendenti: formData.get('fasciaDipendenti') || null,
+      area_operativa: formData.get('areaOperativa') || null,
+      valori_cause: formData.get('valoriCause') || null,
+      obiettivi_esg: formData.get('obiettiviEsg') || null,
+      tipologia_impatto: formData.get('tipologiaImpatto') || null,
     })
     if (impError) throw new Error(`Errore Impresa: ${impError.message}`)
   }
