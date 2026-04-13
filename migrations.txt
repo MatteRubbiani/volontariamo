@@ -255,3 +255,11 @@ USING (
 
 ALTER TABLE public.impresa_dipendenti
 ADD COLUMN id UUID DEFAULT gen_random_uuid() UNIQUE;
+
+
+
+-- Permette al volontario di vedere le righe che lo riguardano nella tabella dipendenti
+CREATE POLICY "I_volontari_vedono_la_propria_assunzione"
+ON public.impresa_dipendenti FOR SELECT
+TO authenticated
+USING (volontario_id = auth.uid());
