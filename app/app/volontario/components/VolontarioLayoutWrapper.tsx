@@ -2,6 +2,7 @@
 
 import { WorkspaceProvider } from '@/lib/context/WorkspaceContext'
 import NavbarUI from '@/components/NavbarUI' 
+import { WorkspaceTransitionOverlay } from '@/components/WorkspaceTransitionOverlay' // 👈 NUOVO IMPORT
 
 export function VolontarioLayoutWrapper({
   children,
@@ -15,7 +16,11 @@ export function VolontarioLayoutWrapper({
   return (
     <WorkspaceProvider initialHasAziendale={hasAziendale}>
       
-      {/* 1. LA NAVBAR ORA È DENTRO E PUÒ VEDERE LO SWITCH! */}
+      {/* 🚨 AGGIUNGI QUESTO QUI SOTTO, PRIMA DELLA NAVBAR 🚨 
+         Essendo l'ultimo nell'HTML e avendo z-[9999], coprirà tutto 
+      */}
+      <WorkspaceTransitionOverlay />
+      
       <NavbarUI 
         email={userEmail}
         isVolontario={true} 
@@ -24,7 +29,6 @@ export function VolontarioLayoutWrapper({
         dashboardLink="/app/volontario"
       />
       
-      {/* 2. IL CONTENUTO DELLA PAGINA */}
       <div className="flex-1">
         {children}
       </div>

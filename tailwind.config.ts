@@ -58,6 +58,31 @@ export default {
         md: "calc(var(--radius) - 2px)",
         sm: "calc(var(--radius) - 4px)",
       },
+      // 🚨 AGGIUNGI QUESTO BLOCCO 👇
+      keyframes: {
+      // Un'apparizione vellutata della sfocatura
+      'blur-in': {
+        '0%': { filter: 'blur(0px)', opacity: '0' },
+        '50%': { filter: 'blur(12px)', opacity: '1' },
+        '100%': { filter: 'blur(0px)', opacity: '0' },
+      },
+      // Una linea di luce ultra-veloce che pulisce lo schermo
+      'shimmer-sweep': {
+        '0%': { transform: 'translateX(-100%) skewX(-15deg)' },
+        '100%': { transform: 'translateX(200%) skewX(-15deg)' },
+      },
+      // Uno zoom leggerissimo del contenuto
+      'scale-pulse': {
+        '0%': { transform: 'scale(1)' },
+        '50%': { transform: 'scale(0.98)' },
+        '100%': { transform: 'scale(1)' },
+      }
+    },
+    animation: {
+      'blur-in': 'blur-in 1.2s cubic-bezier(0.4, 0, 0.2, 1) forwards',
+      'shimmer': 'shimmer-sweep 0.6s ease-in-out forwards',
+      'content-pulse': 'scale-pulse 0.5s cubic-bezier(0.4, 0, 0.2, 1) forwards',
+    }
     },
   },
   plugins: [require("tailwindcss-animate")],
