@@ -102,3 +102,25 @@ CREATE POLICY "I volontari vedono le proprie affiliazioni"
 -- 3. La "Magia ESG": aggiungiamo la colonna opzionale alle candidature
 ALTER TABLE public.candidature
 ADD COLUMN impresa_sponsor_id UUID REFERENCES public.imprese(id) ON DELETE SET NULL;
+
+
+
+
+
+-- 1. Crea la tabella degli inviti
+CREATE TABLE public.inviti_impresa (
+  id UUID NOT NULL DEFAULT gen_random_uuid() PRIMARY KEY,
+  impresa_id UUID NOT NULL REFERENCES public.imprese(id) ON DELETE CASCADE,
+  email text NOT NULL,
+  token UUID NOT NULL DEFAULT gen_random_uuid() UNIQUE,
+  stato text NOT NULL DEFAULT 'in_attesa' CHECK (stato IN ('in_attesa', 'accettato', 'revocato')),
+  created_at timestamp with time zone NOT NULL DEFAULT timezone('utc'::text, now())
+);
+
+-- 2. Regole di Sicurezza (RLS)
+ALTER TABLE public.inviti_impresa ENABLE ROW LEVEL SECURITY;
+
+-- Le imprese possono gestire solo i propri inviti
+CREATE POLICY "Gestione inviti impresa"
+  ON public.inviti_impresa FOR ALL
+  USING ( auth.uid() = impresa_id );

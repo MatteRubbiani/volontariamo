@@ -1,7 +1,6 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
 
-// Esportazione pulita e diretta. Esattamente come vuole il tuo setup.
 export async function proxy(request: NextRequest) {
   let supabaseResponse = NextResponse.next({
     request,
@@ -33,6 +32,7 @@ export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl
   const isAppRoute = pathname.startsWith('/app')
   const isAuthRoute = pathname.startsWith('/auth')
+  const isHomeRoute = pathname === '/' // <-- AGGIUNTO: Intercettiamo la home pubblica
 
   // Salviamo i cookie di Supabase anche quando facciamo redirect
   const redirectWithCookies = (url: URL) => {
@@ -70,8 +70,8 @@ export async function proxy(request: NextRequest) {
       return redirectWithCookies(onboardingUrl)
     }
 
-    // CONTROLLO 2: Se HA FINITO e prova ad andare su Login o su Onboarding
-    if (hasCompletedOnboarding && (isAuthRoute || isOnboardingRoute)) {
+    // CONTROLLO 2: Se HA FINITO e prova ad andare su Login, Onboarding OPPURE sulla Home (/)
+    if (hasCompletedOnboarding && (isAuthRoute || isOnboardingRoute || isHomeRoute)) {
       const ruoloDestinazione = profilo?.ruolo || 'volontario'
       return redirectWithCookies(new URL(`/app/${ruoloDestinazione}`, request.url))
     }
