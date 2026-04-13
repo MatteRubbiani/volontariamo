@@ -232,3 +232,26 @@ BEGIN
   RETURN TRUE;
 END;
 $$;
+
+
+
+-- 1. L'impresa può leggere la sua tabella dei dipendenti
+CREATE POLICY "L'impresa vede i propri dipendenti"
+ON public.impresa_dipendenti FOR SELECT
+TO authenticated
+USING (impresa_id = auth.uid());
+
+-- 2. L'impresa può leggere il profilo di un volontario SOLO SE lavora per lei
+CREATE POLICY "L'impresa vede il profilo dei propri dipendenti"
+ON public.volontari FOR SELECT
+TO authenticated
+USING (
+  EXISTS (
+    SELECT 1 FROM impresa_dipendenti
+    WHERE impresa_dipendenti.volontario_id = volontari.id
+    AND impresa_dipendenti.impresa_id = auth.uid()
+  )
+);
+
+ALTER TABLE public.impresa_dipendenti
+ADD COLUMN id UUID DEFAULT gen_random_uuid() UNIQUE;

@@ -58,3 +58,42 @@ export async function creaInvito(prevState: any, formData: FormData) {
     token: invito.token 
   }
 }
+
+
+// ... (tieni le importazioni e la funzione creaInvito esistente)
+
+export async function eliminaInvito(invitoId: string) {
+  const cookieStore = await cookies()
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    { cookies: { getAll() { return cookieStore.getAll() } } }
+  )
+
+  const { error } = await supabase
+    .from('inviti_impresa')
+    .delete()
+    .eq('id', invitoId)
+
+  if (error) throw new Error("Impossibile eliminare l'invito")
+  
+  revalidatePath('/app/impresa/team')
+}
+
+export async function rimuoviDipendente(dipendenteId: string) {
+  const cookieStore = await cookies()
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    { cookies: { getAll() { return cookieStore.getAll() } } }
+  )
+
+  const { error } = await supabase
+    .from('impresa_dipendenti')
+    .delete()
+    .eq('id', dipendenteId)
+
+  if (error) throw new Error("Impossibile rimuovere il dipendente")
+  
+  revalidatePath('/app/impresa/team')
+}
