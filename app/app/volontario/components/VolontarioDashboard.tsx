@@ -5,13 +5,6 @@ import PosizioneCard from '@/components/PosizioneCard'
 import FiltriRicerca from '@/components/FiltriRicerca'
 import { useEffect } from 'react'
 
-// Mock dati per dashboard privata
-const mockOreVolate = 24
-const mockProssimiEventi = [
-  { id: 1, titolo: 'Esplora cause', descrizione: 'Scopri le associazioni che supportano le tue cause' },
-  { id: 2, titolo: 'Gestisci competenze', descrizione: 'Aggiorna le tue competenze e interessi' }
-]
-
 // Mock dati per dashboard aziendale
 const mockOreAziendale = 16
 const mockImpactMetrics = [
@@ -36,7 +29,7 @@ export function VolontarioDashboard({
   const { workspace, setWorkspace, hasAziendale } = useWorkspace()
 
   // Se è la prima volta e ha un'azienda, facciamo settare il context
-useEffect(() => {
+  useEffect(() => {
     if (hasAziendale && !workspace) {
       setWorkspace('privato')
     }
@@ -56,20 +49,6 @@ useEffect(() => {
               <p className="text-lg text-slate-600 max-w-2xl">
                 Scopri le associazioni che fanno la differenza. Scegli la causa che ti appassiona e inizia a fare volontariato.
               </p>
-            </div>
-
-            {/* STAT PRIVATA */}
-            <div className="grid gap-4 md:grid-cols-2">
-              <div className="bg-white rounded-2xl border border-emerald-100 p-6 shadow-sm hover:shadow-md transition-shadow">
-                <p className="text-[10px] font-black uppercase text-emerald-600 mb-2">Le Tue Ore di Volontariato</p>
-                <p className="text-4xl font-black text-slate-900">{mockOreVolate}h</p>
-                <p className="text-sm text-slate-500 mt-1">nella tua realtà privata</p>
-              </div>
-              <div className="bg-white rounded-2xl border border-slate-100 p-6 shadow-sm hover:shadow-md transition-shadow">
-                <p className="text-[10px] font-black uppercase text-slate-500 mb-2">Prossimi Step</p>
-                <p className="text-2xl font-black text-slate-900">Candidati</p>
-                <p className="text-sm text-slate-500 mt-1">a nuove posizioni</p>
-              </div>
             </div>
           </section>
 
