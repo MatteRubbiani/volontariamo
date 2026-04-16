@@ -292,3 +292,52 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+
+
+-- 1. Facciamo fuori la vecchia funzione
+DROP FUNCTION IF EXISTS cerca_posizioni_vicine(float, float, float);
+
+-- 2. Creiamo la nuova funzione con il cast a testo (ST_AsText)
+CREATE FUNCTION cerca_posizioni_vicine(user_lat float, user_lng float, raggio_km float)
+RETURNS TABLE (
+  id uuid,
+  associazione_id uuid,
+  titolo text,
+  descrizione text,
+  tipo text,
+  quando text,
+  dove text,
+  created_at timestamptz,
+  data_esatta date,
+  ora_inizio time,
+  ora_fine time,
+  giorni_settimana text[],
+  coords text -- Eccolo qui, ora è ufficialmente testo!
+)
+LANGUAGE plpgsql
+AS $$
+BEGIN
+  RETURN QUERY
+  SELECT 
+    p.id, 
+    p.associazione_id, 
+    p.titolo, 
+    p.descrizione, 
+    p.tipo, 
+    p.quando, 
+    p.dove, 
+    p.created_at, 
+    p.data_esatta, 
+    p.ora_inizio, 
+    p.ora_fine, 
+    p.giorni_settimana,
+    ST_AsText(p.coords) as coords -- La magia della traduzione
+  FROM posizioni p
+  WHERE p.coords IS NOT NULL
+  AND ST_DWithin(
+    p.coords, 
+    ST_SetSRID(ST_MakePoint(user_lng, user_lat), 4326), 
+    raggio_km * 1000 -- PostGIS lavora in metri, quindi moltiplichiamo
+  );
+END;
+$$;
