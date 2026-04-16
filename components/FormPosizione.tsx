@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { getTagColor } from '@/lib/tagColors'
-// 1. IMPORTIAMO IL NOSTRO SELETTORE DI COMPETENZE
 import CompetenzaSelector from './CompetenzaSelector'
 
 const GIORNI = [
@@ -19,15 +18,15 @@ export default function FormPosizione({
   posizione, 
   tagsDisponibili = [], 
   tagsSelezionati: tagsIniziali = [],
-  competenzeDisponibili = [],           // <--- NUOVA PROP
-  competenzeSelezionate = [],           // <--- NUOVA PROP
+  competenzeDisponibili = [],           
+  competenzeSelezionate = [],           
   salvaAction 
 }: { 
   posizione?: any
   tagsDisponibili?: any[]
   tagsSelezionati?: string[]
-  competenzeDisponibili?: any[]         // <--- NUOVO TIPO
-  competenzeSelezionate?: string[]      // <--- NUOVO TIPO
+  competenzeDisponibili?: any[]         
+  competenzeSelezionate?: string[]      
   salvaAction: (formData: FormData) => Promise<void>
 }) {
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -35,9 +34,12 @@ export default function FormPosizione({
   const [giorniSelezionati, setGiorniSelezionati] = useState<string[]>(posizione?.giorni_settimana || [])
   const [tagSelezionati, setTagSelezionati] = useState<string[]>(tagsIniziali)
   
+  // NUOVO STATO: Salviamo le coordinate geografiche
+  const [coordinate, setCoordinate] = useState<{lat: number, lng: number} | null>(null)
+  
   const inputRef = useRef<HTMLInputElement>(null)
 
-  // --- LOGICA GOOGLE MAPS (Invariata) ---
+  // --- LOGICA GOOGLE MAPS AGGIORNATA ---
   useEffect(() => {
     const initAutocomplete = () => {
       const google = (window as any).google
@@ -45,13 +47,22 @@ export default function FormPosizione({
         const autocomplete = new google.maps.places.Autocomplete(inputRef.current, {
           types: ['address'],
           componentRestrictions: { country: 'it' },
-          fields: ['formatted_address']
+          // Abbiamo aggiunto 'geometry' per farci restituire le coordinate
+          fields: ['formatted_address', 'geometry'] 
         })
 
         autocomplete.addListener('place_changed', () => {
           const place = autocomplete.getPlace()
           if (place && place.formatted_address && inputRef.current) {
             inputRef.current.value = place.formatted_address
+            
+            // Estraiamo Latitudine e Longitudine
+            if (place.geometry && place.geometry.location) {
+              setCoordinate({
+                lat: place.geometry.location.lat(),
+                lng: place.geometry.location.lng()
+              })
+            }
           }
         })
       }
@@ -92,6 +103,7 @@ export default function FormPosizione({
             // FORZIAMO IL RELOAD PER AGGIORNARE NAVBAR E DASHBOARD
             window.location.assign('/app/associazione')
           } catch (error) {
+            console.error("Errore salvataggio:", error)
             window.location.assign('/app/associazione')
           }
         }} 
@@ -170,6 +182,13 @@ export default function FormPosizione({
               required autoComplete="off"
               onKeyDown={(e) => { if (e.key === 'Enter') e.preventDefault(); }}
             />
+            {/* CAMPI NASCOSTI PER INVIARE LE COORDINATE ALLA ACTION */}
+            {coordinate && (
+              <>
+                <input type="hidden" name="lat" value={coordinate.lat} />
+                <input type="hidden" name="lng" value={coordinate.lng} />
+              </>
+            )}
           </div>
         </div>
 
@@ -205,7 +224,7 @@ export default function FormPosizione({
           ))}
         </div>
 
-        {/* 6. COMPETENZE RICHIESTE - NUOVA SEZIONE! */}
+        {/* 6. COMPETENZE RICHIESTE */}
         <div className="space-y-4 pt-6 border-t border-slate-100">
           <label className="text-[10px] font-black uppercase text-slate-400 ml-2 tracking-widest block">
             Competenze Richieste (Opzionale)

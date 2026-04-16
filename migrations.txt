@@ -263,3 +263,32 @@ CREATE POLICY "I_volontari_vedono_la_propria_assunzione"
 ON public.impresa_dipendenti FOR SELECT
 TO authenticated
 USING (volontario_id = auth.uid());
+
+
+// Vai nella dashboard di Supabase -> Database -> Extensions e abilita postgis.
+
+ALTER TABLE posizioni 
+ADD COLUMN coords geography(POINT, 4326);
+
+
+
+
+CREATE OR REPLACE FUNCTION cerca_posizioni_vicine(
+  user_lat float, 
+  user_lng float, 
+  raggio_km float
+)
+RETURNS SETOF posizioni AS $$
+BEGIN
+  RETURN QUERY
+  SELECT *
+  FROM posizioni
+  WHERE ST_DWithin(
+    coords,
+    ST_SetSRID(ST_MakePoint(user_lng, user_lat), 4326)::geography,
+    raggio_km * 1000 -- Trasforma km in metri
+  )
+  ORDER BY coords <-> ST_SetSRID(ST_MakePoint(user_lng, user_lat), 4326)::geography;
+END;
+$$ LANGUAGE plpgsql;
+
