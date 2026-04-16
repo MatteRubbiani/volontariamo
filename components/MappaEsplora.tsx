@@ -26,14 +26,12 @@ function MapEvents({ onBoundsChange, onMapReady, forcedLat, forcedLng, forcedZoo
   const map = useMap()
   const didInit = useRef(false)
   
-  // Volo alla città cercata
   useEffect(() => {
     if (forcedLat && forcedLng) {
       map.flyTo([forcedLat, forcedLng], forcedZoom, { animate: true, duration: 1.5 })
     }
   }, [forcedLat, forcedLng, forcedZoom, map])
 
-  // Aggiornamento bordi silenzioso
   useMapEvents({
     moveend: () => {
       const b = map.getBounds();
@@ -44,17 +42,16 @@ function MapEvents({ onBoundsChange, onMapReady, forcedLat, forcedLng, forcedZoo
     }
   });
 
-  // Init iniziale
   useEffect(() => {
     if (!didInit.current) {
       const b = map.getBounds();
-      onMapReady({
+      onBoundsChange({
         sw: { lat: b.getSouthWest().lat, lng: b.getSouthWest().lng },
         ne: { lat: b.getNorthEast().lat, lng: b.getNorthEast().lng }
       });
       didInit.current = true;
     }
-  }, [map, onMapReady]);
+  }, [map, onBoundsChange]);
 
   return null;
 }
@@ -62,21 +59,25 @@ function MapEvents({ onBoundsChange, onMapReady, forcedLat, forcedLng, forcedZoo
 const createPositionIcon = (tipo: string, isActive: boolean) => {
   const isUnaTantum = tipo === 'una_tantum';
   const color = isActive ? '#ea580c' : (isUnaTantum ? '#334155' : '#2563eb');
-  const scale = isActive ? 'scale-125 -translate-y-2 shadow-xl z-[1000]' : 'hover:scale-110';
+  const scale = isActive ? 'scale-125 -translate-y-2' : 'hover:scale-110';
+
+  // SVG completi presi dalle PosizioneCard
+  const svgContent = isUnaTantum 
+    ? `<path stroke-linecap="round" stroke-linejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 11.25v7.5" />`
+    : `<path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99" />`;
 
   const html = `
     <div class="flex flex-col items-center transition-all duration-300 ${scale}">
-      <div class="w-10 h-10 rounded-2xl flex items-center justify-center border-2 border-white shadow-lg" style="background-color: ${color}">
+      <div class="w-10 h-10 rounded-2xl flex items-center justify-center border-2 border-white shadow-lg flex-shrink-0" style="background-color: ${color}">
         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="white" class="w-5 h-5">
-           ${isUnaTantum 
-             ? '<path d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5" />' 
-             : '<path d="M16.023 9.348h4.992v-.001" />'}
+           ${svgContent}
         </svg>
       </div>
-      <div class="w-3 h-3 rotate-45 -mt-2 shadow-sm border-r-[2px] border-b-[2px] border-white" style="background-color: ${color}"></div>
+      <div class="w-3 h-3 rotate-45 -mt-2 shadow-sm border-r-[2px] border-b-[2px] border-white flex-shrink-0" style="background-color: ${color}"></div>
     </div>
   `
-  return L.divIcon({ html, className: '', iconSize: [40, 40], iconAnchor: [20, 20], popupAnchor: [0, -20] })
+  // iconSize alzato a [40, 48] per non tagliare la punta, iconAnchor [20, 48] per puntare esatto
+  return L.divIcon({ html, className: '', iconSize: [40, 48], iconAnchor: [20, 48], popupAnchor: [0, -45] })
 }
 
 export default function MappaEsplora({ 
@@ -154,7 +155,7 @@ export default function MappaEsplora({
               <Popup className="premium-popup">
                 <div className="p-1">
                    <h3 className="font-black text-slate-800 text-sm mb-2 leading-tight">{pos.titolo}</h3>
-                   <a href={`/posizione/${pos.id}`} className="block w-full text-center bg-slate-900 text-white text-[10px] font-black py-2 rounded-xl">DETTAGLI</a>
+                   <a href={`/posizione/${pos.id}`} className="block w-full text-center bg-slate-900 text-white text-[10px] font-black py-2 rounded-xl hover:bg-slate-800 transition-colors">DETTAGLI</a>
                 </div>
               </Popup>
             </Marker>

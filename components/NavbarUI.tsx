@@ -64,7 +64,7 @@ export default function NavbarUI({
                 {isVolontario && (
                   <>
                     <Link 
-                      href="/app/volontario/mappa" 
+                      href="/mappa" 
                       className={`text-sm font-bold transition-colors ${textColor}`}
                     >
                       Mappa
@@ -90,7 +90,7 @@ export default function NavbarUI({
           ) : (
             /* LINK MAPPA PER UTENTI NON LOGGATI (DESKTOP) */
             <Link 
-              href="/app/volontario/mappa" 
+              href="/mappa" 
               className={`text-sm font-bold transition-colors ${textColor}`}
             >
               Esplora Mappa
