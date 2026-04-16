@@ -55,44 +55,52 @@ export default function NavbarUI({
         
         {/* NAVIGAZIONE CENTRALE */}
         <div className="hidden md:flex gap-6 items-center">
-          {isLoggedIn && !needsOnboarding && (
-            <>
-              <Link href={dashboardLink} className={`text-sm font-bold transition-colors ${textColor}`}>
-                Dashboard
-              </Link>
-              {isVolontario && (
-                <>
-                  <Link 
-                    href="/app/volontario/mappa" 
-                    className={`text-sm font-bold transition-colors ${textColor}`}
-                  >
-                    Mappa
-                  </Link>
-                  <Link 
-                    href={isAziendale ? "/app/volontario/iniziative-team" : "/app/volontario/candidature"} 
-                    className={`text-sm font-bold transition-colors ${textColor}`}
-                  >
-                    {isAziendale ? 'Iniziative Team' : 'Le Mie Candidature'}
-                  </Link>
-                </>
-              )}
-              {/* NUOVO LINK PER LE ASSOCIAZIONI */}
-              {isAssociazione && (
-                <Link 
-                  href="/app/associazione/candidature" 
-                  className={`text-sm font-bold transition-colors ${textColor}`}
-                >
-                  Candidature Ricevute
+          {isLoggedIn ? (
+            !needsOnboarding && (
+              <>
+                <Link href={dashboardLink} className={`text-sm font-bold transition-colors ${textColor}`}>
+                  Dashboard
                 </Link>
-              )}
-            </>
+                {isVolontario && (
+                  <>
+                    <Link 
+                      href="/app/volontario/mappa" 
+                      className={`text-sm font-bold transition-colors ${textColor}`}
+                    >
+                      Mappa
+                    </Link>
+                    <Link 
+                      href={isAziendale ? "/app/volontario/iniziative-team" : "/app/volontario/candidature"} 
+                      className={`text-sm font-bold transition-colors ${textColor}`}
+                    >
+                      {isAziendale ? 'Iniziative Team' : 'Le Mie Candidature'}
+                    </Link>
+                  </>
+                )}
+                {isAssociazione && (
+                  <Link 
+                    href="/app/associazione/candidature" 
+                    className={`text-sm font-bold transition-colors ${textColor}`}
+                  >
+                    Candidature Ricevute
+                  </Link>
+                )}
+              </>
+            )
+          ) : (
+            /* LINK MAPPA PER UTENTI NON LOGGATI (DESKTOP) */
+            <Link 
+              href="/app/volontario/mappa" 
+              className={`text-sm font-bold transition-colors ${textColor}`}
+            >
+              Esplora Mappa
+            </Link>
           )}
         </div>
 
-        {/* AREA DESTRA (IL CUORE DEL PROBLEMA) */}
+        {/* AREA DESTRA */}
         <div className="flex items-center gap-3">
           
-          {/* WORKSPACE SWITCHER - Pulito e visibile */}
           {hasAziendale && isVolontario && (
             <div className="hidden md:flex items-center mr-2">
               <WorkspaceSwitcher />
@@ -152,14 +160,12 @@ export default function NavbarUI({
       {isOpen && (
         <div className={`md:hidden border-t px-6 py-6 flex flex-col gap-2 absolute w-full shadow-2xl ${isAziendale ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100'}`}>
           
-          {/* WORKSPACE SWITCHER (se volontario con azienda) */}
           {hasAziendale && isVolontario && (
             <div className={`mb-4 pb-4 border-b flex justify-center ${isAziendale ? 'border-slate-800' : 'border-slate-100'}`}>
               <WorkspaceSwitcher />
             </div>
           )}
 
-          {/* LINK DI NAVIGAZIONE */}
           {isLoggedIn ? (
             <div className="flex flex-col gap-1">
               {!needsOnboarding && (
@@ -203,10 +209,8 @@ export default function NavbarUI({
                 </>
               )}
 
-              {/* SEPARATORE */}
               <div className={`my-2 border-t ${isAziendale ? 'border-slate-800' : 'border-slate-100'}`}></div>
 
-              {/* PROFILO E LOGOUT */}
               <Link 
                 href="/profilo" 
                 onClick={chiudiMenu}
@@ -235,6 +239,14 @@ export default function NavbarUI({
             </div>
           ) : (
             <div className="flex flex-col gap-3 mt-2">
+              {/* LINK MAPPA PER UTENTI NON LOGGATI (MOBILE) */}
+              <Link 
+                href="/app/volontario/mappa" 
+                onClick={chiudiMenu}
+                className={`p-3 rounded-xl font-bold transition-all text-center ${isAziendale ? 'text-white hover:bg-slate-800' : 'text-slate-900 hover:bg-slate-50'}`}
+              >
+                Esplora Mappa
+              </Link>
               <Link 
                 href="/auth/login" 
                 onClick={chiudiMenu}

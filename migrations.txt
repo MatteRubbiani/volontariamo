@@ -341,3 +341,147 @@ BEGIN
   );
 END;
 $$;
+
+
+
+
+CREATE OR REPLACE FUNCTION get_ultime_posizioni(limite int DEFAULT 50)
+RETURNS TABLE (
+  id uuid,
+  associazione_id uuid,
+  titolo text,
+  descrizione text,
+  tipo text,
+  quando text,
+  dove text,
+  created_at timestamptz,
+  data_esatta date,
+  ora_inizio time,
+  ora_fine time,
+  giorni_settimana text[],
+  coords text 
+)
+LANGUAGE plpgsql
+AS $$
+BEGIN
+  RETURN QUERY
+  SELECT 
+    p.id, 
+    p.associazione_id, 
+    p.titolo, 
+    p.descrizione, 
+    p.tipo, 
+    p.quando, 
+    p.dove, 
+    p.created_at, 
+    p.data_esatta, 
+    p.ora_inizio, 
+    p.ora_fine, 
+    p.giorni_settimana,
+    ST_AsText(p.coords) as coords -- LA MAGIA: Traduciamo anche qui!
+  FROM posizioni p
+  WHERE p.coords IS NOT NULL -- Scartiamo in automatico quelle rotte
+  ORDER BY p.created_at DESC
+  LIMIT limite;
+END;
+$$;
+
+
+
+CREATE OR REPLACE FUNCTION ricerca_avanzata_posizioni(
+  min_lat float, min_lng float, max_lat float, max_lng float,
+  search_q text DEFAULT NULL,
+  filter_tipo text DEFAULT NULL,
+  filter_tags uuid[] DEFAULT NULL,
+  filter_competenze uuid[] DEFAULT NULL,
+  filter_data date DEFAULT NULL,
+  filter_giorni text[] DEFAULT NULL
+)
+RETURNS TABLE (
+  id uuid, titolo text, descrizione text, tipo text, dove text, 
+  quando text, data_esatta date, ora_inizio time, ora_fine time, 
+  coords text, tags jsonb, competenze jsonb
+) 
+LANGUAGE plpgsql
+AS $$
+BEGIN
+  RETURN QUERY
+  SELECT 
+    p.id, p.titolo, p.descrizione, p.tipo, p.dove, 
+    p.quando, p.data_esatta, p.ora_inizio, p.ora_fine,
+    ST_AsText(p.coords) as coords,
+    COALESCE(jsonb_agg(DISTINCT t.name) FILTER (WHERE t.id IS NOT NULL), '[]') as tags,
+    COALESCE(jsonb_agg(DISTINCT c.name) FILTER (WHERE c.id IS NOT NULL), '[]') as competenze
+  FROM posizioni p
+  LEFT JOIN posizione_tags pt ON p.id = pt.posizione_id
+  LEFT JOIN tags t ON pt.tag_id = t.id
+  LEFT JOIN posizione_competenze pc ON p.id = pc.posizione_id
+  LEFT JOIN competenze c ON pc.competenza_id = c.id
+  WHERE 
+    -- 1. Filtro Geografico (Bordi della mappa)
+    p.coords && ST_MakeEnvelope(min_lng, min_lat, max_lng, max_lat, 4326)
+    
+    -- 2. Ricerca Testuale (Nome/Titolo)
+    AND (search_q IS NULL OR p.titolo ILIKE '%' || search_q || '%')
+    
+    -- 3. Filtro Tipo (Una tantum / Ricorrente)
+    AND (filter_tipo IS NULL OR p.tipo = filter_tipo)
+    
+    -- 4. Filtro Data (Per eventi singoli)
+    AND (filter_data IS NULL OR p.data_esatta = filter_data)
+    
+    -- 5. Filtro Giorni (Per ricorrenti)
+    AND (filter_giorni IS NULL OR p.giorni_settimana && filter_giorni)
+
+    -- 6. Filtri Relazionali (Tags e Competenze)
+    AND (filter_tags IS NULL OR p.id IN (SELECT posizione_id FROM posizione_tags WHERE tag_id = ANY(filter_tags)))
+    AND (filter_competenze IS NULL OR p.id IN (SELECT posizione_id FROM posizione_competenze WHERE competenza_id = ANY(filter_competenze)))
+    
+  GROUP BY p.id;
+END;
+$$;
+
+
+
+CREATE OR REPLACE FUNCTION ricerca_avanzata_posizioni(
+  min_lat float, min_lng float, max_lat float, max_lng float,
+  search_q text DEFAULT NULL,
+  filter_tipo text DEFAULT NULL,
+  filter_tags uuid[] DEFAULT NULL,
+  filter_competenze uuid[] DEFAULT NULL,
+  filter_data date DEFAULT NULL,
+  filter_giorni text[] DEFAULT NULL
+)
+RETURNS TABLE (
+  id uuid, titolo text, descrizione text, tipo text, dove text, 
+  quando text, data_esatta date, ora_inizio time, ora_fine time, 
+  coords text, tags jsonb, competenze jsonb
+) 
+LANGUAGE plpgsql
+AS $$
+BEGIN
+  RETURN QUERY
+  SELECT 
+    p.id, p.titolo, p.descrizione, p.tipo, p.dove, 
+    p.quando, p.data_esatta, p.ora_inizio, p.ora_fine,
+    ST_AsText(p.coords) as coords,
+    COALESCE(jsonb_agg(DISTINCT t.name) FILTER (WHERE t.id IS NOT NULL), '[]') as tags,
+    COALESCE(jsonb_agg(DISTINCT c.name) FILTER (WHERE c.id IS NOT NULL), '[]') as competenze
+  FROM posizioni p
+  LEFT JOIN posizione_tags pt ON p.id = pt.posizione_id
+  LEFT JOIN tags t ON pt.tag_id = t.id
+  LEFT JOIN posizione_competenze pc ON p.id = pc.posizione_id
+  LEFT JOIN competenze c ON pc.competenza_id = c.id
+  WHERE 
+    -- 🚨 LA CORREZIONE È QUI: cast p.coords::geometry
+    p.coords::geometry && ST_MakeEnvelope(min_lng, min_lat, max_lng, max_lat, 4326)
+    
+    AND (search_q IS NULL OR search_q = '' OR p.titolo ILIKE '%' || search_q || '%')
+    AND (filter_tipo IS NULL OR filter_tipo = '' OR p.tipo = filter_tipo)
+    AND (filter_data IS NULL OR p.data_esatta = filter_data)
+    AND (filter_giorni IS NULL OR p.giorni_settimana && filter_giorni)
+    AND (filter_tags IS NULL OR p.id IN (SELECT posizione_id FROM posizione_tags WHERE tag_id = ANY(filter_tags)))
+    AND (filter_competenze IS NULL OR p.id IN (SELECT posizione_id FROM posizione_competenze WHERE competenza_id = ANY(filter_competenze)))
+  GROUP BY p.id;
+END;
+$$;

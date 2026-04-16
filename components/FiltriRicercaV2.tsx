@@ -1,209 +1,155 @@
 'use client'
 
-import { useRouter, usePathname, useSearchParams } from 'next/navigation'
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
+import { createBrowserClient } from '@supabase/ssr'
 
-export default function FiltriRicercaV2({ allTags = [] }: { allTags?: any[] }) {
+export default function FiltriRicercaV2() {
   const router = useRouter()
-  const pathname = usePathname()
   const searchParams = useSearchParams()
+  const supabase = createBrowserClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!, 
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  )
 
-  // STATI ORIGINALI
-  const [q, setQ] = useState(searchParams.get('q') || '')
-  const [tipo, setTipo] = useState(searchParams.get('tipo') || '')
-  const [tagSelezionato, setTagSelezionato] = useState(searchParams.get('tag') || '')
+  const [dbTags, setDbTags] = useState<any[]>([])
+  const [dbComp, setDbComp] = useState<any[]>([])
 
-  // NUOVI STATI GEOGRAFICI
+  const [query, setQuery] = useState(searchParams.get('q') || '')
   const [indirizzo, setIndirizzo] = useState(searchParams.get('indirizzo') || '')
-  const [lat, setLat] = useState(searchParams.get('lat') || '')
-  const [lng, setLng] = useState(searchParams.get('lng') || '')
   const [raggio, setRaggio] = useState(searchParams.get('raggio') || '15')
+  
+  const [selectedTags, setSelectedTags] = useState<string[]>(searchParams.get('tags')?.split(',').filter(Boolean) || [])
+  const [selectedComp, setSelectedComp] = useState<string[]>(searchParams.get('competenze')?.split(',').filter(Boolean) || [])
 
-  const [isLoadingGps, setIsLoadingGps] = useState(false)
-  const inputRef = useRef<HTMLInputElement>(null)
+  const [isSearching, setIsSearching] = useState(false)
 
-  // 1. INIZIALIZZAZIONE GOOGLE MAPS AUTOCOMPLETE
   useEffect(() => {
-    const initAutocomplete = () => {
-      const google = (window as any).google
-      if (google && inputRef.current) {
-        const autocomplete = new google.maps.places.Autocomplete(inputRef.current, {
-          types: ['geocode'],
-          componentRestrictions: { country: 'it' },
-          fields: ['formatted_address', 'geometry']
-        })
-
-        autocomplete.addListener('place_changed', () => {
-          const place = autocomplete.getPlace()
-          if (place && place.formatted_address && place.geometry?.location) {
-            setIndirizzo(place.formatted_address)
-            setLat(place.geometry.location.lat().toString())
-            setLng(place.geometry.location.lng().toString())
-          }
-        })
-      }
+    async function loadData() {
+      const { data: t } = await supabase.from('tags').select('*').order('name')
+      const { data: c } = await supabase.from('competenze').select('*').order('name')
+      if (t) setDbTags(t); if (c) setDbComp(c);
     }
-
-    if ((window as any).google) initAutocomplete()
-    else {
-      const checkGoogle = setInterval(() => {
-        if ((window as any).google) {
-          initAutocomplete()
-          clearInterval(checkGoogle)
-        }
-      }, 500)
-      return () => clearInterval(checkGoogle)
-    }
+    loadData()
   }, [])
 
-  // 2. FUNZIONE PER IL GPS DEL BROWSER
-  const ottieniPosizioneGPS = () => {
-    setIsLoadingGps(true)
-    if (!navigator.geolocation) {
-      alert("Il tuo browser non supporta la geolocalizzazione.")
-      setIsLoadingGps(false)
-      return
-    }
+  const handleTagToggle = (id: string) => {
+    let newList = [...selectedTags]
+    if (newList.includes(id)) newList = newList.filter(i => i !== id)
+    else newList.push(id)
+    setSelectedTags(newList)
+    updateUrl({ tags: newList.length > 0 ? newList.join(',') : null })
+  }
 
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
-        setLat(position.coords.latitude.toString())
-        setLng(position.coords.longitude.toString())
-        setIndirizzo("📍 Posizione Attuale (GPS)")
-        setIsLoadingGps(false)
-      },
-      (error) => {
-        alert("Non è stato possibile ottenere la posizione. Verifica i permessi.")
-        setIsLoadingGps(false)
+  const handleCompToggle = (id: string) => {
+    let newList = [...selectedComp]
+    if (newList.includes(id)) newList = newList.filter(i => i !== id)
+    else newList.push(id)
+    setSelectedComp(newList)
+    updateUrl({ competenze: newList.length > 0 ? newList.join(',') : null })
+  }
+
+  const updateUrl = (newParams: any) => {
+    const params = new URLSearchParams(searchParams.toString())
+    Object.keys(newParams).forEach(key => {
+      if (newParams[key]) params.set(key, newParams[key])
+      else params.delete(key)
+    })
+    router.push(`?${params.toString()}`)
+  }
+
+  const handleSearch = async (e?: any) => {
+    if (e) e.preventDefault()
+    setIsSearching(true)
+    
+    const params = new URLSearchParams(searchParams.toString())
+    if (query) params.set('q', query)
+    else params.delete('q')
+    
+    if (indirizzo) params.set('indirizzo', indirizzo)
+    else params.delete('indirizzo')
+    
+    params.set('raggio', raggio)
+
+    // Geocoding gratuito
+    if (indirizzo && indirizzo !== searchParams.get('indirizzo')) {
+      try {
+        const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(indirizzo)}`)
+        const data = await res.json()
+        if (data && data.length > 0) {
+          params.set('lat', data[0].lat)
+          params.set('lng', data[0].lon)
+        }
+      } catch (err) {
+        console.error("Geocoding error", err)
       }
-    )
-  }
-
-  // 3. APPLICAZIONE DEI FILTRI (AGGIORNA L'URL)
-  const applicaFiltri = (e: React.FormEvent) => {
-    e.preventDefault()
-    
-    const params = new URLSearchParams()
-    if (q) params.set('q', q)
-    if (tipo) params.set('tipo', tipo)
-    if (tagSelezionato) params.set('tag', tagSelezionato)
-    
-    // Parametri Geografici
-    if (lat && lng) {
-      params.set('lat', lat)
-      params.set('lng', lng)
-      params.set('raggio', raggio)
-      if (indirizzo) params.set('indirizzo', indirizzo)
+    } else if (!indirizzo) {
+      params.delete('lat'); params.delete('lng');
     }
 
-    router.push(`${pathname}?${params.toString()}`)
-  }
-
-  const resetFiltri = () => {
-    setQ(''); setTipo(''); setTagSelezionato(''); 
-    setIndirizzo(''); setLat(''); setLng(''); setRaggio('15')
-    if (inputRef.current) inputRef.current.value = ''
-    router.push(pathname)
+    router.push(`?${params.toString()}`)
+    setIsSearching(false)
   }
 
   return (
-    <form onSubmit={applicaFiltri} className="bg-white p-6 rounded-[2rem] shadow-xl border border-slate-100 space-y-6">
+    <div className="flex flex-col gap-4 bg-white p-6 rounded-[2.5rem] shadow-sm border border-slate-100">
       
-      <div className="flex items-center justify-between mb-4 border-b pb-4">
-        <h2 className="text-xl font-black text-slate-800 tracking-tight">Filtri Esplorazione</h2>
-        {searchParams.toString() && (
-          <button type="button" onClick={resetFiltri} className="text-xs font-bold text-red-500 hover:text-red-700 transition-colors bg-red-50 px-4 py-2 rounded-full">
-            Reset
-          </button>
-        )}
-      </div>
+      <form onSubmit={handleSearch} className="flex flex-col md:flex-row gap-3">
+        <input 
+          type="text" 
+          placeholder="Cosa vuoi fare?" 
+          className="flex-grow bg-slate-50 border-none rounded-2xl px-5 py-3 text-sm font-bold focus:ring-2 focus:ring-blue-500 outline-none"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+        />
+        <input 
+          type="text" 
+          placeholder="Città..." 
+          className="md:w-1/4 bg-slate-50 border-none rounded-2xl px-5 py-3 text-sm font-bold focus:ring-2 focus:ring-blue-500 outline-none"
+          value={indirizzo}
+          onChange={(e) => setIndirizzo(e.target.value)}
+        />
+        <select 
+          className="md:w-32 bg-slate-50 border-none rounded-2xl px-5 py-3 text-sm font-bold focus:ring-2 focus:ring-blue-500 outline-none cursor-pointer"
+          value={raggio}
+          onChange={(e) => setRaggio(e.target.value)}
+        >
+          <option value="5">+5 km</option>
+          <option value="15">+15 km</option>
+          <option value="50">+50 km</option>
+        </select>
+        <button type="submit" disabled={isSearching} className="bg-blue-600 text-white px-8 py-3 rounded-2xl font-black text-sm hover:bg-blue-700 transition-all disabled:opacity-50">
+          {isSearching ? '...' : 'CERCA'}
+        </button>
+      </form>
 
-      {/* SEZIONE 1: GEOGRAFIA (IL CUORE DELLA MAPPA) */}
-      <div className="space-y-4 bg-blue-50/50 p-5 rounded-2xl border border-blue-100/50">
-        <div className="space-y-2">
-          <label className="text-[10px] font-black uppercase text-blue-800 ml-2">Dove vuoi aiutare?</label>
-          <div className="flex flex-col xl:flex-row gap-2">
-            <input 
-              ref={inputRef}
-              type="text" 
-              value={indirizzo}
-              onChange={(e) => {
-                setIndirizzo(e.target.value)
-                if(e.target.value === '') { setLat(''); setLng('') } // Reset se l'utente cancella tutto
-              }}
-              placeholder="Cerca una città o un indirizzo..." 
-              className="flex-1 p-4 bg-white border-2 border-slate-100 focus:border-blue-500 rounded-xl outline-none font-bold text-slate-700 transition-all"
-            />
-            <button 
-              type="button"
-              onClick={ottieniPosizioneGPS}
-              disabled={isLoadingGps}
-              className="px-6 py-4 bg-slate-900 text-white font-bold rounded-xl hover:bg-slate-800 transition-all whitespace-nowrap flex justify-center items-center gap-2"
-            >
-              {isLoadingGps ? 'Cerco...' : '📍 Usa GPS'}
+      <div className="flex flex-col gap-2">
+        <span className="text-[10px] font-black uppercase text-slate-400 tracking-widest ml-1">Ambiti</span>
+        <div className="flex gap-2 overflow-x-auto pb-2 no-scrollbar">
+          {dbTags.map(tag => (
+            <button key={tag.id} type="button" onClick={() => handleTagToggle(tag.id)}
+              className={`whitespace-nowrap px-4 py-1.5 rounded-full text-xs font-bold border transition-all ${
+                selectedTags.includes(tag.id) ? 'bg-blue-600 border-blue-600 text-white shadow-md' : 'bg-white border-slate-200 text-slate-500 hover:border-blue-400'
+              }`}>
+              {tag.name}
             </button>
-          </div>
-        </div>
-
-        {/* SLIDER DEL RAGGIO (Visibile solo se c'è una coordinata) */}
-        <div className={`transition-all duration-300 overflow-hidden ${lat && lng ? 'opacity-100 max-h-32' : 'opacity-50 max-h-32 grayscale pointer-events-none'}`}>
-          <div className="flex justify-between items-center mb-2 mt-4">
-            <label className="text-[10px] font-black uppercase text-slate-500 ml-2">Raggio di Ricerca</label>
-            <span className="font-black text-blue-600 bg-blue-100 px-3 py-1 rounded-full text-xs">{raggio} km</span>
-          </div>
-          <input 
-            type="range" 
-            min="2" max="100" step="1"
-            value={raggio} 
-            onChange={(e) => setRaggio(e.target.value)}
-            className="w-full accent-blue-600 cursor-pointer"
-          />
-          <div className="flex justify-between text-[10px] font-bold text-slate-400 mt-1 px-1">
-            <span>2 km</span><span>50 km</span><span>100 km</span>
-          </div>
+          ))}
         </div>
       </div>
 
-      {/* SEZIONE 2: FILTRI CLASSICI */}
-      <div className="grid grid-cols-1 gap-4 pt-2">
-        <div className="space-y-1">
-          <label className="text-[10px] font-black uppercase text-slate-400 ml-2">Parola Chiave</label>
-          <input 
-            type="text" value={q} onChange={(e) => setQ(e.target.value)}
-            placeholder="es. Mensa, Bambini..." 
-            className="w-full p-4 bg-slate-50 border-2 border-slate-50 focus:border-slate-200 focus:bg-white rounded-xl outline-none font-bold text-slate-700 transition-all"
-          />
-        </div>
-
-        <div className="grid grid-cols-2 gap-2">
-          <div className="space-y-1">
-            <label className="text-[10px] font-black uppercase text-slate-400 ml-2">Frequenza</label>
-            <select value={tipo} onChange={(e) => setTipo(e.target.value)} className="w-full p-4 bg-slate-50 border-2 border-slate-50 focus:border-slate-200 rounded-xl outline-none font-bold text-slate-700 transition-all appearance-none">
-              <option value="">Qualsiasi</option>
-              <option value="una_tantum">Singoli</option>
-              <option value="ricorrente">Ricorrenti</option>
-            </select>
-          </div>
-
-          <div className="space-y-1">
-            <label className="text-[10px] font-black uppercase text-slate-400 ml-2">Categoria</label>
-            <select value={tagSelezionato} onChange={(e) => setTagSelezionato(e.target.value)} className="w-full p-4 bg-slate-50 border-2 border-slate-50 focus:border-slate-200 rounded-xl outline-none font-bold text-slate-700 transition-all appearance-none">
-              <option value="">Tutte</option>
-              {allTags.map(t => (
-                <option key={t.id} value={t.id}>{t.name}</option>
-              ))}
-            </select>
-          </div>
+      <div className="flex flex-col gap-2">
+        <span className="text-[10px] font-black uppercase text-slate-400 tracking-widest ml-1">Competenze</span>
+        <div className="flex gap-2 overflow-x-auto pb-2 no-scrollbar">
+          {dbComp.map(c => (
+            <button key={c.id} type="button" onClick={() => handleCompToggle(c.id)}
+              className={`whitespace-nowrap px-4 py-1.5 rounded-full text-xs font-bold border transition-all ${
+                selectedComp.includes(c.id) ? 'bg-slate-800 border-slate-800 text-white shadow-md' : 'bg-white border-slate-200 text-slate-500 hover:border-slate-400'
+              }`}>
+              {c.name}
+            </button>
+          ))}
         </div>
       </div>
-
-      <button type="submit" className="w-full py-4 bg-blue-600 text-white font-black rounded-xl hover:bg-blue-700 shadow-lg shadow-blue-200 transition-all active:scale-95 text-lg">
-        Applica e Cerca Sulla Mappa
-      </button>
-
-      <style jsx global>{`
-        .pac-container { z-index: 99999 !important; border-radius: 1rem; border: none !important; box-shadow: 0 20px 25px -5px rgb(0 0 0 / 0.1) !important; margin-top: 4px; }
-      `}</style>
-    </form>
+    </div>
   )
 }
