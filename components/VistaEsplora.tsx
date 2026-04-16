@@ -12,8 +12,9 @@ interface MapBounds {
   ne: { lat: number; lng: number };
 }
 
-// Helper per calcolare l'area di ricerca immediata quando l'utente cerca una città
-function getBoundsFromCenter(lat: number, lng: number, raggioKm: number): MapBounds {
+// Raggio fisso a 15km "invisibile" per caricare subito i dati al centro della ricerca
+function getBoundsFromCenter(lat: number, lng: number): MapBounds {
+  const raggioKm = 15; 
   const latOffset = raggioKm / 111.32;
   const lngOffset = raggioKm / (111.32 * Math.cos(lat * (Math.PI / 180)));
   return {
@@ -29,7 +30,6 @@ export default function VistaEsplora() {
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
   )
 
-  // STATI E REF (La logica che hai confermato funzionare)
   const [posizioni, setPosizioni] = useState<any[]>([])
   const [loading, setLoading] = useState(false)
   const [hoveredId, setHoveredId] = useState<string | null>(null)
@@ -38,18 +38,15 @@ export default function VistaEsplora() {
   const boundsRef = useRef<MapBounds | null>(null)
   const isFirstLoad = useRef(true)
 
-  // Parametri URL
   const q = searchParams.get('q') || null
   const tipo = searchParams.get('tipo') || null
   const lat = searchParams.get('lat') ? parseFloat(searchParams.get('lat')!) : null
   const lng = searchParams.get('lng') ? parseFloat(searchParams.get('lng')!) : null
-  const raggio = searchParams.get('raggio') ? parseInt(searchParams.get('raggio')!) : 15
   const tagsStr = searchParams.get('tags')
   const competenzeStr = searchParams.get('competenze')
   const filterTags = tagsStr ? tagsStr.split(',') : null
   const filterCompetenze = competenzeStr ? competenzeStr.split(',') : null
 
-  // FUNZIONE FETCH
   const fetchPosizioni = async (targetBounds: MapBounds) => {
     setLoading(true)
     try {
@@ -79,30 +76,26 @@ export default function VistaEsplora() {
     }
   }
 
-  // Quando la mappa è pronta la prima volta
   const handleMapReady = useCallback((initialBounds: MapBounds) => {
     boundsRef.current = initialBounds;
     if (isFirstLoad.current) {
       isFirstLoad.current = false;
-      // Se non c'è una ricerca specifica nell'URL, carichiamo quello che c'è a video
       if (!lat || !lng) fetchPosizioni(initialBounds);
     }
   }, [lat, lng, q, tipo, tagsStr, competenzeStr])
 
-  // Reazione ai filtri URL
   useEffect(() => {
     if (isFirstLoad.current) return;
     
     if (lat && lng) {
-      const calcBounds = getBoundsFromCenter(lat, lng, raggio);
+      const calcBounds = getBoundsFromCenter(lat, lng);
       boundsRef.current = calcBounds; 
       fetchPosizioni(calcBounds);
     } else if (boundsRef.current) {
       fetchPosizioni(boundsRef.current);
     }
-  }, [q, tipo, tagsStr, competenzeStr, lat, lng, raggio])
+  }, [q, tipo, tagsStr, competenzeStr, lat, lng])
 
-  // Scroll automatico
   useEffect(() => {
     if (focusedId) {
       const cardElement = document.getElementById(`card-${focusedId}`)
@@ -113,7 +106,6 @@ export default function VistaEsplora() {
   return (
     <div className="flex flex-col lg:flex-row w-full h-full overflow-hidden relative bg-white">
       
-      {/* COLONNA SINISTRA: LISTA */}
       <div className="w-full lg:w-[55%] xl:w-[50%] h-full overflow-y-auto p-6 md:p-8 lg:p-10 flex flex-col gap-6 order-2 lg:order-1 bg-slate-50 scroll-smooth relative z-10">
         <div className="flex justify-between items-end border-b border-slate-200 pb-6">
           <h1 className="text-3xl md:text-4xl font-black text-slate-800 tracking-tighter">Esplora</h1>
@@ -130,8 +122,8 @@ export default function VistaEsplora() {
         {posizioni.length === 0 && !loading ? (
           <div className="bg-white p-12 rounded-[3rem] text-center border-2 border-dashed border-slate-200 my-10 shadow-sm">
             <span className="text-5xl block mb-4">🌍</span>
-            <h3 className="text-xl font-black text-slate-800 mb-2">Nessun risultato</h3>
-            <p className="text-slate-500 font-medium italic text-sm">Sposta la mappa e usa il tasto "Cerca in questa zona".</p>
+            <h3 className="text-xl font-black text-slate-800 mb-2">Nessun risultato in questa zona</h3>
+            <p className="text-slate-500 font-medium italic text-sm">Sposta la mappa o usa il mirino per trovare altro.</p>
           </div>
         ) : (
           <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 pb-20">
@@ -150,10 +142,7 @@ export default function VistaEsplora() {
         )}
       </div>
 
-      {/* COLONNA DESTRA: MAPPA */}
       <div className="w-full lg:w-[45%] xl:w-[50%] h-[40vh] lg:h-full order-1 lg:order-2 border-l border-slate-200 z-20 relative">
-        
-        {/* 🚨 IL TASTO RITROVATO: Posizionamento assoluto con z-index massiccio */}
         <div className="absolute top-8 left-1/2 -translate-x-1/2 z-[9999] pointer-events-auto">
           <button 
             onClick={(e) => {
@@ -178,8 +167,7 @@ export default function VistaEsplora() {
           onBoundsChange={(b: any) => { boundsRef.current = b }} 
           forcedLat={lat}
           forcedLng={lng}
-          forcedRaggio={raggio}
-          forcedZoom={raggio > 50 ? 8 : raggio > 20 ? 10 : 12}
+          forcedZoom={12} // Zoom standard per quando vola su una città
         />
       </div>
 

@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState, useRef } from 'react'
-import { MapContainer, TileLayer, Marker, Popup, useMap, useMapEvents, Circle } from 'react-leaflet'
+import { MapContainer, TileLayer, Marker, Popup, useMap, useMapEvents } from 'react-leaflet'
 import 'leaflet/dist/leaflet.css'
 import L from 'leaflet'
 
@@ -14,13 +14,51 @@ const fixLeafletIcons = () => {
   })
 }
 
-const userIconHtml = `
-  <div class="relative flex items-center justify-center">
-    <div class="absolute w-8 h-8 bg-blue-500 rounded-full animate-ping opacity-20"></div>
-    <div class="relative w-4 h-4 bg-blue-600 border-2 border-white rounded-full shadow-lg"></div>
-  </div>
-`
-const customUserIcon = L.divIcon({ html: userIconHtml, className: '', iconSize: [32, 32], iconAnchor: [16, 16] })
+// IL MIRINO GPS (Pulsante Fluttuante)
+function LocateControl() {
+  const map = useMap()
+  const [locating, setLocating] = useState(false)
+
+  const handleLocate = (e: any) => {
+    e.preventDefault();
+    if (!("geolocation" in navigator)) {
+      alert("Il tuo browser non supporta la geolocalizzazione.");
+      return;
+    }
+    setLocating(true);
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        const { latitude, longitude } = position.coords;
+        map.flyTo([latitude, longitude], 13, { animate: true, duration: 1.5 });
+        setLocating(false);
+      },
+      (err) => {
+        console.error(err);
+        alert("Impossibile trovare la posizione. Controlla i permessi del browser.");
+        setLocating(false);
+      },
+      { enableHighAccuracy: true, timeout: 5000 }
+    );
+  }
+
+  return (
+    <div className="leaflet-bottom leaflet-right z-[1000] absolute bottom-6 right-6 pointer-events-auto">
+      <button 
+        onClick={handleLocate}
+        title="Trova la mia posizione"
+        className="bg-white text-slate-800 w-12 h-12 rounded-full shadow-[0_10px_20px_rgba(0,0,0,0.2)] flex items-center justify-center hover:bg-slate-50 hover:scale-110 active:scale-95 transition-all border border-slate-100"
+      >
+        {locating ? (
+           <div className="w-5 h-5 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+        ) : (
+          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-6 h-6 text-blue-600">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M7.5 16.5A9 9 0 0 1 16.5 7.5M12 3v3m0 12v3m9-9h-3M6 12H3m9 3a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z" />
+          </svg>
+        )}
+      </button>
+    </div>
+  )
+}
 
 function MapEvents({ onBoundsChange, onMapReady, forcedLat, forcedLng, forcedZoom }: any) {
   const map = useMap()
@@ -45,13 +83,13 @@ function MapEvents({ onBoundsChange, onMapReady, forcedLat, forcedLng, forcedZoo
   useEffect(() => {
     if (!didInit.current) {
       const b = map.getBounds();
-      onBoundsChange({
+      onMapReady({
         sw: { lat: b.getSouthWest().lat, lng: b.getSouthWest().lng },
         ne: { lat: b.getNorthEast().lat, lng: b.getNorthEast().lng }
       });
       didInit.current = true;
     }
-  }, [map, onBoundsChange]);
+  }, [map, onMapReady]);
 
   return null;
 }
@@ -61,7 +99,6 @@ const createPositionIcon = (tipo: string, isActive: boolean) => {
   const color = isActive ? '#ea580c' : (isUnaTantum ? '#334155' : '#2563eb');
   const scale = isActive ? 'scale-125 -translate-y-2' : 'hover:scale-110';
 
-  // SVG completi presi dalle PosizioneCard
   const svgContent = isUnaTantum 
     ? `<path stroke-linecap="round" stroke-linejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 11.25v7.5" />`
     : `<path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99" />`;
@@ -76,7 +113,6 @@ const createPositionIcon = (tipo: string, isActive: boolean) => {
       <div class="w-3 h-3 rotate-45 -mt-2 shadow-sm border-r-[2px] border-b-[2px] border-white flex-shrink-0" style="background-color: ${color}"></div>
     </div>
   `
-  // iconSize alzato a [40, 48] per non tagliare la punta, iconAnchor [20, 48] per puntare esatto
   return L.divIcon({ html, className: '', iconSize: [40, 48], iconAnchor: [20, 48], popupAnchor: [0, -45] })
 }
 
@@ -90,7 +126,6 @@ export default function MappaEsplora({
   onBoundsChange, 
   forcedLat, 
   forcedLng, 
-  forcedRaggio, 
   forcedZoom 
 }: any) {
   const [isMounted, setIsMounted] = useState(false)
@@ -104,9 +139,12 @@ export default function MappaEsplora({
 
   return (
     <div className="w-full h-full relative z-0">
+      {/* ZOOM 6 E CENTRO ITALIA COME VISTA INIZIALE DA EFFETTO WOW */}
       <MapContainer center={[41.8719, 12.5674]} zoom={6} style={{ height: '100%', width: '100%' }} zoomControl={false}>
         <TileLayer url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png" />
         
+        <LocateControl />
+
         <MapEvents 
           onMapReady={onMapReady}
           onBoundsChange={onBoundsChange} 
@@ -114,24 +152,6 @@ export default function MappaEsplora({
           forcedLng={forcedLng} 
           forcedZoom={forcedZoom} 
         />
-
-        {forcedLat && forcedLng && (
-          <>
-            <Marker position={[forcedLat, forcedLng]} icon={customUserIcon} />
-            <Circle 
-              center={[forcedLat, forcedLng]} 
-              radius={forcedRaggio * 1000} 
-              pathOptions={{ 
-                fillColor: '#3b82f6', 
-                color: '#3b82f6', 
-                weight: 1, 
-                opacity: 0.2, 
-                fillOpacity: 0.05,
-                dashArray: '5, 10' 
-              }} 
-            />
-          </>
-        )}
 
         {posizioni.map((pos: any) => {
           if (!pos.coords) return null;

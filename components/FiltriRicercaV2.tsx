@@ -4,6 +4,10 @@ import { useState, useEffect } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { createBrowserClient } from '@supabase/ssr'
 
+// 🚨 IMPORTIAMO I TUOI BADGE UFFICIALI
+import TagBadge from '@/components/TagBadge'
+import CompetenzaBadge from '@/components/CompetenzaBadge'
+
 export default function FiltriRicercaV2() {
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -17,7 +21,6 @@ export default function FiltriRicercaV2() {
 
   const [query, setQuery] = useState(searchParams.get('q') || '')
   const [indirizzo, setIndirizzo] = useState(searchParams.get('indirizzo') || '')
-  const [raggio, setRaggio] = useState(searchParams.get('raggio') || '15')
   
   const [selectedTags, setSelectedTags] = useState<string[]>(searchParams.get('tags')?.split(',').filter(Boolean) || [])
   const [selectedComp, setSelectedComp] = useState<string[]>(searchParams.get('competenze')?.split(',').filter(Boolean) || [])
@@ -68,10 +71,7 @@ export default function FiltriRicercaV2() {
     
     if (indirizzo) params.set('indirizzo', indirizzo)
     else params.delete('indirizzo')
-    
-    params.set('raggio', raggio)
 
-    // Geocoding gratuito
     if (indirizzo && indirizzo !== searchParams.get('indirizzo')) {
       try {
         const res = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(indirizzo)}`)
@@ -92,64 +92,76 @@ export default function FiltriRicercaV2() {
   }
 
   return (
-    <div className="flex flex-col gap-4 bg-white p-6 rounded-[2.5rem] shadow-sm border border-slate-100">
+    <div className="flex flex-col gap-5 bg-white p-6 rounded-[2.5rem] shadow-sm border border-slate-100">
       
       <form onSubmit={handleSearch} className="flex flex-col md:flex-row gap-3">
         <input 
           type="text" 
           placeholder="Cosa vuoi fare?" 
-          className="flex-grow bg-slate-50 border-none rounded-2xl px-5 py-3 text-sm font-bold focus:ring-2 focus:ring-blue-500 outline-none"
+          className="flex-grow bg-slate-50 border-none rounded-2xl px-5 py-3 text-sm font-bold focus:ring-2 focus:ring-blue-500 outline-none transition-shadow"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
         />
         <input 
           type="text" 
-          placeholder="Città..." 
-          className="md:w-1/4 bg-slate-50 border-none rounded-2xl px-5 py-3 text-sm font-bold focus:ring-2 focus:ring-blue-500 outline-none"
+          placeholder="Città o indirizzo..." 
+          className="md:w-1/3 bg-slate-50 border-none rounded-2xl px-5 py-3 text-sm font-bold focus:ring-2 focus:ring-blue-500 outline-none transition-shadow"
           value={indirizzo}
           onChange={(e) => setIndirizzo(e.target.value)}
         />
-        <select 
-          className="md:w-32 bg-slate-50 border-none rounded-2xl px-5 py-3 text-sm font-bold focus:ring-2 focus:ring-blue-500 outline-none cursor-pointer"
-          value={raggio}
-          onChange={(e) => setRaggio(e.target.value)}
-        >
-          <option value="5">+5 km</option>
-          <option value="15">+15 km</option>
-          <option value="50">+50 km</option>
-        </select>
-        <button type="submit" disabled={isSearching} className="bg-blue-600 text-white px-8 py-3 rounded-2xl font-black text-sm hover:bg-blue-700 transition-all disabled:opacity-50">
+        <button type="submit" disabled={isSearching} className="bg-blue-600 text-white px-8 py-3 rounded-2xl font-black text-sm hover:bg-blue-700 active:scale-95 transition-all disabled:opacity-50">
           {isSearching ? '...' : 'CERCA'}
         </button>
       </form>
 
-      <div className="flex flex-col gap-2">
+      {/* AMBITI CON TAG BADGE */}
+      <div className="flex flex-col gap-2 mt-1">
         <span className="text-[10px] font-black uppercase text-slate-400 tracking-widest ml-1">Ambiti</span>
-        <div className="flex gap-2 overflow-x-auto pb-2 no-scrollbar">
-          {dbTags.map(tag => (
-            <button key={tag.id} type="button" onClick={() => handleTagToggle(tag.id)}
-              className={`whitespace-nowrap px-4 py-1.5 rounded-full text-xs font-bold border transition-all ${
-                selectedTags.includes(tag.id) ? 'bg-blue-600 border-blue-600 text-white shadow-md' : 'bg-white border-slate-200 text-slate-500 hover:border-blue-400'
-              }`}>
-              {tag.name}
-            </button>
-          ))}
+        <div className="flex gap-3 overflow-x-auto pb-3 pt-1 px-1 no-scrollbar items-center">
+          {dbTags.map(tag => {
+            const isSelected = selectedTags.includes(tag.id);
+            return (
+              <button 
+                key={tag.id} 
+                type="button" 
+                onClick={() => handleTagToggle(tag.id)}
+                className={`transition-all flex-shrink-0 rounded-xl outline-none ${
+                  isSelected 
+                    ? 'scale-105 ring-2 ring-blue-500 ring-offset-2 shadow-md opacity-100 z-10' 
+                    : 'opacity-40 grayscale hover:grayscale-0 hover:opacity-100 hover:scale-105'
+                }`}
+              >
+                <TagBadge nome={tag.name} size="md" />
+              </button>
+            )
+          })}
         </div>
       </div>
 
+      {/* COMPETENZE CON COMPETENZA BADGE */}
       <div className="flex flex-col gap-2">
         <span className="text-[10px] font-black uppercase text-slate-400 tracking-widest ml-1">Competenze</span>
-        <div className="flex gap-2 overflow-x-auto pb-2 no-scrollbar">
-          {dbComp.map(c => (
-            <button key={c.id} type="button" onClick={() => handleCompToggle(c.id)}
-              className={`whitespace-nowrap px-4 py-1.5 rounded-full text-xs font-bold border transition-all ${
-                selectedComp.includes(c.id) ? 'bg-slate-800 border-slate-800 text-white shadow-md' : 'bg-white border-slate-200 text-slate-500 hover:border-slate-400'
-              }`}>
-              {c.name}
-            </button>
-          ))}
+        <div className="flex gap-3 overflow-x-auto pb-3 pt-1 px-1 no-scrollbar items-center">
+          {dbComp.map(c => {
+            const isSelected = selectedComp.includes(c.id);
+            return (
+              <button 
+                key={c.id} 
+                type="button" 
+                onClick={() => handleCompToggle(c.id)}
+                className={`transition-all flex-shrink-0 rounded-lg outline-none ${
+                  isSelected 
+                    ? 'scale-105 ring-2 ring-slate-800 ring-offset-2 shadow-md opacity-100 z-10' 
+                    : 'opacity-50 hover:opacity-100 hover:scale-105'
+                }`}
+              >
+                <CompetenzaBadge nome={c.name} />
+              </button>
+            )
+          })}
         </div>
       </div>
+
     </div>
   )
 }
