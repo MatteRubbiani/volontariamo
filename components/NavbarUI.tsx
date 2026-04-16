@@ -181,7 +181,7 @@ export default function NavbarUI({
                   {isVolontario && (
                     <>
                       <Link 
-                        href="/app/volontario/mappa" 
+                        href="/mappa" 
                         onClick={chiudiMenu}
                         className={`p-3 rounded-xl font-bold transition-all ${isAziendale ? 'text-white hover:bg-slate-800' : 'text-slate-900 hover:bg-slate-50'}`}
                       >
@@ -241,7 +241,7 @@ export default function NavbarUI({
             <div className="flex flex-col gap-3 mt-2">
               {/* LINK MAPPA PER UTENTI NON LOGGATI (MOBILE) */}
               <Link 
-                href="/app/volontario/mappa" 
+                href="/mappa" 
                 onClick={chiudiMenu}
                 className={`p-3 rounded-xl font-bold transition-all text-center ${isAziendale ? 'text-white hover:bg-slate-800' : 'text-slate-900 hover:bg-slate-50'}`}
               >
