@@ -1,9 +1,10 @@
 'use client'
 
 import { createContext, useContext, useState, ReactNode } from 'react'
+import { useRouter } from 'next/navigation' // 1. Aggiunto l'import
 
-// 1. Definiamo i tipi in modo chiaro
-type WorkspaceType = 'privato' | 'aziendale' | null
+// 1. Rimuoviamo il "null". O sei privato, o sei aziendale. Niente stati intermedi.
+type WorkspaceType = 'privato' | 'aziendale'
 
 interface WorkspaceContextType {
   workspace: WorkspaceType
@@ -11,10 +12,8 @@ interface WorkspaceContextType {
   hasAziendale: boolean
 }
 
-// 2. Creiamo il context
 const WorkspaceContext = createContext<WorkspaceContextType | undefined>(undefined)
 
-// 3. Il Provider
 export function WorkspaceProvider({ 
   children, 
   initialHasAziendale 
@@ -22,12 +21,25 @@ export function WorkspaceProvider({
   children: ReactNode, 
   initialHasAziendale: boolean 
 }) {
-  const [workspace, setWorkspace] = useState<WorkspaceType>(null)
+  // 2. Inizializziamo a 'privato' di default.
+  // (Se vuoi che i dipendenti partano dalla vista aziendale, usa: initialHasAziendale ? 'aziendale' : 'privato')
+  const [workspace, setWorkspace] = useState<WorkspaceType>('privato')
+  const router = useRouter() // 2. Inizializzato il router
+
+  // 3. Il "Buttafuori": un wrapper sicuro che impedisce a un privato di forzare lo stato aziendale
+  const safeSetWorkspace = (newWorkspace: WorkspaceType) => {
+    if (newWorkspace === 'aziendale' && !initialHasAziendale) {
+      console.warn("Accesso negato: L'utente non ha un'azienda collegata.")
+      return // Blocchiamo l'azione senza far crashare nulla
+    }
+    setWorkspace(newWorkspace)
+    router.push('/app/volontario') // 3. Il redirect automatico alla home
+  }
 
   return (
     <WorkspaceContext.Provider value={{ 
       workspace, 
-      setWorkspace, 
+      setWorkspace: safeSetWorkspace, 
       hasAziendale: initialHasAziendale 
     }}>
       {children}
@@ -35,17 +47,15 @@ export function WorkspaceProvider({
   )
 }
 
-// 4. L'hook con il "Salvavita" tipizzato a prova di bomba
 export function useWorkspace(): WorkspaceContextType {
   const context = useContext(WorkspaceContext)
   
   if (context === undefined) {
-    // Forziamo il tipo di ritorno per evitare il "never"
     return { 
       workspace: 'privato', 
       setWorkspace: () => {}, 
       hasAziendale: false 
-    } as WorkspaceContextType
+    }
   }
   
   return context

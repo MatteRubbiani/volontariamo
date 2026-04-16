@@ -5,6 +5,9 @@ import { cookies } from 'next/headers'
 import { revalidatePath } from 'next/cache'
 
 export async function updateProfilo(formData: FormData) {
+  // 🐛 ARMA SEGRETA: Stampa nel terminale TUTTO quello che arriva dal form
+  console.log("📦 DATI RICEVUTI DAL FORM:", Object.fromEntries(formData.entries()))
+
   const cookieStore = await cookies()
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -20,46 +23,32 @@ export async function updateProfilo(formData: FormData) {
   const bio = formData.get('bio') as string
 
   if (role === 'volontario') {
-    // 1. Update dati base volontario
     const { error: updateError } = await supabase
       .from('volontari')
       .update({ nome_completo: nome, bio: bio })
       .eq('id', user.id)
 
-    if (updateError) throw new Error("Errore aggiornamento profilo")
+    if (updateError) throw new Error("Errore aggiornamento profilo volontario")
 
-    // 2. Gestione TAG
     const tags = formData.getAll('tags') as string[]
     await supabase.from('volontario_tags').delete().eq('volontario_id', user.id)
-    
     if (tags.length > 0) {
-      const tagInserts = tags.map(tagId => ({
-        volontario_id: user.id,
-        tag_id: tagId
-      }))
-      await supabase.from('volontario_tags').insert(tagInserts)
+      await supabase.from('volontario_tags').insert(tags.map(id => ({ volontario_id: user.id, tag_id: id })))
     }
 
-    // 3. Gestione COMPETENZE
     const competenze = formData.getAll('competenze') as string[]
     await supabase.from('volontario_competenze').delete().eq('volontario_id', user.id)
-    
     if (competenze.length > 0) {
-      const compInserts = competenze.map(compId => ({
-        volontario_id: user.id,
-        competenza_id: compId
-      }))
-      await supabase.from('volontario_competenze').insert(compInserts)
+      await supabase.from('volontario_competenze').insert(competenze.map(id => ({ volontario_id: user.id, competenza_id: id })))
     }
 
   } else if (role === 'associazione') {
-    // 1. Upsert per le associazioni con TUTTI i campi
+    // 🚨 FIX: Passiamo da UPSERT a UPDATE!
     const { error } = await supabase
       .from('associazioni')
-      .upsert({
-        id: user.id,
+      .update({
         nome: nome,
-        descrizione: bio, // Mappa 'bio' del form a 'descrizione' del DB
+        descrizione: bio,
         forma_giuridica: formData.get('forma_giuridica') as string || null,
         codice_fiscale: formData.get('codice_fiscale') as string || null,
         citta: formData.get('citta') as string || null,
@@ -69,34 +58,26 @@ export async function updateProfilo(formData: FormData) {
         nome_referente: formData.get('nome_referente') as string || null,
         sito_web: formData.get('sito_web') as string || null,
         profili_social: formData.get('profili_social') as string || null,
-      }, {
-        onConflict: 'id'
       })
+      .eq('id', user.id) // <--- Fondamentale per l'UPDATE
 
-    if (error) throw new Error(`Errore aggiornamento associazione: ${error.message}`)
+    if (error) {
+      console.error("❌ ERRORE UPDATE ASSOCIAZIONE:", error.message)
+      throw new Error(`Errore DB: ${error.message}`)
+    }
 
-    // 2. Gestione TAG Associazione
     const tags = formData.getAll('tags') as string[]
-    
-    // Pulizia dei vecchi tag
     await supabase.from('associazione_tags').delete().eq('associazione_id', user.id)
-    
-    // Inserimento dei nuovi tag se presenti
     if (tags.length > 0) {
-      const tagInserts = tags.map(tagId => ({
-        associazione_id: user.id,
-        tag_id: tagId
-      }))
-      await supabase.from('associazione_tags').insert(tagInserts)
+      await supabase.from('associazione_tags').insert(tags.map(id => ({ associazione_id: user.id, tag_id: id })))
     }
     
   } else if (role === 'impresa') {
-    // 1. Upsert per le imprese con TUTTI i campi corporate
+    // 🚨 FIX: Passiamo da UPSERT a UPDATE anche qui per coerenza
     const { error } = await supabase
       .from('imprese')
-      .upsert({
-        id: user.id,
-        ragione_sociale: nome, // Mappato dal campo "nome" generico del form
+      .update({
+        ragione_sociale: nome,
         forma_giuridica: formData.get('forma_giuridica') as string || null,
         partita_iva: formData.get('partita_iva') as string || null,
         codice_fiscale: formData.get('codice_fiscale') as string || null,
@@ -110,15 +91,16 @@ export async function updateProfilo(formData: FormData) {
         obiettivi_esg: formData.get('obiettivi_esg') as string || null,
         valori_cause: formData.get('valori_cause') as string || null,
         tipologia_impatto: formData.get('tipologia_impatto') as string || null,
-      }, {
-        onConflict: 'id'
       })
+      .eq('id', user.id)
 
-    if (error) throw new Error(`Errore aggiornamento impresa: ${error.message}`)
+    if (error) {
+      console.error("❌ ERRORE UPDATE IMPRESA:", error.message)
+      throw new Error(`Errore DB: ${error.message}`)
+    }
   }
 
-  // Invalida la cache per far vedere subito le modifiche su tutto il sito
   revalidatePath('/profilo')
   revalidatePath('/profilo/modifica')
-  revalidatePath('/', 'layout') // Invalida anche la Navbar e il resto dell'App
+  revalidatePath('/', 'layout')
 }

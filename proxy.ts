@@ -33,7 +33,7 @@ export async function proxy(request: NextRequest) {
   const isAppRoute = pathname.startsWith('/app')
   const isAuthRoute = pathname.startsWith('/auth')
   const isHomeRoute = pathname === '/' 
-  const isAccettaInvitoRoute = pathname.startsWith('/accetta-invito') // <-- AGGIUNTO
+  const isAccettaInvitoRoute = pathname.startsWith('/accetta-invito') 
 
   // Salviamo i cookie di Supabase anche quando facciamo redirect
   const redirectWithCookies = (url: URL) => {
@@ -58,9 +58,9 @@ export async function proxy(request: NextRequest) {
 
     const hasCompletedOnboarding = !!profilo 
     const isOnboardingRoute = pathname.startsWith('/app/onboarding')
+    const ruolo = profilo?.ruolo || 'volontario'
 
     // CONTROLLO 1: Se NON ha finito e sta girando altrove, mandalo all'onboarding
-    // Permettiamo di vedere l'invito anche se non ha finito l'onboarding? Sì, lo gestirà la pagina stessa.
     if (!hasCompletedOnboarding && !isOnboardingRoute && !isAccettaInvitoRoute) {
       const onboardingUrl = new URL('/app/onboarding', request.url)
       if (!isAuthRoute) {
@@ -73,10 +73,28 @@ export async function proxy(request: NextRequest) {
     }
 
     // CONTROLLO 2: Se HA FINITO e prova ad andare su Login, Onboarding OPPURE sulla Home (/)
-    // Escludiamo la rotta dell'invito così non viene rimbalzato!
     if (hasCompletedOnboarding && (isAuthRoute || isOnboardingRoute || isHomeRoute) && !isAccettaInvitoRoute) {
-      const ruoloDestinazione = profilo?.ruolo || 'volontario'
-      return redirectWithCookies(new URL(`/app/${ruoloDestinazione}`, request.url))
+      return redirectWithCookies(new URL(`/app/${ruolo}`, request.url))
+    }
+
+    // CONTROLLO 3: Protezione delle rotte per ruolo (RBAC)
+    // Entra in azione solo se l'utente è dentro /app/ e ha finito l'onboarding
+    if (hasCompletedOnboarding && isAppRoute && !isOnboardingRoute) {
+      
+      const protectedRoutes = {
+        '/app/volontario': 'volontario',
+        '/app/associazione': 'associazione',
+        '/app/impresa': 'impresa',
+      }
+
+      // Cicliamo sulle rotte protette. Se la rotta richiesta inizia con una di queste 
+      // (es. /app/impresa/team) ma il ruolo non combacia, scatta il blocco.
+      for (const [route, allowedRole] of Object.entries(protectedRoutes)) {
+        if (pathname.startsWith(route) && ruolo !== allowedRole) {
+          console.warn(`Accesso negato: Utente [${ruolo}] ha tentato di accedere a ${pathname}`)
+          return redirectWithCookies(new URL(`/app/${ruolo}`, request.url))
+        }
+      }
     }
   }
 
