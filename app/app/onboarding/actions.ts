@@ -15,7 +15,6 @@ export async function completeOnboarding(formData: FormData) {
 
   // --- LOGICA VOLONTARIO ---
   if (role === 'volontario') {
-    // Usiamo UPSERT e mappiamo tutti i nuovi campi (usando lo snake_case per il DB)
     const { error: volError } = await supabase.from('volontari').upsert({
       id: user.id,
       nome: formData.get('nome'),
@@ -25,6 +24,7 @@ export async function completeOnboarding(formData: FormData) {
       data_nascita: formData.get('dataNascita') || null,
       sesso: formData.get('sesso') || null,
       citta_residenza: formData.get('cittaResidenza') || null,
+      cap: formData.get('cap') || null, // ✅ AGGIUNTO
       grado_istruzione: formData.get('gradoIstruzione') || null,
     })
 
@@ -60,6 +60,7 @@ export async function completeOnboarding(formData: FormData) {
       forma_giuridica: formData.get('formaGiuridica') || null,
       codice_fiscale: formData.get('codiceFiscale'),
       citta: formData.get('citta'),
+      cap: formData.get('cap') || null, // 🚨 MANCAVA QUI
       indirizzo_sede: formData.get('indirizzoSede'),
       telefono: formData.get('telefono'),
       email_contatto: formData.get('emailContatto'),
@@ -77,7 +78,6 @@ export async function completeOnboarding(formData: FormData) {
         associazione_id: user.id,
         tag_id: tagId
       }))
-      // Usiamo upsert anche qui per sicurezza
       await supabase.from('associazione_tags').upsert(assTagsToInsert)
     }
   }
@@ -91,6 +91,7 @@ export async function completeOnboarding(formData: FormData) {
       partita_iva: formData.get('partitaIva') || null,
       codice_fiscale: formData.get('codiceFiscale') || null,
       indirizzo_sede: formData.get('indirizzoSede') || null,
+      cap: formData.get('cap') || null, // 🚨 MANCAVA QUI
       sito_web: formData.get('sitoWeb') || null,
       profili_social: formData.get('profiliSocial') || null,
       nome_referente: formData.get('nomeReferente') || null,
@@ -115,9 +116,9 @@ export async function completeOnboarding(formData: FormData) {
     throw new Error("Errore durante la finalizzazione del profilo.")
   }
 
-  // 🔄 INVALIDAZIONE CACHE: Forza il refresh della Navbar e dei layout
+  // 🔄 INVALIDAZIONE CACHE
   revalidatePath('/', 'layout')
 
-  // Redirect pulito verso la dashboard dell'utente
+  // Redirect
   redirect(redirectTo)
 }

@@ -485,3 +485,9 @@ BEGIN
   GROUP BY p.id;
 END;
 $$;
+
+
+-- Aggiungiamo la colonna CAP alle tabelle interessate
+ALTER TABLE volontari ADD COLUMN cap VARCHAR(5);
+ALTER TABLE associazioni ADD COLUMN cap VARCHAR(5);
+ALTER TABLE imprese ADD COLUMN cap VARCHAR(5);

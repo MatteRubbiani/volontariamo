@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { useSearchParams } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { createBrowserClient } from '@supabase/ssr'
 import PosizioneCard from '@/components/PosizioneCard'
 import MappaWrapper from '@/components/MappaWrapper'
@@ -24,6 +24,7 @@ function getBoundsFromCenter(lat: number, lng: number): MapBounds {
 }
 
 export default function VistaEsplora() {
+  const router = useRouter()
   const searchParams = useSearchParams()
   const supabase = createBrowserClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -37,6 +38,7 @@ export default function VistaEsplora() {
   
   const boundsRef = useRef<MapBounds | null>(null)
   const isFirstLoad = useRef(true)
+  const checkedCap = useRef(false) // 🚨 Nuovo ref per controllare il CAP una volta sola
 
   const q = searchParams.get('q') || null
   const tipo = searchParams.get('tipo') || null
@@ -46,6 +48,45 @@ export default function VistaEsplora() {
   const competenzeStr = searchParams.get('competenze')
   const filterTags = tagsStr ? tagsStr.split(',') : null
   const filterCompetenze = competenzeStr ? competenzeStr.split(',') : null
+
+  // 🚨 LA MAGIA DELL'AUTOLOCALIZZAZIONE
+  useEffect(() => {
+    async function autoCenterUser() {
+      if (checkedCap.current) return
+      checkedCap.current = true
+
+      // Se c'è già un indirizzo o delle coordinate nell'URL, non interveniamo (magari ha cliccato un link condiviso)
+      if (searchParams.get('lat') || searchParams.get('indirizzo')) return
+
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return
+
+      // Controlliamo se ha un CAP e una città salvati
+      const { data: vol } = await supabase.from('volontari').select('cap, citta_residenza').eq('id', user.id).single()
+      
+      if (vol?.cap) {
+        try {
+          const res = await fetch(`https://nominatim.openstreetmap.org/search?postalcode=${vol.cap}&country=italy&format=json`)
+          const data = await res.json()
+          
+          if (data && data.length > 0) {
+            const params = new URLSearchParams(searchParams.toString())
+            params.set('lat', data[0].lat)
+            params.set('lng', data[0].lon)
+            // Mostriamo la città se l'ha salvata, altrimenti il CAP nudo e crudo
+            params.set('indirizzo', vol.citta_residenza || vol.cap) 
+            
+            // Sostituiamo l'URL. Questo attiverà a cascata la ricerca e il volo della mappa!
+            router.replace(`?${params.toString()}`)
+          }
+        } catch (err) {
+          console.error("Errore autolocalizzazione CAP:", err)
+        }
+      }
+    }
+
+    autoCenterUser()
+  }, [searchParams, router, supabase])
 
   const fetchPosizioni = async (targetBounds: MapBounds) => {
     setLoading(true)
@@ -144,6 +185,7 @@ export default function VistaEsplora() {
 
       <div className="w-full lg:w-[45%] xl:w-[50%] h-[40vh] lg:h-full order-1 lg:order-2 border-l border-slate-200 z-20 relative">
         <div className="absolute top-8 left-1/2 -translate-x-1/2 z-[9999] pointer-events-auto">
+          {/* 💎 IL NUOVO BOTTONE PREMIUM AIRBNB/APPLE MAPS STYLE */}
           <button 
             onClick={(e) => {
               e.preventDefault();
@@ -151,10 +193,21 @@ export default function VistaEsplora() {
               if (boundsRef.current) fetchPosizioni(boundsRef.current);
             }}
             disabled={loading}
-            className="bg-slate-900 text-white px-6 py-3 rounded-full font-black text-[10px] uppercase tracking-widest shadow-[0_10px_30px_rgba(0,0,0,0.3)] hover:bg-blue-600 hover:scale-105 active:scale-95 transition-all flex items-center gap-2 disabled:opacity-50 whitespace-nowrap"
+            className="group flex items-center gap-2 rounded-full bg-white/90 backdrop-blur-md px-5 py-2.5 text-sm font-bold text-slate-700 shadow-[0_8px_30px_rgb(0,0,0,0.12)] ring-1 ring-slate-900/5 transition-all hover:scale-105 hover:bg-white hover:text-blue-600 hover:shadow-[0_8px_30px_rgb(0,0,0,0.16)] active:scale-95 disabled:pointer-events-none disabled:opacity-80"
           >
-            {loading ? 'Aggiorno...' : '🔄 Cerca in questa zona'}
+            {loading ? (
+              <svg className="h-4 w-4 animate-spin text-blue-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+              </svg>
+            ) : (
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="h-4 w-4 transition-transform group-hover:rotate-180">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182m0-4.991v4.99" />
+              </svg>
+            )}
+            {loading ? 'Ricerca in corso...' : "Cerca in quest'area"}
           </button>
+          {/* 💎 FINE BOTTONE */}
         </div>
 
         <MappaWrapper 
@@ -167,7 +220,7 @@ export default function VistaEsplora() {
           onBoundsChange={(b: any) => { boundsRef.current = b }} 
           forcedLat={lat}
           forcedLng={lng}
-          forcedZoom={12} // Zoom standard per quando vola su una città
+          forcedZoom={12} 
         />
       </div>
 

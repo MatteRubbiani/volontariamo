@@ -1,6 +1,7 @@
 'use client'
 
 import { useEffect, useState, useRef } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { MapContainer, TileLayer, Marker, Popup, useMap, useMapEvents } from 'react-leaflet'
 import 'leaflet/dist/leaflet.css'
 import L from 'leaflet'
@@ -14,56 +15,14 @@ const fixLeafletIcons = () => {
   })
 }
 
-// IL MIRINO GPS (Pulsante Fluttuante)
-function LocateControl() {
-  const map = useMap()
-  const [locating, setLocating] = useState(false)
-
-  const handleLocate = (e: any) => {
-    e.preventDefault();
-    if (!("geolocation" in navigator)) {
-      alert("Il tuo browser non supporta la geolocalizzazione.");
-      return;
-    }
-    setLocating(true);
-    navigator.geolocation.getCurrentPosition(
-      (position) => {
-        const { latitude, longitude } = position.coords;
-        map.flyTo([latitude, longitude], 13, { animate: true, duration: 1.5 });
-        setLocating(false);
-      },
-      (err) => {
-        console.error(err);
-        alert("Impossibile trovare la posizione. Controlla i permessi del browser.");
-        setLocating(false);
-      },
-      { enableHighAccuracy: true, timeout: 5000 }
-    );
-  }
-
-  return (
-    <div className="leaflet-bottom leaflet-right z-[1000] absolute bottom-6 right-6 pointer-events-auto">
-      <button 
-        onClick={handleLocate}
-        title="Trova la mia posizione"
-        className="bg-white text-slate-800 w-12 h-12 rounded-full shadow-[0_10px_20px_rgba(0,0,0,0.2)] flex items-center justify-center hover:bg-slate-50 hover:scale-110 active:scale-95 transition-all border border-slate-100"
-      >
-        {locating ? (
-           <div className="w-5 h-5 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
-        ) : (
-          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-6 h-6 text-blue-600">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M7.5 16.5A9 9 0 0 1 16.5 7.5M12 3v3m0 12v3m9-9h-3M6 12H3m9 3a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z" />
-          </svg>
-        )}
-      </button>
-    </div>
-  )
-}
-
+// ==========================================
+// GLI EVENTI INTERNI ALLA MAPPA (Non toccare!)
+// ==========================================
 function MapEvents({ onBoundsChange, onMapReady, forcedLat, forcedLng, forcedZoom }: any) {
   const map = useMap()
   const didInit = useRef(false)
   
+  // Vola dove l'URL gli dice di volare
   useEffect(() => {
     if (forcedLat && forcedLng) {
       map.flyTo([forcedLat, forcedLng], forcedZoom, { animate: true, duration: 1.5 })
@@ -94,6 +53,9 @@ function MapEvents({ onBoundsChange, onMapReady, forcedLat, forcedLng, forcedZoo
   return null;
 }
 
+// ==========================================
+// FUNZIONE PER CREARE I PIN BELLISSIMI
+// ==========================================
 const createPositionIcon = (tipo: string, isActive: boolean) => {
   const isUnaTantum = tipo === 'una_tantum';
   const color = isActive ? '#ea580c' : (isUnaTantum ? '#334155' : '#2563eb');
@@ -116,6 +78,9 @@ const createPositionIcon = (tipo: string, isActive: boolean) => {
   return L.divIcon({ html, className: '', iconSize: [40, 48], iconAnchor: [20, 48], popupAnchor: [0, -45] })
 }
 
+// ==========================================
+// COMPONENTE PRINCIPALE DELLA MAPPA
+// ==========================================
 export default function MappaEsplora({ 
   posizioni = [], 
   hoveredId, 
@@ -129,22 +94,94 @@ export default function MappaEsplora({
   forcedZoom 
 }: any) {
   const [isMounted, setIsMounted] = useState(false)
+  const [mapInstance, setMapInstance] = useState<L.Map | null>(null)
+  
+  // Stati per il mirino
+  const router = useRouter()
+  const searchParams = useSearchParams()
+  const [locating, setLocating] = useState(false)
 
   useEffect(() => {
     fixLeafletIcons()
     setIsMounted(true)
   }, [])
 
+  // 🎯 LA LOGICA DEL MIRINO (Elegante e a prova di errore)
+  const handleLocate = (e: React.MouseEvent) => {
+    e.preventDefault();
+    
+    if (!("geolocation" in navigator)) {
+      alert("Ops! 🧭 Il tuo dispositivo non sembra supportare la geolocalizzazione. Prova a inserire la città a mano nella barra di ricerca.");
+      return;
+    }
+
+    setLocating(true);
+    navigator.geolocation.getCurrentPosition(
+      async (position) => {
+        const { latitude, longitude } = position.coords;
+        
+        try {
+          // La magia: chiediamo a Nominatim che città è in base a queste coordinate
+          const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&zoom=10&addressdetails=1`);
+          const data = await res.json();
+          
+          const city = data?.address?.city || data?.address?.town || data?.address?.village || data?.address?.municipality || "La tua posizione";
+
+          // Scriviamo la città nell'URL, che a cascata aggiornerà la barra di ricerca in FiltriRicercaV2!
+          const params = new URLSearchParams(searchParams.toString());
+          params.set('lat', latitude.toString());
+          params.set('lng', longitude.toString());
+          params.set('indirizzo', city);
+          router.push(`?${params.toString()}`);
+          
+          // Diamo un aiutino alla mappa facendola volare subito lì
+          if (mapInstance) {
+            mapInstance.flyTo([latitude, longitude], 13, { animate: true, duration: 1.5 });
+          }
+        } catch (error) {
+           console.error("Errore recupero nome città:", error);
+           // Piano B se non trova il nome: usa "La tua posizione"
+           const params = new URLSearchParams(searchParams.toString());
+           params.set('lat', latitude.toString());
+           params.set('lng', longitude.toString());
+           params.set('indirizzo', "La tua posizione");
+           router.push(`?${params.toString()}`);
+           
+           if (mapInstance) mapInstance.flyTo([latitude, longitude], 13, { animate: true });
+        } finally {
+          setLocating(false);
+        }
+      },
+      (err) => {
+        setLocating(false);
+        if (err.code === err.PERMISSION_DENIED) {
+           alert("Hai negato l'accesso alla posizione 🛑. Per usare il mirino, sblocca i permessi cliccando sul lucchetto in alto a sinistra (vicino all'URL), oppure scrivi la tua città nella barra di ricerca.");
+        } else {
+           alert("Non riusciamo a rilevare la tua posizione esatta 🌍. Il segnale GPS potrebbe essere debole in questo momento. Prova a scriverla manualmente.");
+        }
+      },
+      { enableHighAccuracy: true, timeout: 10000 } // Tempo alzato per dispositivi un po' più lenti
+    );
+  };
+
   if (!isMounted) return <div className="w-full h-full bg-slate-100 animate-pulse"></div>
 
   return (
-    <div className="w-full h-full relative z-0">
-      {/* ZOOM 6 E CENTRO ITALIA COME VISTA INIZIALE DA EFFETTO WOW */}
-      <MapContainer center={[41.8719, 12.5674]} zoom={6} style={{ height: '100%', width: '100%' }} zoomControl={false}>
+    // 🚨 IL SEGRETO: relative h-full w-full sul contenitore esterno!
+    <div className="relative h-full w-full z-0 bg-slate-100">
+      
+      {/* MAP CONTAINER: 
+        Passiamo ref={setMapInstance} così possiamo controllare la mappa da fuori. 
+      */}
+      <MapContainer 
+        center={[41.8719, 12.5674]} 
+        zoom={6} 
+        style={{ height: '100%', width: '100%' }} 
+        zoomControl={false}
+        ref={setMapInstance}
+      >
         <TileLayer url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png" />
         
-        <LocateControl />
-
         <MapEvents 
           onMapReady={onMapReady}
           onBoundsChange={onBoundsChange} 
@@ -182,6 +219,28 @@ export default function MappaEsplora({
           )
         })}
       </MapContainer>
+
+      {/* 🚨 IL MIRINO OUTSIDE! 
+        Essendo fuori dal MapContainer, non viene ingerito da Leaflet. 
+        Gli diamo un z-[1000] e sarà SEMPRE lì visibile, e i pin non scompariranno mai più.
+      */}
+      <div className="absolute bottom-6 right-6 z-[1000]">
+        <button 
+          onClick={handleLocate}
+          title="Trova la mia posizione"
+          className="group relative flex h-14 w-14 items-center justify-center rounded-full bg-white text-blue-600 shadow-[0_10px_30px_rgba(0,0,0,0.2)] transition-all hover:scale-110 hover:bg-blue-50 active:scale-95 border border-slate-100"
+        >
+          {locating ? (
+             <div className="h-6 w-6 animate-spin rounded-full border-2 border-blue-600 border-t-transparent"></div>
+          ) : (
+            // L'ICONA DEL MIRINO VERO E PROPRIO
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="h-7 w-7 transition-transform group-hover:scale-90">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 2.25v4.5m0 10.5v4.5m-9.75-9.75h4.5m10.5 0h4.5m-14.25 0a4.5 4.5 0 1 1 9 0 4.5 4.5 0 0 1-9 0Z" />
+            </svg>
+          )}
+        </button>
+      </div>
+
     </div>
   )
 }

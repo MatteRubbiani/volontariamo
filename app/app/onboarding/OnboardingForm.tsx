@@ -18,11 +18,12 @@ type FormState = {
   cognome: string
   sitoWeb: string
   partitaIva: string
-  citta: string // Rimane per le associazioni
+  citta: string 
+  cap: string
   indirizzoSede: string
   fasciaDipendenti: string
-  emailContatto: string // Rimane per le associazioni
-  mission: string // Rimane per le associazioni
+  emailContatto: string 
+  mission: string 
   tags: string[]
   competenze: string[]
   formaGiuridica: string
@@ -35,7 +36,6 @@ type FormState = {
   sesso: string
   cittaResidenza: string
   gradoIstruzione: string
-  // NUOVI CAMPI IMPRESA (Allineati al DB)
   settoreAttivita: string
   areaOperativa: string
   valoriCause: string
@@ -67,6 +67,7 @@ export default function OnboardingForm({ redirectTo }: OnboardingFormProps) {
     sitoWeb: '',
     partitaIva: '',
     citta: '',
+    cap: '', 
     indirizzoSede: '',
     fasciaDipendenti: '',
     emailContatto: '',
@@ -89,6 +90,37 @@ export default function OnboardingForm({ redirectTo }: OnboardingFormProps) {
     obiettiviEsg: '',
     tipologiaImpatto: ''
   })
+
+  const [isFetchingCity, setIsFetchingCity] = useState(false)
+
+  // 🚨 LOGICA CORRETTA PER ESTRARRE LA CITTÀ DAL CAP
+  const handleCapChange = async (val: string, targetCityField: 'cittaResidenza' | 'citta') => {
+    const cleanedVal = val.replace(/\D/g, '').slice(0, 5)
+    setFormData(prev => ({ ...prev, cap: cleanedVal }))
+
+    if (cleanedVal.length === 5) {
+      setIsFetchingCity(true)
+      try {
+        // Aggiunto &addressdetails=1 per avere i dati separati
+        const res = await fetch(`https://nominatim.openstreetmap.org/search?postalcode=${cleanedVal}&country=italy&format=json&addressdetails=1`)
+        const data = await res.json()
+        
+        if (data && data.length > 0 && data[0].address) {
+          // Nominatim può chiamare la città in modi diversi in base alla grandezza del comune
+          const address = data[0].address;
+          const cityName = address.city || address.town || address.village || address.municipality || '';
+          
+          if (cityName) {
+            setFormData(prev => ({ ...prev, [targetCityField]: cityName }))
+          }
+        }
+      } catch (err) {
+        console.error("Errore recupero città dal CAP:", err)
+      } finally {
+        setIsFetchingCity(false)
+      }
+    }
+  }
 
   useEffect(() => {
     async function loadCatalogs() {
@@ -118,7 +150,7 @@ export default function OnboardingForm({ redirectTo }: OnboardingFormProps) {
   }
 
   const canGoStep3 = role === 'volontario' 
-    ? formData.nome.trim().length > 1 && formData.cognome.trim().length > 1
+    ? formData.nome.trim().length > 1 && formData.cognome.trim().length > 1 && formData.cap.length === 5
     : formData.nome.trim().length > 1;
 
   return (
@@ -151,7 +183,6 @@ export default function OnboardingForm({ redirectTo }: OnboardingFormProps) {
           }}
           className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm md:p-10"
         >
-          {/* CAMPI NASCOSTI COMUNI/MISTI */}
           <input type="hidden" name="role" value={role} />
           <input type="hidden" name="redirectTo" value={redirectTo} />
           <input type="hidden" name="nome" value={formData.nome} />
@@ -166,6 +197,7 @@ export default function OnboardingForm({ redirectTo }: OnboardingFormProps) {
           <input type="hidden" name="sitoWeb" value={formData.sitoWeb} />
           <input type="hidden" name="partitaIva" value={formData.partitaIva} />
           <input type="hidden" name="citta" value={formData.citta} />
+          <input type="hidden" name="cap" value={formData.cap} />
           <input type="hidden" name="indirizzoSede" value={formData.indirizzoSede} />
           <input type="hidden" name="fasciaDipendenti" value={formData.fasciaDipendenti} />
           <input type="hidden" name="emailContatto" value={formData.emailContatto} />
@@ -175,7 +207,6 @@ export default function OnboardingForm({ redirectTo }: OnboardingFormProps) {
           <input type="hidden" name="nomeReferente" value={formData.nomeReferente} />
           <input type="hidden" name="profiliSocial" value={formData.profiliSocial} />
 
-          {/* NUOVI CAMPI NASCOSTI IMPRESA */}
           <input type="hidden" name="settoreAttivita" value={formData.settoreAttivita} />
           <input type="hidden" name="areaOperativa" value={formData.areaOperativa} />
           <input type="hidden" name="valoriCause" value={formData.valoriCause} />
@@ -189,7 +220,6 @@ export default function OnboardingForm({ redirectTo }: OnboardingFormProps) {
             <input key={`comp-${competenzaId}`} type="hidden" name="competenze" value={competenzaId} />
           ))}
 
-          {/* STEP 1: SCELTA RUOLO */}
           {step === 1 && (
             <div className="space-y-6">
               <div>
@@ -218,7 +248,6 @@ export default function OnboardingForm({ redirectTo }: OnboardingFormProps) {
             </div>
           )}
 
-          {/* STEP 2: DATI ANAGRAFICI */}
           {step === 2 && (
             <div className="space-y-6">
               <div>
@@ -226,7 +255,6 @@ export default function OnboardingForm({ redirectTo }: OnboardingFormProps) {
                 <p className="mt-2 text-slate-600">Inserisci i dati principali della tua organizzazione o profilo.</p>
               </div>
 
-              {/* ... Volontario e Associazione invariati ... */}
               {role === 'volontario' && (
                 <div className="grid gap-4 md:grid-cols-2">
                   <input type="text" placeholder="Nome *" value={formData.nome} onChange={(e) => setFormData((prev) => ({ ...prev, nome: e.target.value }))} className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 font-medium outline-none focus:border-blue-500 focus:bg-white" />
@@ -242,8 +270,7 @@ export default function OnboardingForm({ redirectTo }: OnboardingFormProps) {
                     <label className="text-[10px] font-bold uppercase text-slate-400 ml-1">Data di Nascita</label>
                     <input type="date" value={formData.dataNascita} onChange={(e) => setFormData((prev) => ({ ...prev, dataNascita: e.target.value }))} className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 font-medium outline-none focus:border-blue-500 focus:bg-white" />
                   </div>
-                  <input type="text" placeholder="Città di Residenza" value={formData.cittaResidenza} onChange={(e) => setFormData((prev) => ({ ...prev, cittaResidenza: e.target.value }))} className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 font-medium outline-none focus:border-blue-500 focus:bg-white mt-auto" />
-                  <select value={formData.gradoIstruzione} onChange={(e) => setFormData((prev) => ({ ...prev, gradoIstruzione: e.target.value }))} className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 font-medium outline-none focus:border-blue-500 focus:bg-white md:col-span-2">
+                  <select value={formData.gradoIstruzione} onChange={(e) => setFormData((prev) => ({ ...prev, gradoIstruzione: e.target.value }))} className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 font-medium outline-none focus:border-blue-500 focus:bg-white mt-auto">
                     <option value="">Grado di Istruzione</option>
                     <option value="Scuola Media">Scuola Media</option>
                     <option value="Diploma">Diploma Superiore</option>
@@ -251,6 +278,27 @@ export default function OnboardingForm({ redirectTo }: OnboardingFormProps) {
                     <option value="Laurea Magistrale">Laurea Magistrale</option>
                     <option value="Master / Dottorato">Master / Dottorato</option>
                   </select>
+
+                  <div className="md:col-span-2 grid gap-4 md:grid-cols-2 pt-4 border-t border-slate-100">
+                    <div className="relative">
+                      <input 
+                        type="text" 
+                        placeholder="CAP (Es. 20100) *" 
+                        value={formData.cap} 
+                        onChange={(e) => handleCapChange(e.target.value, 'cittaResidenza')} 
+                        className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 font-medium outline-none focus:border-blue-500 focus:bg-white" 
+                        maxLength={5}
+                      />
+                      {isFetchingCity && <span className="absolute right-4 top-3.5 w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></span>}
+                    </div>
+                    <input 
+                      type="text" 
+                      placeholder="Città di Residenza" 
+                      value={formData.cittaResidenza} 
+                      onChange={(e) => setFormData((prev) => ({ ...prev, cittaResidenza: e.target.value }))} 
+                      className={`w-full rounded-xl border border-slate-200 px-4 py-3 font-medium outline-none focus:border-blue-500 focus:bg-white ${formData.cittaResidenza ? 'bg-blue-50/50' : 'bg-slate-50'}`} 
+                    />
+                  </div>
                 </div>
               )}
 
@@ -260,13 +308,32 @@ export default function OnboardingForm({ redirectTo }: OnboardingFormProps) {
                   <select value={formData.formaGiuridica} onChange={(e) => setFormData((prev) => ({ ...prev, formaGiuridica: e.target.value }))} className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 font-medium outline-none focus:border-green-500 focus:bg-white"><option value="">Forma Giuridica (Opzionale)</option><option value="APS">APS</option><option value="ODV">ODV</option><option value="ONLUS">ONLUS</option><option value="ETS">ETS</option></select>
                   <input type="text" placeholder="Codice Fiscale / P.IVA" value={formData.codiceFiscale} onChange={(e) => setFormData((prev) => ({ ...prev, codiceFiscale: e.target.value }))} className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 font-medium outline-none focus:border-green-500 focus:bg-white" />
                   <input type="text" placeholder="Email Pubblica" value={formData.emailContatto} onChange={(e) => setFormData((prev) => ({ ...prev, emailContatto: e.target.value }))} className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 font-medium outline-none focus:border-green-500 focus:bg-white" />
-                  <input type="text" placeholder="Città" value={formData.citta} onChange={(e) => setFormData((prev) => ({ ...prev, citta: e.target.value }))} className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 font-medium outline-none focus:border-green-500 focus:bg-white" />
-                  <input type="text" placeholder="Indirizzo Sede" value={formData.indirizzoSede} onChange={(e) => setFormData((prev) => ({ ...prev, indirizzoSede: e.target.value }))} className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 font-medium outline-none focus:border-green-500 focus:bg-white" />
                   <input type="text" placeholder="Telefono" value={formData.telefono} onChange={(e) => setFormData((prev) => ({ ...prev, telefono: e.target.value }))} className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 font-medium outline-none focus:border-green-500 focus:bg-white md:col-span-2" />
+
+                  <div className="md:col-span-2 grid gap-4 md:grid-cols-2 pt-4 border-t border-slate-100">
+                     <div className="relative">
+                      <input 
+                        type="text" 
+                        placeholder="CAP (Es. 20100)" 
+                        value={formData.cap} 
+                        onChange={(e) => handleCapChange(e.target.value, 'citta')} 
+                        className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 font-medium outline-none focus:border-green-500 focus:bg-white" 
+                        maxLength={5}
+                      />
+                      {isFetchingCity && <span className="absolute right-4 top-3.5 w-4 h-4 border-2 border-green-500 border-t-transparent rounded-full animate-spin"></span>}
+                    </div>
+                    <input 
+                      type="text" 
+                      placeholder="Città" 
+                      value={formData.citta} 
+                      onChange={(e) => setFormData((prev) => ({ ...prev, citta: e.target.value }))} 
+                      className={`w-full rounded-xl border border-slate-200 px-4 py-3 font-medium outline-none focus:border-green-500 focus:bg-white ${formData.citta ? 'bg-green-50/50' : 'bg-slate-50'}`} 
+                    />
+                  </div>
+                  <input type="text" placeholder="Indirizzo Sede (es. Via Roma 1)" value={formData.indirizzoSede} onChange={(e) => setFormData((prev) => ({ ...prev, indirizzoSede: e.target.value }))} className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 font-medium outline-none focus:border-green-500 focus:bg-white md:col-span-2" />
                 </div>
               )}
 
-              {/* NUOVI CAMPI IMPRESA (Step 2) */}
               {role === 'impresa' && (
                 <div className="grid gap-4 md:grid-cols-2">
                   <input type="text" placeholder="Ragione Sociale *" value={formData.nome} onChange={(e) => setFormData((prev) => ({ ...prev, nome: e.target.value }))} className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 font-medium outline-none focus:border-violet-500 focus:bg-white md:col-span-2" />
@@ -274,25 +341,44 @@ export default function OnboardingForm({ redirectTo }: OnboardingFormProps) {
                   <input type="text" placeholder="Partita IVA" value={formData.partitaIva} onChange={(e) => setFormData((prev) => ({ ...prev, partitaIva: e.target.value }))} className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 font-medium outline-none focus:border-violet-500 focus:bg-white" />
                   <input type="text" placeholder="Codice Fiscale" value={formData.codiceFiscale} onChange={(e) => setFormData((prev) => ({ ...prev, codiceFiscale: e.target.value }))} className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 font-medium outline-none focus:border-violet-500 focus:bg-white" />
                   <input type="text" placeholder="Settore di Attività" value={formData.settoreAttivita} onChange={(e) => setFormData((prev) => ({ ...prev, settoreAttivita: e.target.value }))} className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 font-medium outline-none focus:border-violet-500 focus:bg-white" />
-                  <input type="text" placeholder="Indirizzo Sede Legale" value={formData.indirizzoSede} onChange={(e) => setFormData((prev) => ({ ...prev, indirizzoSede: e.target.value }))} className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 font-medium outline-none focus:border-violet-500 focus:bg-white" />
-                  <select value={formData.fasciaDipendenti} onChange={(e) => setFormData((prev) => ({ ...prev, fasciaDipendenti: e.target.value }))} className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 font-medium outline-none focus:border-violet-500 focus:bg-white">
+                  <select value={formData.fasciaDipendenti} onChange={(e) => setFormData((prev) => ({ ...prev, fasciaDipendenti: e.target.value }))} className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 font-medium outline-none focus:border-violet-500 focus:bg-white md:col-span-2">
                     <option value="">Fascia Dipendenti...</option>
                     <option value="1-10">1-10</option>
                     <option value="11-50">11-50</option>
                     <option value="51-250">51-250</option>
                     <option value="250+">250+</option>
                   </select>
+                  <div className="md:col-span-2 grid gap-4 md:grid-cols-2 pt-4 border-t border-slate-100">
+                     <div className="relative">
+                      <input 
+                        type="text" 
+                        placeholder="CAP (Es. 20100)" 
+                        value={formData.cap} 
+                        onChange={(e) => handleCapChange(e.target.value, 'citta')} 
+                        className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 font-medium outline-none focus:border-violet-500 focus:bg-white" 
+                        maxLength={5}
+                      />
+                      {isFetchingCity && <span className="absolute right-4 top-3.5 w-4 h-4 border-2 border-violet-500 border-t-transparent rounded-full animate-spin"></span>}
+                    </div>
+                    <input 
+                      type="text" 
+                      placeholder="Città" 
+                      value={formData.citta} 
+                      onChange={(e) => setFormData((prev) => ({ ...prev, citta: e.target.value }))} 
+                      className={`w-full rounded-xl border border-slate-200 px-4 py-3 font-medium outline-none focus:border-violet-500 focus:bg-white ${formData.citta ? 'bg-violet-50/50' : 'bg-slate-50'}`} 
+                    />
+                  </div>
+                  <input type="text" placeholder="Indirizzo Sede Legale" value={formData.indirizzoSede} onChange={(e) => setFormData((prev) => ({ ...prev, indirizzoSede: e.target.value }))} className="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 font-medium outline-none focus:border-violet-500 focus:bg-white md:col-span-2" />
                 </div>
               )}
 
-              <div className="flex gap-3">
+              <div className="flex gap-3 pt-6">
                 <button type="button" onClick={(e) => { e.preventDefault(); setStep(1); }} className="w-1/3 rounded-xl bg-slate-100 py-3 font-bold text-slate-700 transition-colors hover:bg-slate-200">Indietro</button>
                 <button type="button" onClick={(e) => { e.preventDefault(); setStep(3); }} disabled={!canGoStep3} className="w-2/3 rounded-xl bg-slate-900 py-3 font-black text-white transition-all hover:bg-slate-800 disabled:bg-slate-300">Continua</button>
               </div>
             </div>
           )}
 
-          {/* STEP 3: PROFILO PUBBLICO / IMPATTO */}
           {step === 3 && (
             <div className="space-y-6">
               <div>
@@ -302,7 +388,6 @@ export default function OnboardingForm({ redirectTo }: OnboardingFormProps) {
                 <p className="mt-2 text-slate-600">Completa le informazioni per farti conoscere.</p>
               </div>
 
-              {/* ... Volontario e Associazione invariati ... */}
               {role === 'volontario' && (
                  <>
                  <div className="space-y-2">
@@ -346,7 +431,6 @@ export default function OnboardingForm({ redirectTo }: OnboardingFormProps) {
                 </>
               )}
 
-              {/* NUOVI CAMPI IMPRESA (Step 3) */}
               {role === 'impresa' && (
                 <div className="space-y-4">
                   <div className="grid gap-4 md:grid-cols-2">
