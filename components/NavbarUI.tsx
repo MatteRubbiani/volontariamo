@@ -61,12 +61,20 @@ export default function NavbarUI({
                 Dashboard
               </Link>
               {isVolontario && (
-                <Link 
-                  href={isAziendale ? "/app/volontario/iniziative-team" : "/app/volontario/candidature"} 
-                  className={`text-sm font-bold transition-colors ${textColor}`}
-                >
-                  {isAziendale ? 'Iniziative Team' : 'Le Mie Candidature'}
-                </Link>
+                <>
+                  <Link 
+                    href="/app/volontario/mappa" 
+                    className={`text-sm font-bold transition-colors ${textColor}`}
+                  >
+                    Mappa
+                  </Link>
+                  <Link 
+                    href={isAziendale ? "/app/volontario/iniziative-team" : "/app/volontario/candidature"} 
+                    className={`text-sm font-bold transition-colors ${textColor}`}
+                  >
+                    {isAziendale ? 'Iniziative Team' : 'Le Mie Candidature'}
+                  </Link>
+                </>
               )}
               {/* NUOVO LINK PER LE ASSOCIAZIONI */}
               {isAssociazione && (
@@ -165,13 +173,22 @@ export default function NavbarUI({
                   </Link>
 
                   {isVolontario && (
-                    <Link 
-                      href={isAziendale ? "/app/volontario/iniziative-team" : "/app/volontario/candidature"} 
-                      onClick={chiudiMenu}
-                      className={`p-3 rounded-xl font-bold transition-all ${isAziendale ? 'text-white hover:bg-slate-800' : 'text-slate-900 hover:bg-slate-50'}`}
-                    >
-                      {isAziendale ? 'Iniziative Team' : 'Le Mie Candidature'}
-                    </Link>
+                    <>
+                      <Link 
+                        href="/app/volontario/mappa" 
+                        onClick={chiudiMenu}
+                        className={`p-3 rounded-xl font-bold transition-all ${isAziendale ? 'text-white hover:bg-slate-800' : 'text-slate-900 hover:bg-slate-50'}`}
+                      >
+                        Mappa
+                      </Link>
+                      <Link 
+                        href={isAziendale ? "/app/volontario/iniziative-team" : "/app/volontario/candidature"} 
+                        onClick={chiudiMenu}
+                        className={`p-3 rounded-xl font-bold transition-all ${isAziendale ? 'text-white hover:bg-slate-800' : 'text-slate-900 hover:bg-slate-50'}`}
+                      >
+                        {isAziendale ? 'Iniziative Team' : 'Le Mie Candidature'}
+                      </Link>
+                    </>
                   )}
 
                   {isAssociazione && (
