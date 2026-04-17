@@ -60,8 +60,23 @@ export async function generateMetadata(
   }
 }
 
-export default async function DettaglioPosizioneVolontario({ params }: { params: Promise<{ id: string }> }) {
+export default async function DettaglioPosizioneVolontario({ 
+  params,
+  searchParams 
+}: { 
+  params: Promise<{ id: string }>
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>
+}) {
   const { id } = await params
+  
+  // 🚨 ESTRAIAMO I SEARCH PARAMS LATO SERVER
+  const sp = await searchParams
+  const from = sp?.from
+
+  // 🎯 LOGICA SMART BOTTONE INDIETRO
+  // Se viene dalla mappa, il bottone lo riporta lì. Altrimenti, lo manda alla dashboard vecchia.
+  const backUrl = from === 'mappa' ? '/mappa' : '/esplora' 
+
   const publicSupabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
@@ -95,7 +110,8 @@ export default async function DettaglioPosizioneVolontario({ params }: { params:
     .eq('id', id)
     .single()
 
-  if (error || !pos) redirect('/esplora')
+  // Se la posizione non esiste, possiamo reindirizzare intelligentemente anche qui
+  if (error || !pos) redirect(backUrl)
 
   const { data: candidatura } = user
     ? await authSupabase
@@ -141,8 +157,9 @@ export default async function DettaglioPosizioneVolontario({ params }: { params:
       {/* HEADER DINAMICO MOBILE-FIRST */}
       <div className="max-w-4xl mx-auto p-4 md:p-10 pt-6 md:pt-12">
         
-        <Link href="/esplora" className="text-slate-400 text-sm font-bold mb-6 inline-flex items-center gap-2 hover:text-blue-600 transition-colors group">
-          <span className="group-hover:-translate-x-1 transition-transform">←</span> Torna agli annunci
+        {/* 🚨 IL LINK AGGIORNATO CON BACKURL */}
+        <Link href={backUrl} className="text-slate-400 text-sm font-bold mb-6 inline-flex items-center gap-2 hover:text-blue-600 transition-colors group">
+          <span className="group-hover:-translate-x-1 transition-transform">←</span> Torna indietro
         </Link>
 
         <div className="bg-white rounded-[2rem] md:rounded-[3rem] shadow-xl border border-slate-100 overflow-hidden">

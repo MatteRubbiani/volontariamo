@@ -12,7 +12,6 @@ interface MapBounds {
   ne: { lat: number; lng: number };
 }
 
-// Raggio fisso a 15km "invisibile" per caricare subito i dati al centro della ricerca
 function getBoundsFromCenter(lat: number, lng: number): MapBounds {
   const raggioKm = 15; 
   const latOffset = raggioKm / 111.32;
@@ -36,9 +35,11 @@ export default function VistaEsplora() {
   const [hoveredId, setHoveredId] = useState<string | null>(null)
   const [focusedId, setFocusedId] = useState<string | null>(null)
   
+  const [isDrawerOpen, setIsDrawerOpen] = useState(false)
+  
   const boundsRef = useRef<MapBounds | null>(null)
   const isFirstLoad = useRef(true)
-  const checkedCap = useRef(false) // 🚨 Nuovo ref per controllare il CAP una volta sola
+  const checkedCap = useRef(false)
 
   const q = searchParams.get('q') || null
   const tipo = searchParams.get('tipo') || null
@@ -49,34 +50,48 @@ export default function VistaEsplora() {
   const filterTags = tagsStr ? tagsStr.split(',') : null
   const filterCompetenze = competenzeStr ? competenzeStr.split(',') : null
 
-  // 🚨 LA MAGIA DELL'AUTOLOCALIZZAZIONE
+  const selectedPos = posizioni.find(p => p.id === focusedId)
+
+  // 📱 GESTIONE SWIPE PER LA TENDINA
+  const [touchStartY, setTouchStartY] = useState<number | null>(null)
+
+  const handleTouchStart = (e: React.TouchEvent) => {
+    setTouchStartY(e.touches[0].clientY)
+  }
+
+  const handleTouchEnd = (e: React.TouchEvent) => {
+    if (!touchStartY) return
+    const touchEndY = e.changedTouches[0].clientY
+    const distance = touchEndY - touchStartY
+
+    if (distance > 40) {
+      // Scorri in GIÙ (Chiude la tendina)
+      setIsDrawerOpen(false)
+      setFocusedId(null)
+    } else if (distance < -40) {
+      // Scorri in SU (Apre la tendina)
+      setIsDrawerOpen(true)
+    }
+    setTouchStartY(null)
+  }
+
   useEffect(() => {
     async function autoCenterUser() {
       if (checkedCap.current) return
       checkedCap.current = true
-
-      // Se c'è già un indirizzo o delle coordinate nell'URL, non interveniamo (magari ha cliccato un link condiviso)
       if (searchParams.get('lat') || searchParams.get('indirizzo')) return
-
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
-
-      // Controlliamo se ha un CAP e una città salvati
       const { data: vol } = await supabase.from('volontari').select('cap, citta_residenza').eq('id', user.id).single()
-      
       if (vol?.cap) {
         try {
           const res = await fetch(`https://nominatim.openstreetmap.org/search?postalcode=${vol.cap}&country=italy&format=json`)
           const data = await res.json()
-          
           if (data && data.length > 0) {
             const params = new URLSearchParams(searchParams.toString())
             params.set('lat', data[0].lat)
             params.set('lng', data[0].lon)
-            // Mostriamo la città se l'ha salvata, altrimenti il CAP nudo e crudo
             params.set('indirizzo', vol.citta_residenza || vol.cap) 
-            
-            // Sostituiamo l'URL. Questo attiverà a cascata la ricerca e il volo della mappa!
             router.replace(`?${params.toString()}`)
           }
         } catch (err) {
@@ -84,7 +99,6 @@ export default function VistaEsplora() {
         }
       }
     }
-
     autoCenterUser()
   }, [searchParams, router, supabase])
 
@@ -101,9 +115,7 @@ export default function VistaEsplora() {
         filter_tags: filterTags,
         filter_competenze: filterCompetenze
       })
-
       if (error) throw error
-      
       const formattedData = (data || []).map((pos: any) => ({
         ...pos,
         tags: pos.tags ? pos.tags.map((t: string) => ({ id: t, name: t })) : [],
@@ -127,7 +139,6 @@ export default function VistaEsplora() {
 
   useEffect(() => {
     if (isFirstLoad.current) return;
-    
     if (lat && lng) {
       const calcBounds = getBoundsFromCenter(lat, lng);
       boundsRef.current = calcBounds; 
@@ -138,7 +149,7 @@ export default function VistaEsplora() {
   }, [q, tipo, tagsStr, competenzeStr, lat, lng])
 
   useEffect(() => {
-    if (focusedId) {
+    if (focusedId && window.innerWidth >= 1024) {
       const cardElement = document.getElementById(`card-${focusedId}`)
       if (cardElement) cardElement.scrollIntoView({ behavior: 'smooth', block: 'center' })
     }
@@ -147,7 +158,7 @@ export default function VistaEsplora() {
   return (
     <div className="flex flex-col lg:flex-row w-full h-full overflow-hidden relative bg-white">
       
-      <div className="w-full lg:w-[55%] xl:w-[50%] h-full overflow-y-auto p-6 md:p-8 lg:p-10 flex flex-col gap-6 order-2 lg:order-1 bg-slate-50 scroll-smooth relative z-10">
+      <div className="hidden lg:flex w-full lg:w-[55%] xl:w-[50%] h-full overflow-y-auto p-6 md:p-8 lg:p-10 flex-col gap-6 order-2 lg:order-1 bg-slate-50 scroll-smooth relative z-10">
         <div className="flex justify-between items-end border-b border-slate-200 pb-6">
           <h1 className="text-3xl md:text-4xl font-black text-slate-800 tracking-tighter">Esplora</h1>
           <div className="text-right">
@@ -183,9 +194,9 @@ export default function VistaEsplora() {
         )}
       </div>
 
-      <div className="w-full lg:w-[45%] xl:w-[50%] h-[40vh] lg:h-full order-1 lg:order-2 border-l border-slate-200 z-20 relative">
-        <div className="absolute top-8 left-1/2 -translate-x-1/2 z-[9999] pointer-events-auto">
-          {/* 💎 IL NUOVO BOTTONE PREMIUM AIRBNB/APPLE MAPS STYLE */}
+      <div className="w-full h-full lg:w-[45%] xl:w-[50%] order-1 lg:order-2 lg:border-l border-slate-200 z-20 relative overflow-hidden">
+        
+        <div className="absolute top-8 left-1/2 -translate-x-1/2 z-[999] pointer-events-auto">
           <button 
             onClick={(e) => {
               e.preventDefault();
@@ -207,7 +218,6 @@ export default function VistaEsplora() {
             )}
             {loading ? 'Ricerca in corso...' : "Cerca in quest'area"}
           </button>
-          {/* 💎 FINE BOTTONE */}
         </div>
 
         <MappaWrapper 
@@ -215,15 +225,86 @@ export default function VistaEsplora() {
           hoveredId={hoveredId}    
           setHoveredId={setHoveredId} 
           focusedId={focusedId}    
-          setFocusedId={setFocusedId}
+          setFocusedId={(id: string) => {
+            setFocusedId(id);
+            if (id) setIsDrawerOpen(false); 
+          }}
           onMapReady={handleMapReady}
           onBoundsChange={(b: any) => { boundsRef.current = b }} 
           forcedLat={lat}
           forcedLng={lng}
           forcedZoom={12} 
         />
-      </div>
 
+       {/* 📱 MOBILE: LA CARD FLUTTUANTE (Esce quando clicchi un Pin) */}
+        {selectedPos && !isDrawerOpen && (
+          <div className="lg:hidden absolute bottom-8 left-4 right-4 z-[1001] flex flex-col items-end gap-2 animate-in fade-in slide-in-from-bottom-4 duration-300 ease-out pointer-events-none">
+            
+            {/* TASTO CHIUDI ESTERNO: Niente più sovrapposizioni! */}
+            <button 
+              onClick={() => setFocusedId(null)}
+              className="p-2.5 bg-white/90 backdrop-blur-md hover:bg-slate-100 rounded-full text-slate-700 shadow-[0_8px_20px_rgba(0,0,0,0.15)] border border-slate-100 transition-colors pointer-events-auto"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={3} stroke="currentColor" className="w-5 h-5">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+            
+            {/* LA CARD */}
+            <div className="w-full bg-white rounded-3xl shadow-[0_15px_40px_rgba(0,0,0,0.2)] overflow-hidden border border-slate-100 pointer-events-auto">
+              <PosizioneCard posizione={selectedPos} />
+            </div>
+
+          </div>
+        )}
+
+        <div 
+          className={`lg:hidden absolute inset-x-0 bottom-0 z-[1000] bg-white rounded-t-[2.5rem] shadow-[0_-15px_40px_rgba(0,0,0,0.12)] transition-transform duration-500 ease-[cubic-bezier(0.32,0.72,0,1)] border-t border-slate-100 flex flex-col ${
+            isDrawerOpen ? 'translate-y-0 h-[85vh]' : 'translate-y-[calc(100%-80px)] h-[85vh]'
+          }`}
+        >
+          {/* 🚨 AREA MANIGLIA (ORA SUPPORTA LO SWIPE IN SU E IN GIÙ!) */}
+          <div 
+            className="w-full h-[80px] flex-shrink-0 flex flex-col items-center justify-start pt-4 cursor-pointer"
+            onClick={() => {
+              setIsDrawerOpen(!isDrawerOpen);
+              if (!isDrawerOpen) setFocusedId(null);
+            }}
+            onTouchStart={handleTouchStart}
+            onTouchEnd={handleTouchEnd}
+          >
+            <div className="w-12 h-1.5 bg-slate-300 rounded-full mb-3" />
+            <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+              {isDrawerOpen ? 'Scorri per chiudere' : `Vedi ${posizioni.length} posizioni`}
+            </span>
+          </div>
+
+          <div className="px-6 pb-20 overflow-y-auto flex-grow flex flex-col gap-6">
+            <FiltriRicercaV2 />
+            
+            {posizioni.length === 0 && !loading ? (
+              <div className="bg-slate-50 p-8 rounded-3xl text-center border border-dashed border-slate-200 shadow-sm">
+                <span className="text-4xl block mb-4">🌍</span>
+                <h3 className="text-lg font-black text-slate-800 mb-2">Nessun risultato</h3>
+                <p className="text-slate-500 font-medium italic text-xs">Sposta la mappa o usa il mirino.</p>
+              </div>
+            ) : (
+              <div className="flex flex-col gap-4">
+                {posizioni.map((pos: any) => (
+                  <div key={pos.id} onClick={() => { setFocusedId(pos.id); setIsDrawerOpen(false); }}>
+                    <PosizioneCard 
+                      posizione={pos} 
+                      isHovered={hoveredId === pos.id}
+                      isFocused={focusedId === pos.id}
+                    />
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+
+      </div>
     </div>
   )
 }

@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import { usePathname } from 'next/navigation'
 import TagBadge from '@/components/TagBadge'
 
 interface PosizioneCardProps {
@@ -23,6 +24,7 @@ export default function PosizioneCard({
   onMouseLeave
 }: PosizioneCardProps) { 
   
+  const pathname = usePathname()
   const isAssociazione = ruolo === 'associazione'
 
   const formattaOra = (ora: string | null) => {
@@ -30,9 +32,15 @@ export default function PosizioneCard({
     return ora.substring(0, 5)
   }
 
-  const urlDestinazione = isAssociazione
+  // 🎯 LOGICA INTELLIGENTE PER L'URL
+  let urlDestinazione = isAssociazione
     ? `/app/associazione/posizione/${posizione.id}/modifica`
     : `/posizione/${posizione.id}`
+
+  // Se la card viene renderizzata dentro la pagina esplora (mappa), aggiunge il parametro!
+  if (!isAssociazione && (pathname?.includes('/esplora') || pathname?.includes('/mappa'))) {
+    urlDestinazione += '?from=mappa'
+  }
 
   const iconaAzione = isAssociazione ? '✏️' : '→'
   

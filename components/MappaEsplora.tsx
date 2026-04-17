@@ -121,26 +121,22 @@ export default function MappaEsplora({
         const { latitude, longitude } = position.coords;
         
         try {
-          // La magia: chiediamo a Nominatim che città è in base a queste coordinate
           const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&zoom=10&addressdetails=1`);
           const data = await res.json();
           
           const city = data?.address?.city || data?.address?.town || data?.address?.village || data?.address?.municipality || "La tua posizione";
 
-          // Scriviamo la città nell'URL, che a cascata aggiornerà la barra di ricerca in FiltriRicercaV2!
           const params = new URLSearchParams(searchParams.toString());
           params.set('lat', latitude.toString());
           params.set('lng', longitude.toString());
           params.set('indirizzo', city);
           router.push(`?${params.toString()}`);
           
-          // Diamo un aiutino alla mappa facendola volare subito lì
           if (mapInstance) {
             mapInstance.flyTo([latitude, longitude], 13, { animate: true, duration: 1.5 });
           }
         } catch (error) {
            console.error("Errore recupero nome città:", error);
-           // Piano B se non trova il nome: usa "La tua posizione"
            const params = new URLSearchParams(searchParams.toString());
            params.set('lat', latitude.toString());
            params.set('lng', longitude.toString());
@@ -155,24 +151,28 @@ export default function MappaEsplora({
       (err) => {
         setLocating(false);
         if (err.code === err.PERMISSION_DENIED) {
-           alert("Hai negato l'accesso alla posizione 🛑. Per usare il mirino, sblocca i permessi cliccando sul lucchetto in alto a sinistra (vicino all'URL), oppure scrivi la tua città nella barra di ricerca.");
+           alert("Accesso alla posizione bloccato 🛑.\n\nSe usi Safari o iPhone, assicurati di aver attivato la Localizzazione nelle Impostazioni di Sistema (Privacy > Localizzazione). In alternativa, scrivi la tua città nella barra di ricerca!");
         } else {
            alert("Non riusciamo a rilevare la tua posizione esatta 🌍. Il segnale GPS potrebbe essere debole in questo momento. Prova a scriverla manualmente.");
         }
       },
-      { enableHighAccuracy: true, timeout: 10000 } // Tempo alzato per dispositivi un po' più lenti
+      { enableHighAccuracy: true, timeout: 10000 }
     );
   };
 
   if (!isMounted) return <div className="w-full h-full bg-slate-100 animate-pulse"></div>
 
   return (
-    // 🚨 IL SEGRETO: relative h-full w-full sul contenitore esterno!
     <div className="relative h-full w-full z-0 bg-slate-100">
       
-      {/* MAP CONTAINER: 
-        Passiamo ref={setMapInstance} così possiamo controllare la mappa da fuori. 
-      */}
+      {/* 🚨 IL FIX PER IL MOBILE: Spegne i popup nativi solo su schermi piccoli (<1024px) */}
+      <style>{`
+        @media (max-width: 1023px) {
+          .leaflet-popup-pane { display: none !important; }
+        }
+      `}</style>
+
+      {/* MAP CONTAINER */}
       <MapContainer 
         center={[41.8719, 12.5674]} 
         zoom={6} 
@@ -212,7 +212,8 @@ export default function MappaEsplora({
               <Popup className="premium-popup">
                 <div className="p-1">
                    <h3 className="font-black text-slate-800 text-sm mb-2 leading-tight">{pos.titolo}</h3>
-                   <a href={`/posizione/${pos.id}`} className="block w-full text-center bg-slate-900 text-white text-[10px] font-black py-2 rounded-xl hover:bg-slate-800 transition-colors">DETTAGLI</a>
+                   {/* 🚨 AGGIUNTO IL PARAMETRO ?from=mappa QUI SOTTO */}
+                   <a href={`/posizione/${pos.id}?from=mappa`} className="block w-full text-center bg-slate-900 text-white text-[10px] font-black py-2 rounded-xl hover:bg-slate-800 transition-colors">DETTAGLI</a>
                 </div>
               </Popup>
             </Marker>
@@ -220,10 +221,7 @@ export default function MappaEsplora({
         })}
       </MapContainer>
 
-      {/* 🚨 IL MIRINO OUTSIDE! 
-        Essendo fuori dal MapContainer, non viene ingerito da Leaflet. 
-        Gli diamo un z-[1000] e sarà SEMPRE lì visibile, e i pin non scompariranno mai più.
-      */}
+      {/* 🚨 IL MIRINO OUTSIDE! */}
       <div className="absolute bottom-6 right-6 z-[1000]">
         <button 
           onClick={handleLocate}
@@ -233,7 +231,6 @@ export default function MappaEsplora({
           {locating ? (
              <div className="h-6 w-6 animate-spin rounded-full border-2 border-blue-600 border-t-transparent"></div>
           ) : (
-            // L'ICONA DEL MIRINO VERO E PROPRIO
             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="h-7 w-7 transition-transform group-hover:scale-90">
               <path strokeLinecap="round" strokeLinejoin="round" d="M12 2.25v4.5m0 10.5v4.5m-9.75-9.75h4.5m10.5 0h4.5m-14.25 0a4.5 4.5 0 1 1 9 0 4.5 4.5 0 0 1-9 0Z" />
             </svg>
