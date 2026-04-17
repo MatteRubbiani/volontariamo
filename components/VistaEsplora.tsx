@@ -65,11 +65,9 @@ export default function VistaEsplora() {
     const distance = touchEndY - touchStartY
 
     if (distance > 40) {
-      // Scorri in GIÙ (Chiude la tendina)
       setIsDrawerOpen(false)
       setFocusedId(null)
     } else if (distance < -40) {
-      // Scorri in SU (Apre la tendina)
       setIsDrawerOpen(true)
     }
     setTouchStartY(null)
@@ -156,8 +154,13 @@ export default function VistaEsplora() {
   }, [focusedId])
 
   return (
-    <div className="flex flex-col lg:flex-row w-full h-full overflow-hidden relative bg-white">
+    /**
+     * 🚨 FIX 1: h-[calc(100dvh-76px)] 
+     * Usiamo dvh (dynamic viewport height) per evitare che Safari tagli il fondo.
+     */
+    <div className="flex flex-col lg:flex-row w-full h-[calc(100dvh-76px)] overflow-hidden relative bg-white">
       
+      {/* SIDEBAR DESKTOP */}
       <div className="hidden lg:flex w-full lg:w-[55%] xl:w-[50%] h-full overflow-y-auto p-6 md:p-8 lg:p-10 flex-col gap-6 order-2 lg:order-1 bg-slate-50 scroll-smooth relative z-10">
         <div className="flex justify-between items-end border-b border-slate-200 pb-6">
           <h1 className="text-3xl md:text-4xl font-black text-slate-800 tracking-tighter">Esplora</h1>
@@ -194,8 +197,10 @@ export default function VistaEsplora() {
         )}
       </div>
 
+      {/* AREA MAPPA */}
       <div className="w-full h-full lg:w-[45%] xl:w-[50%] order-1 lg:order-2 lg:border-l border-slate-200 z-20 relative overflow-hidden">
         
+        {/* TASTO "CERCA IN QUEST'AREA" */}
         <div className="absolute top-8 left-1/2 -translate-x-1/2 z-[999] pointer-events-auto">
           <button 
             onClick={(e) => {
@@ -213,10 +218,10 @@ export default function VistaEsplora() {
               </svg>
             ) : (
               <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="h-4 w-4 transition-transform group-hover:rotate-180">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0 3.181 3.183a8.25 8.25 0 0 0 13.803-3.7M4.031 9.865a8.25 8.25 0 0 1 13.803-3.7l3.181 3.182m0-4.991v4.99" />
+                <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99" />
               </svg>
             )}
-            {loading ? 'Ricerca in corso...' : "Cerca in quest'area"}
+            {loading ? 'Ricerca...' : "Cerca qui"}
           </button>
         </div>
 
@@ -236,36 +241,40 @@ export default function VistaEsplora() {
           forcedZoom={12} 
         />
 
-       {/* 📱 MOBILE: LA CARD FLUTTUANTE (Esce quando clicchi un Pin) */}
+       {/* 📱 MOBILE: CARD FLUTTUANTE 
+           🚨 FIX 2: bottom-[calc(env(safe-area-inset-bottom)+5.5rem)]
+           Alzata per non finire dietro la barra di Safari.
+       */}
         {selectedPos && !isDrawerOpen && (
-          <div className="lg:hidden absolute bottom-8 left-4 right-4 z-[1001] flex flex-col items-end gap-2 animate-in fade-in slide-in-from-bottom-4 duration-300 ease-out pointer-events-none">
+          <div className="lg:hidden absolute bottom-[calc(env(safe-area-inset-bottom)+5.5rem)] left-4 right-4 z-[1001] flex flex-col items-end gap-2 animate-in fade-in slide-in-from-bottom-4 duration-300 pointer-events-none">
             
-            {/* TASTO CHIUDI ESTERNO: Niente più sovrapposizioni! */}
             <button 
               onClick={() => setFocusedId(null)}
-              className="p-2.5 bg-white/90 backdrop-blur-md hover:bg-slate-100 rounded-full text-slate-700 shadow-[0_8px_20px_rgba(0,0,0,0.15)] border border-slate-100 transition-colors pointer-events-auto"
+              className="p-2.5 bg-white/90 backdrop-blur-md hover:bg-slate-100 rounded-full text-slate-700 shadow-lg border border-slate-100 transition-colors pointer-events-auto"
             >
               <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={3} stroke="currentColor" className="w-5 h-5">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
               </svg>
             </button>
             
-            {/* LA CARD */}
-            <div className="w-full bg-white rounded-3xl shadow-[0_15px_40px_rgba(0,0,0,0.2)] overflow-hidden border border-slate-100 pointer-events-auto">
+            <div className="w-full bg-white rounded-3xl shadow-2xl overflow-hidden border border-slate-100 pointer-events-auto">
               <PosizioneCard posizione={selectedPos} />
             </div>
 
           </div>
         )}
 
+        {/* 📱 MOBILE: TENDINA DRAWER 
+            🚨 FIX 3: h-[85dvh] e padding di sicurezza 
+        */}
         <div 
-          className={`lg:hidden absolute inset-x-0 bottom-0 z-[1000] bg-white rounded-t-[2.5rem] shadow-[0_-15px_40px_rgba(0,0,0,0.12)] transition-transform duration-500 ease-[cubic-bezier(0.32,0.72,0,1)] border-t border-slate-100 flex flex-col ${
-            isDrawerOpen ? 'translate-y-0 h-[85vh]' : 'translate-y-[calc(100%-80px)] h-[85vh]'
+          className={`lg:hidden absolute inset-x-0 bottom-0 z-[1000] bg-white rounded-t-[3rem] shadow-[0_-15px_40px_rgba(0,0,0,0.15)] transition-transform duration-500 ease-[cubic-bezier(0.32,0.72,0,1)] border-t border-slate-100 flex flex-col ${
+            isDrawerOpen ? 'translate-y-0 h-[85dvh]' : 'translate-y-[calc(100%-100px-env(safe-area-inset-bottom))] h-[85dvh]'
           }`}
         >
-          {/* 🚨 AREA MANIGLIA (ORA SUPPORTA LO SWIPE IN SU E IN GIÙ!) */}
+          {/* AREA MANIGLIA PIÙ ALTA (100px) PER EVITARE CONFLITTI CON LA NAVBAR SAFARI */}
           <div 
-            className="w-full h-[80px] flex-shrink-0 flex flex-col items-center justify-start pt-4 cursor-pointer"
+            className="w-full h-[100px] flex-shrink-0 flex flex-col items-center justify-start pt-4 cursor-pointer"
             onClick={() => {
               setIsDrawerOpen(!isDrawerOpen);
               if (!isDrawerOpen) setFocusedId(null);
@@ -279,7 +288,8 @@ export default function VistaEsplora() {
             </span>
           </div>
 
-          <div className="px-6 pb-20 overflow-y-auto flex-grow flex flex-col gap-6">
+          {/* CONTENUTO SCROLLABILE CON EXTRA PADDING PER IL FONDO */}
+          <div className="px-6 pb-[calc(env(safe-area-inset-bottom)+6rem)] overflow-y-auto flex-grow flex flex-col gap-6">
             <FiltriRicercaV2 />
             
             {posizioni.length === 0 && !loading ? (
