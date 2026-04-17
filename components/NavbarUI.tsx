@@ -36,7 +36,8 @@ export default function NavbarUI({
   const logoText = isAziendale ? 'text-white' : 'text-slate-900'
   
   return (
-    <nav className={`border-b backdrop-blur-md sticky top-0 z-[100] transition-colors duration-500 ${navBg}`}>
+    // 🚨 FIX Z-INDEX: Alzato a 9999 per stare sicuramente sopra la mappa Leaflet
+    <nav className={`border-b backdrop-blur-md sticky top-0 z-[9999] transition-colors duration-500 ${navBg}`}>
       <div className="py-3 px-6 md:px-8 flex justify-between items-center max-w-7xl mx-auto">
         
         {/* LOGO AREA */}
@@ -144,7 +145,7 @@ export default function NavbarUI({
 
           {/* HAMBURGER MOBILE */}
           <button 
-            className={`md:hidden p-2 rounded-lg transition-colors ${isAziendale ? 'text-slate-300 hover:bg-slate-800' : 'text-slate-600 hover:bg-slate-100'}`}
+            className={`md:hidden p-2 rounded-lg transition-colors z-[10000] relative ${isAziendale ? 'text-slate-300 hover:bg-slate-800' : 'text-slate-600 hover:bg-slate-100'}`}
             onClick={() => setIsOpen(!isOpen)}
           >
             {isOpen ? (
@@ -156,9 +157,9 @@ export default function NavbarUI({
         </div>
       </div>
 
-      {/* MENU MOBILE */}
+      {/* MENU MOBILE - 🚨 Aggiunto backdrop-blur-xl e opacità per un effetto premium sopra la mappa */}
       {isOpen && (
-        <div className={`md:hidden border-t px-6 py-6 flex flex-col gap-2 absolute w-full shadow-2xl ${isAziendale ? 'bg-slate-900 border-slate-800' : 'bg-white border-slate-100'}`}>
+        <div className={`md:hidden border-t px-6 py-6 flex flex-col gap-2 absolute w-full shadow-2xl backdrop-blur-xl transition-all ${isAziendale ? 'bg-slate-900/95 border-slate-800' : 'bg-white/95 border-slate-100'}`}>
           
           {hasAziendale && isVolontario && (
             <div className={`mb-4 pb-4 border-b flex justify-center ${isAziendale ? 'border-slate-800' : 'border-slate-100'}`}>
@@ -239,7 +240,6 @@ export default function NavbarUI({
             </div>
           ) : (
             <div className="flex flex-col gap-3 mt-2">
-              {/* LINK MAPPA PER UTENTI NON LOGGATI (MOBILE) */}
               <Link 
                 href="/mappa" 
                 onClick={chiudiMenu}
