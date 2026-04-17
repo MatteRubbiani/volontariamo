@@ -35,11 +35,24 @@ export default function VistaEsplora() {
   const [hoveredId, setHoveredId] = useState<string | null>(null)
   const [focusedId, setFocusedId] = useState<string | null>(null)
   
+  // 📱 STATI PER IL DRAGGING PREMIUM
   const [isDrawerOpen, setIsDrawerOpen] = useState(false)
+  const [dragY, setDragY] = useState(0)
+  const [isDragging, setIsDragging] = useState(false)
+  const [screenHeight, setScreenHeight] = useState(0) 
+  const pointerStartY = useRef<number | null>(null)
+  const wasDragging = useRef(false) // 🚨 Impedisce al click di invertire il drag
   
   const boundsRef = useRef<MapBounds | null>(null)
   const isFirstLoad = useRef(true)
   const checkedCap = useRef(false)
+
+  useEffect(() => {
+    setScreenHeight(window.innerHeight)
+    const handleResize = () => setScreenHeight(window.innerHeight)
+    window.addEventListener('resize', handleResize)
+    return () => window.removeEventListener('resize', handleResize)
+  }, [])
 
   const q = searchParams.get('q') || null
   const tipo = searchParams.get('tipo') || null
@@ -52,27 +65,48 @@ export default function VistaEsplora() {
 
   const selectedPos = posizioni.find(p => p.id === focusedId)
 
-  // 📱 GESTIONE SWIPE PER LA TENDINA
-  const [touchStartY, setTouchStartY] = useState<number | null>(null)
-
-  const handleTouchStart = (e: React.TouchEvent) => {
-    setTouchStartY(e.touches[0].clientY)
+  // 📱 LOGICA DI TRASCINAMENTO (POINTER EVENTS)
+  const handlePointerDown = (e: React.PointerEvent) => {
+    e.currentTarget.setPointerCapture(e.pointerId)
+    pointerStartY.current = e.clientY
+    setIsDragging(true)
+    wasDragging.current = false
   }
 
-  const handleTouchEnd = (e: React.TouchEvent) => {
-    if (!touchStartY) return
-    const touchEndY = e.changedTouches[0].clientY
-    const distance = touchEndY - touchStartY
+  const handlePointerMove = (e: React.PointerEvent) => {
+    if (!isDragging || pointerStartY.current === null) return
+    const currentY = e.clientY
+    const deltaY = currentY - pointerStartY.current
 
-    if (distance > 40) {
+    // Se muovo di più di 5px, considero che sto trascinando (non è un click)
+    if (Math.abs(deltaY) > 5) wasDragging.current = true
+
+    if (isDrawerOpen) {
+      setDragY(Math.max(0, deltaY)) // Da aperta può solo scendere
+    } else {
+      setDragY(Math.min(0, deltaY)) // Da chiusa può solo salire
+    }
+  }
+
+  const handlePointerUp = (e: React.PointerEvent) => {
+    if (!isDragging) return
+    setIsDragging(false)
+
+    // SOGLIA DI AGGANCIO (50px per un feeling reattivo)
+    const threshold = 50
+    if (dragY < -threshold && !isDrawerOpen) {
+      setIsDrawerOpen(true)
+    } else if (dragY > threshold && isDrawerOpen) {
       setIsDrawerOpen(false)
       setFocusedId(null)
-    } else if (distance < -40) {
-      setIsDrawerOpen(true)
     }
-    setTouchStartY(null)
+
+    setDragY(0)
+    pointerStartY.current = null
+    e.currentTarget.releasePointerCapture(e.pointerId)
   }
 
+  // LOGICA AUTOCENTER & FETCH
   useEffect(() => {
     async function autoCenterUser() {
       if (checkedCap.current) return
@@ -92,9 +126,7 @@ export default function VistaEsplora() {
             params.set('indirizzo', vol.citta_residenza || vol.cap) 
             router.replace(`?${params.toString()}`)
           }
-        } catch (err) {
-          console.error("Errore autolocalizzazione CAP:", err)
-        }
+        } catch (err) { console.error(err) }
       }
     }
     autoCenterUser()
@@ -120,11 +152,7 @@ export default function VistaEsplora() {
         competenze: pos.competenze ? pos.competenze.map((c: string) => ({ id: c, name: c })) : []
       }))
       setPosizioni(formattedData)
-    } catch (error) {
-      console.error("Errore fetch:", error)
-    } finally {
-      setLoading(false)
-    }
+    } catch (error) { console.error(error) } finally { setLoading(false) }
   }
 
   const handleMapReady = useCallback((initialBounds: MapBounds) => {
@@ -141,27 +169,14 @@ export default function VistaEsplora() {
       const calcBounds = getBoundsFromCenter(lat, lng);
       boundsRef.current = calcBounds; 
       fetchPosizioni(calcBounds);
-    } else if (boundsRef.current) {
-      fetchPosizioni(boundsRef.current);
-    }
+    } else if (boundsRef.current) fetchPosizioni(boundsRef.current);
   }, [q, tipo, tagsStr, competenzeStr, lat, lng])
 
-  useEffect(() => {
-    if (focusedId && window.innerWidth >= 1024) {
-      const cardElement = document.getElementById(`card-${focusedId}`)
-      if (cardElement) cardElement.scrollIntoView({ behavior: 'smooth', block: 'center' })
-    }
-  }, [focusedId])
-
   return (
-    /**
-     * 🚨 FIX 1: h-[calc(100dvh-76px)] 
-     * Usiamo dvh (dynamic viewport height) per evitare che Safari tagli il fondo.
-     */
     <div className="flex flex-col lg:flex-row w-full h-[calc(100dvh-76px)] overflow-hidden relative bg-white">
       
       {/* SIDEBAR DESKTOP */}
-      <div className="hidden lg:flex w-full lg:w-[55%] xl:w-[50%] h-full overflow-y-auto p-6 md:p-8 lg:p-10 flex-col gap-6 order-2 lg:order-1 bg-slate-50 scroll-smooth relative z-10">
+      <div className="hidden lg:flex w-full lg:w-[55%] xl:w-[50%] h-full overflow-y-auto p-6 md:p-8 lg:p-10 flex-col gap-6 order-2 lg:order-1 bg-slate-50 relative z-10">
         <div className="flex justify-between items-end border-b border-slate-200 pb-6">
           <h1 className="text-3xl md:text-4xl font-black text-slate-800 tracking-tighter">Esplora</h1>
           <div className="text-right">
@@ -169,58 +184,32 @@ export default function VistaEsplora() {
             <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest mt-1">Trovate</p>
           </div>
         </div>
-
-        <div className="-mx-2">
-            <FiltriRicercaV2 /> 
+        <div className="-mx-2"><FiltriRicercaV2 /></div>
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 pb-20">
+          {posizioni.map((pos: any) => (
+            <div key={pos.id} id={`card-${pos.id}`}>
+              <PosizioneCard 
+                posizione={pos} 
+                isHovered={hoveredId === pos.id}
+                isFocused={focusedId === pos.id}
+                onMouseEnter={() => setHoveredId(pos.id)}
+                onMouseLeave={() => setHoveredId(null)}
+              />
+            </div>
+          ))}
         </div>
-
-        {posizioni.length === 0 && !loading ? (
-          <div className="bg-white p-12 rounded-[3rem] text-center border-2 border-dashed border-slate-200 my-10 shadow-sm">
-            <span className="text-5xl block mb-4">🌍</span>
-            <h3 className="text-xl font-black text-slate-800 mb-2">Nessun risultato in questa zona</h3>
-            <p className="text-slate-500 font-medium italic text-sm">Sposta la mappa o usa il mirino per trovare altro.</p>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 pb-20">
-            {posizioni.map((pos: any) => (
-              <div key={pos.id} id={`card-${pos.id}`}>
-                <PosizioneCard 
-                  posizione={pos} 
-                  isHovered={hoveredId === pos.id}
-                  isFocused={focusedId === pos.id}
-                  onMouseEnter={() => setHoveredId(pos.id)}
-                  onMouseLeave={() => setHoveredId(null)}
-                />
-              </div>
-            ))}
-          </div>
-        )}
       </div>
 
-      {/* AREA MAPPA */}
-      <div className="w-full h-full lg:w-[45%] xl:w-[50%] order-1 lg:order-2 lg:border-l border-slate-200 z-20 relative overflow-hidden">
+      {/* AREA MAPPA / MOBILE */}
+      <div className="w-full h-full lg:w-[45%] xl:w-[50%] order-1 lg:order-2 z-20 relative overflow-hidden">
         
-        {/* TASTO "CERCA IN QUEST'AREA" */}
-        <div className="absolute top-8 left-1/2 -translate-x-1/2 z-[999] pointer-events-auto">
+        <div className="absolute top-8 left-1/2 -translate-x-1/2 z-[999]">
           <button 
-            onClick={(e) => {
-              e.preventDefault();
-              e.stopPropagation();
-              if (boundsRef.current) fetchPosizioni(boundsRef.current);
-            }}
+            onClick={() => boundsRef.current && fetchPosizioni(boundsRef.current)}
             disabled={loading}
-            className="group flex items-center gap-2 rounded-full bg-white/90 backdrop-blur-md px-5 py-2.5 text-sm font-bold text-slate-700 shadow-[0_8px_30px_rgb(0,0,0,0.12)] ring-1 ring-slate-900/5 transition-all hover:scale-105 hover:bg-white hover:text-blue-600 hover:shadow-[0_8px_30px_rgb(0,0,0,0.16)] active:scale-95 disabled:pointer-events-none disabled:opacity-80"
+            className="group flex items-center gap-2 rounded-full bg-white/90 backdrop-blur-md px-5 py-2.5 text-sm font-bold text-slate-700 shadow-lg ring-1 ring-slate-900/5 hover:scale-105 active:scale-95 transition-all"
           >
-            {loading ? (
-              <svg className="h-4 w-4 animate-spin text-blue-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-              </svg>
-            ) : (
-              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="h-4 w-4 transition-transform group-hover:rotate-180">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99" />
-              </svg>
-            )}
+            {loading ? <div className="h-4 w-4 animate-spin rounded-full border-2 border-blue-600 border-t-transparent" /> : <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="h-4 w-4"><path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99" /></svg>}
             {loading ? 'Ricerca...' : "Cerca qui"}
           </button>
         </div>
@@ -230,87 +219,63 @@ export default function VistaEsplora() {
           hoveredId={hoveredId}    
           setHoveredId={setHoveredId} 
           focusedId={focusedId}    
-          setFocusedId={(id: string) => {
-            setFocusedId(id);
-            if (id) setIsDrawerOpen(false); 
-          }}
+          setFocusedId={(id: string) => { setFocusedId(id); if (id) setIsDrawerOpen(false); }}
           onMapReady={handleMapReady}
           onBoundsChange={(b: any) => { boundsRef.current = b }} 
-          forcedLat={lat}
-          forcedLng={lng}
-          forcedZoom={12} 
+          forcedLat={lat} forcedLng={lng} forcedZoom={12} 
         />
 
-       {/* 📱 MOBILE: CARD FLUTTUANTE 
-           🚨 FIX 2: bottom-[calc(env(safe-area-inset-bottom)+5.5rem)]
-           Alzata per non finire dietro la barra di Safari.
-       */}
+        {/* CARD FLUTTUANTE MOBILE */}
         {selectedPos && !isDrawerOpen && (
-          <div className="lg:hidden absolute bottom-[calc(env(safe-area-inset-bottom)+5.5rem)] left-4 right-4 z-[1001] flex flex-col items-end gap-2 animate-in fade-in slide-in-from-bottom-4 duration-300 pointer-events-none">
-            
-            <button 
-              onClick={() => setFocusedId(null)}
-              className="p-2.5 bg-white/90 backdrop-blur-md hover:bg-slate-100 rounded-full text-slate-700 shadow-lg border border-slate-100 transition-colors pointer-events-auto"
-            >
-              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={3} stroke="currentColor" className="w-5 h-5">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-              </svg>
+          <div className="lg:hidden absolute bottom-[calc(env(safe-area-inset-bottom)+5.5rem)] left-4 right-4 z-[1001] flex flex-col items-end gap-2 animate-in fade-in slide-in-from-bottom-4 pointer-events-none">
+            <button onClick={() => setFocusedId(null)} className="p-2.5 bg-white/90 backdrop-blur-md rounded-full text-slate-700 shadow-lg pointer-events-auto transition-colors active:bg-white">
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={3} stroke="currentColor" className="w-5 h-5"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
             </button>
-            
             <div className="w-full bg-white rounded-3xl shadow-2xl overflow-hidden border border-slate-100 pointer-events-auto">
               <PosizioneCard posizione={selectedPos} />
             </div>
-
           </div>
         )}
 
-        {/* 📱 MOBILE: TENDINA DRAWER 
-            🚨 FIX 3: h-[85dvh] e padding di sicurezza 
-        */}
+        {/* 📱 TENDINA DRAWER PREMIUM */}
         <div 
-          className={`lg:hidden absolute inset-x-0 bottom-0 z-[1000] bg-white rounded-t-[3rem] shadow-[0_-15px_40px_rgba(0,0,0,0.15)] transition-transform duration-500 ease-[cubic-bezier(0.32,0.72,0,1)] border-t border-slate-100 flex flex-col ${
-            isDrawerOpen ? 'translate-y-0 h-[85dvh]' : 'translate-y-[calc(100%-100px-env(safe-area-inset-bottom))] h-[85dvh]'
-          }`}
+          className={`lg:hidden absolute inset-x-0 bottom-0 z-[1000] bg-white rounded-t-[3rem] shadow-[0_-15px_40px_rgba(0,0,0,0.15)] border-t border-slate-100 flex flex-col ${!isDragging ? 'transition-transform duration-500 ease-[cubic-bezier(0.32,0.72,0,1)]' : ''}`}
+          style={{ 
+            height: '85dvh',
+            transform: `translateY(${
+              isDrawerOpen 
+                ? Math.max(0, dragY) 
+                : Math.min(0, dragY) + (screenHeight ? (screenHeight * 0.85 - 100) : 600)
+            }px)`,
+            touchAction: 'none'
+          }}
         >
-          {/* AREA MANIGLIA PIÙ ALTA (100px) PER EVITARE CONFLITTI CON LA NAVBAR SAFARI */}
+          {/* AREA MANIGLIA */}
           <div 
-            className="w-full h-[100px] flex-shrink-0 flex flex-col items-center justify-start pt-4 cursor-pointer"
-            onClick={() => {
-              setIsDrawerOpen(!isDrawerOpen);
-              if (!isDrawerOpen) setFocusedId(null);
+            className="w-full h-[100px] flex-shrink-0 flex flex-col items-center justify-start pt-4 cursor-grab active:cursor-grabbing touch-none"
+            onPointerDown={handlePointerDown}
+            onPointerMove={handlePointerMove}
+            onPointerUp={handlePointerUp}
+            onClick={() => { 
+               // Solo se non stavo trascinando, permetto il toggle al click
+               if (!wasDragging.current) setIsDrawerOpen(!isDrawerOpen); 
             }}
-            onTouchStart={handleTouchStart}
-            onTouchEnd={handleTouchEnd}
           >
             <div className="w-12 h-1.5 bg-slate-300 rounded-full mb-3" />
-            <span className="text-[10px] font-black uppercase tracking-widest text-slate-400">
+            <span className="text-[10px] font-black uppercase tracking-widest text-slate-400 select-none">
               {isDrawerOpen ? 'Scorri per chiudere' : `Vedi ${posizioni.length} posizioni`}
             </span>
           </div>
 
-          {/* CONTENUTO SCROLLABILE CON EXTRA PADDING PER IL FONDO */}
           <div className="px-6 pb-[calc(env(safe-area-inset-bottom)+6rem)] overflow-y-auto flex-grow flex flex-col gap-6">
             <FiltriRicercaV2 />
-            
-            {posizioni.length === 0 && !loading ? (
-              <div className="bg-slate-50 p-8 rounded-3xl text-center border border-dashed border-slate-200 shadow-sm">
-                <span className="text-4xl block mb-4">🌍</span>
-                <h3 className="text-lg font-black text-slate-800 mb-2">Nessun risultato</h3>
-                <p className="text-slate-500 font-medium italic text-xs">Sposta la mappa o usa il mirino.</p>
-              </div>
-            ) : (
-              <div className="flex flex-col gap-4">
-                {posizioni.map((pos: any) => (
-                  <div key={pos.id} onClick={() => { setFocusedId(pos.id); setIsDrawerOpen(false); }}>
-                    <PosizioneCard 
-                      posizione={pos} 
-                      isHovered={hoveredId === pos.id}
-                      isFocused={focusedId === pos.id}
-                    />
-                  </div>
-                ))}
-              </div>
-            )}
+            <div className="flex flex-col gap-4">
+              {posizioni.map((pos: any) => (
+                <div key={pos.id} onClick={() => { if (!wasDragging.current) { setFocusedId(pos.id); setIsDrawerOpen(false); } }}>
+                  <PosizioneCard posizione={pos} isHovered={hoveredId === pos.id} isFocused={focusedId === pos.id} />
+                </div>
+              ))}
+            </div>
           </div>
         </div>
 
