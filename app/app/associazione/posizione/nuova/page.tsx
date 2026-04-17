@@ -3,6 +3,7 @@ import { cookies } from 'next/headers'
 import Link from 'next/link'
 import FormPosizione from '@/components/FormPosizione'
 import { createPosizione } from '../../actions'
+import { redirect } from 'next/navigation'
 
 export default async function NuovaPosizionePage() {
   const cookieStore = await cookies()
@@ -12,10 +13,14 @@ export default async function NuovaPosizionePage() {
     { cookies: { getAll() { return cookieStore.getAll() } } }
   )
 
-  // Scarichiamo in parallelo sia i tag (Interessi) che le competenze (Superpoteri)
-  const [ { data: allTags }, { data: allCompetenze } ] = await Promise.all([
+  const { data: { user } } = await supabase.auth.getUser()
+  if (!user) redirect('/auth/login')
+
+  // Scarichiamo in parallelo tag, competenze E la galleria media dell'associazione!
+  const [ { data: allTags }, { data: allCompetenze }, { data: mediaGallery } ] = await Promise.all([
     supabase.from('tags').select('*').order('name'),
-    supabase.from('competenze').select('*').eq('is_official', true).order('name')
+    supabase.from('competenze').select('*').eq('is_official', true).order('name'),
+    supabase.from('media_associazioni').select('*').eq('associazione_id', user.id).order('created_at', { ascending: false })
   ])
 
   return (
@@ -30,10 +35,11 @@ export default async function NuovaPosizionePage() {
         </Link>
       </div>
 
-      {/* Carichiamo il form passando i tag, le competenze e l'azione di creazione */}
+      {/* Passiamo i nuovi dati al form */}
       <FormPosizione 
         tagsDisponibili={allTags || []} 
         competenzeDisponibili={allCompetenze || []}
+        mediaDisponibili={mediaGallery || []} 
         salvaAction={createPosizione} 
       />
     </div>

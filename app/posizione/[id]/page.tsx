@@ -103,6 +103,7 @@ export default async function DettaglioPosizioneVolontario({
     .from('posizioni')
     .select(`
       *,
+      media_associazioni(url),
       associazioni ( id, nome, email_contatto ),
       tags:posizione_tags(tag:tags(name)),
       competenze:posizione_competenze(competenza:competenze(id, name))

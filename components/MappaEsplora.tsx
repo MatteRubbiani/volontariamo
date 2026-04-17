@@ -191,10 +191,10 @@ export default function MappaEsplora({
         />
 
         {posizioni.map((pos: any) => {
-          if (!pos.coords) return null;
-          const match = pos.coords.match(/POINT\(([^ ]+) ([^)]+)\)/);
-          if (!match) return null;
-          const lat = parseFloat(match[2]), lng = parseFloat(match[1]);
+          // La query ora restituisce direttamente i numeri! Addio Regex!
+          if (!pos.lat || !pos.lng) return null;
+          const lat = pos.lat;
+          const lng = pos.lng;
           const active = hoveredId === pos.id || focusedId === pos.id;
 
           return (

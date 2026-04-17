@@ -35,17 +35,17 @@ export async function createPosizione(formData: FormData) {
   const ora_fine = formData.get('ora_fine') as string
   const selectedTags = formData.getAll('tags') as string[]
   const selectedCompetenze = formData.getAll('competenze') as string[]
+  
+  // Immagine
+  const immagine_id = (formData.get('immagine_id') as string) || null
 
-  // RECUPERIAMO LE COORDINATE DAL FORM
+  // 🔙 RIPRISTINATO IL TUO METODO ORIGINALE PER POSTGIS
   const lat = formData.get('lat') as string
   const lng = formData.get('lng') as string
-  
-  // Costruiamo la stringa PostGIS: attenzione, è POINT(Longitudine Latitudine)
   const coords = (lat && lng) ? `POINT(${lng} ${lat})` : null
 
   const data_esatta = tipo === 'una_tantum' ? (formData.get('data_esatta') as string) : null
   const giorni_settimana = tipo === 'ricorrente' ? (formData.getAll('giorni_settimana') as string[]) : []
-
   const quando = tipo === 'una_tantum' ? data_esatta : giorni_settimana.join(', ')
 
   if (!quando) throw new Error("Devi specificare una data o almeno un giorno della settimana.")
@@ -54,34 +54,23 @@ export async function createPosizione(formData: FormData) {
     .from('posizioni')
     .insert({
       associazione_id: user.id, 
-      titolo, 
-      descrizione, 
-      tipo, 
-      dove, 
-      ora_inizio, 
-      ora_fine, 
-      quando, 
-      data_esatta, 
-      giorni_settimana, 
-      coords // <-- INSERIAMO LE COORDINATE NEL DATABASE
+      titolo, descrizione, tipo, dove, ora_inizio, ora_fine, 
+      quando, data_esatta, giorni_settimana, 
+      coords, // <-- Tornato alla normalità
+      immagine_id
     })
     .select().single()
 
   if (posError) throw new Error("Errore salvataggio posizione: " + posError.message)
 
   if (posizione) {
-    // 1. Salvataggio Tag
     if (selectedTags.length > 0) {
       const tagsToInsert = selectedTags.map(tId => ({ posizione_id: posizione.id, tag_id: tId }))
-      const { error: tagError } = await supabase.from('posizione_tags').insert(tagsToInsert)
-      if (tagError) throw new Error("Errore salvataggio TAG: " + tagError.message)
+      await supabase.from('posizione_tags').insert(tagsToInsert)
     }
-
-    // 2. Salvataggio Competenze
     if (selectedCompetenze.length > 0) {
       const compToInsert = selectedCompetenze.map(cId => ({ posizione_id: posizione.id, competenza_id: cId }))
-      const { error: compError } = await supabase.from('posizione_competenze').insert(compToInsert)
-      if (compError) throw new Error("Errore salvataggio COMPETENZE: " + compError.message)
+      await supabase.from('posizione_competenze').insert(compToInsert)
     }
   }
 
@@ -90,7 +79,6 @@ export async function createPosizione(formData: FormData) {
   redirect('/app/associazione')
 }
 
-// --- LA FUNZIONE PER L'UPDATE ---
 export async function updatePosizione(id: string, formData: FormData) {
   const supabase = await getSupabase()
   const { data: { user } } = await supabase.auth.getUser()
@@ -104,25 +92,20 @@ export async function updatePosizione(id: string, formData: FormData) {
   const ora_fine = formData.get('ora_fine') as string
   const selectedTags = formData.getAll('tags') as string[]
   const selectedCompetenze = formData.getAll('competenze') as string[]
+  
+  // Immagine
+  const immagine_id = (formData.get('immagine_id') as string) || null
 
-  // RECUPERIAMO LE COORDINATE ANCHE QUI
   const lat = formData.get('lat') as string
   const lng = formData.get('lng') as string
   
-  // Costruiamo l'oggetto di base per l'update
   const updateData: any = { 
-    titolo, 
-    descrizione, 
-    tipo, 
-    dove, 
-    ora_inizio, 
-    ora_fine, 
-    quando: '', 
-    data_esatta: null, 
-    giorni_settimana: [] 
+    titolo, descrizione, tipo, dove, ora_inizio, ora_fine, 
+    quando: '', data_esatta: null, giorni_settimana: [],
+    immagine_id
   }
   
-  // Se l'utente ha cercato un NUOVO indirizzo tramite Google Maps, aggiorniamo anche le coordinate
+  // 🔙 RIPRISTINATO IL TUO METODO ORIGINALE PER POSTGIS
   if (lat && lng) {
     updateData.coords = `POINT(${lng} ${lat})`
   }
@@ -136,7 +119,6 @@ export async function updatePosizione(id: string, formData: FormData) {
 
   if (!updateData.quando) throw new Error("Devi specificare una data o almeno un giorno.")
 
-  // 1. Aggiorna la tabella posizioni
   const { error: updateError } = await supabase
     .from('posizioni')
     .update(updateData)
@@ -145,22 +127,16 @@ export async function updatePosizione(id: string, formData: FormData) {
 
   if (updateError) throw new Error(updateError.message)
 
-  // 2. Resetta i tag vecchi e inserisci i nuovi
   await supabase.from('posizione_tags').delete().eq('posizione_id', id)
-  
   if (selectedTags.length > 0) {
     const tagsToInsert = selectedTags.map(tId => ({ posizione_id: id, tag_id: tId }))
-    const { error: tagError } = await supabase.from('posizione_tags').insert(tagsToInsert)
-    if (tagError) throw new Error("Errore aggiornamento TAG: " + tagError.message)
+    await supabase.from('posizione_tags').insert(tagsToInsert)
   }
 
-  // 3. Resetta le competenze vecchie e inserisci le nuove
   await supabase.from('posizione_competenze').delete().eq('posizione_id', id)
-  
   if (selectedCompetenze.length > 0) {
     const compToInsert = selectedCompetenze.map(cId => ({ posizione_id: id, competenza_id: cId }))
-    const { error: compError } = await supabase.from('posizione_competenze').insert(compToInsert)
-    if (compError) throw new Error("Errore aggiornamento COMPETENZE: " + compError.message)
+    await supabase.from('posizione_competenze').insert(compToInsert)
   }
 
   revalidatePath('/app/associazione')

@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from 'react'
 import { getTagColor } from '@/lib/tagColors'
 import CompetenzaSelector from './CompetenzaSelector'
+import MediaGalleryPicker from '@/components/MediaGalleryPicker' // 🚨 IMPORTATO IL NUOVO COMPONENTE
 
 const GIORNI = [
   { etichetta: 'L', valore: 'Lunedì' },
@@ -19,14 +20,16 @@ export default function FormPosizione({
   tagsDisponibili = [], 
   tagsSelezionati: tagsIniziali = [],
   competenzeDisponibili = [],           
-  competenzeSelezionate = [],           
+  competenzeSelezionate = [],
+  mediaDisponibili = [], // 🚨 AGGIUNTA PROP PER LA GALLERIA         
   salvaAction 
 }: { 
   posizione?: any
   tagsDisponibili?: any[]
   tagsSelezionati?: string[]
   competenzeDisponibili?: any[]         
-  competenzeSelezionate?: string[]      
+  competenzeSelezionate?: string[]
+  mediaDisponibili?: any[] // 🚨 TIPO PER LA GALLERIA
   salvaAction: (formData: FormData) => Promise<void>
 }) {
   const [isSubmitting, setIsSubmitting] = useState(false)
@@ -34,12 +37,12 @@ export default function FormPosizione({
   const [giorniSelezionati, setGiorniSelezionati] = useState<string[]>(posizione?.giorni_settimana || [])
   const [tagSelezionati, setTagSelezionati] = useState<string[]>(tagsIniziali)
   
-  // NUOVO STATO: Salviamo le coordinate geografiche
-  const [coordinate, setCoordinate] = useState<{lat: number, lng: number} | null>(null)
+  // 🚨 STATO PER L'IMMAGINE
+  const [immagineId, setImmagineId] = useState<string | null>(posizione?.immagine_id || null)
   
+  const [coordinate, setCoordinate] = useState<{lat: number, lng: number} | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
 
-  // --- LOGICA GOOGLE MAPS AGGIORNATA ---
   useEffect(() => {
     const initAutocomplete = () => {
       const google = (window as any).google
@@ -47,7 +50,6 @@ export default function FormPosizione({
         const autocomplete = new google.maps.places.Autocomplete(inputRef.current, {
           types: ['address'],
           componentRestrictions: { country: 'it' },
-          // Abbiamo aggiunto 'geometry' per farci restituire le coordinate
           fields: ['formatted_address', 'geometry'] 
         })
 
@@ -55,8 +57,6 @@ export default function FormPosizione({
           const place = autocomplete.getPlace()
           if (place && place.formatted_address && inputRef.current) {
             inputRef.current.value = place.formatted_address
-            
-            // Estraiamo Latitudine e Longitudine
             if (place.geometry && place.geometry.location) {
               setCoordinate({
                 lat: place.geometry.location.lat(),
@@ -100,7 +100,6 @@ export default function FormPosizione({
           setIsSubmitting(true)
           try {
             await salvaAction(fd)
-            // FORZIAMO IL RELOAD PER AGGIORNARE NAVBAR E DASHBOARD
             window.location.assign('/app/associazione')
           } catch (error) {
             console.error("Errore salvataggio:", error)
@@ -129,7 +128,16 @@ export default function FormPosizione({
           <input type="hidden" name="tipo" value={tipo} />
         </div>
 
-        {/* 2. TITOLO E DESCRIZIONE */}
+        {/* 🚨 2. IMMAGINE DI COPERTINA (GALLERIA MEDIA) */}
+        <div className="pt-4 pb-2 border-b border-slate-100">
+          <MediaGalleryPicker 
+            mediaIniziali={mediaDisponibili} 
+            onSelect={(id) => setImmagineId(id)} 
+          />
+          <input type="hidden" name="immagine_id" value={immagineId || ''} />
+        </div>
+
+        {/* 3. TITOLO E DESCRIZIONE */}
         <div className="grid gap-6">
           <div className="space-y-1">
             <label className="text-[10px] font-black uppercase text-slate-400 ml-4 tracking-widest">Titolo Posizione</label>
@@ -141,7 +149,7 @@ export default function FormPosizione({
           </div>
         </div>
 
-        {/* 3. LOGICA TEMPORALE */}
+        {/* 4. LOGICA TEMPORALE */}
         <div className="p-8 bg-blue-50 rounded-[2rem] border border-blue-100 transition-all">
           {tipo === 'una_tantum' ? (
             <div className="space-y-3 animate-in fade-in zoom-in-95">
@@ -164,7 +172,7 @@ export default function FormPosizione({
           )}
         </div>
 
-        {/* 4. ORARI E LUOGO */}
+        {/* 5. ORARI E LUOGO */}
         <div className="grid md:grid-cols-2 gap-8">
           <div className="space-y-2">
             <label className="text-[10px] font-black uppercase text-slate-400 ml-2 tracking-widest">⏳ Orario</label>
@@ -182,7 +190,6 @@ export default function FormPosizione({
               required autoComplete="off"
               onKeyDown={(e) => { if (e.key === 'Enter') e.preventDefault(); }}
             />
-            {/* CAMPI NASCOSTI PER INVIARE LE COORDINATE ALLA ACTION */}
             {coordinate && (
               <>
                 <input type="hidden" name="lat" value={coordinate.lat} />
@@ -192,7 +199,7 @@ export default function FormPosizione({
           </div>
         </div>
 
-        {/* 5. TAGS GESTITI DA REACT CON COLORI DINAMICI */}
+        {/* 6. TAGS */}
         <div className="space-y-4 pt-4 border-t border-slate-100">
           <label className="text-[10px] font-black uppercase text-slate-400 ml-2 tracking-widest block">
             Ambito dell'annuncio (Categorie)
@@ -218,13 +225,12 @@ export default function FormPosizione({
               )
             })}
           </div>
-          
           {tagSelezionati.map(tId => (
             <input key={tId} type="hidden" name="tags" value={tId} />
           ))}
         </div>
 
-        {/* 6. COMPETENZE RICHIESTE */}
+        {/* 7. COMPETENZE RICHIESTE */}
         <div className="space-y-4 pt-6 border-t border-slate-100">
           <label className="text-[10px] font-black uppercase text-slate-400 ml-2 tracking-widest block">
             Competenze Richieste (Opzionale)

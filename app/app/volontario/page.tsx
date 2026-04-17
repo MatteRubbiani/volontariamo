@@ -29,6 +29,7 @@ export default async function DashboardVolontario() {
     .from('posizioni')
     .select(`
       *, 
+      media_associazioni(url),
       associazione:associazioni(id, nome, email_contatto),
       tags:posizione_tags(tag:tags(id, name)),
       competenze:posizione_competenze(competenza:competenze(id, name))

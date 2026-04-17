@@ -13,11 +13,12 @@ export default async function DashboardAssociazione() {
 
   const { data: { user } } = await supabase.auth.getUser()
   
-  // FONDAMENTALE: chiediamo a Supabase sia i tag che le competenze!
+  // 🚨 AGGIORNAMENTO QUERY: Ora chiediamo a Supabase anche l'URL dell'immagine collegata!
   const { data: posizioniRaw } = await supabase
     .from('posizioni')
     .select(`
       *, 
+      media_associazioni(url),
       tags:posizione_tags(tag:tags(id, name)),
       competenze:posizione_competenze(competenza:competenze(id, name))
     `)
@@ -25,10 +26,11 @@ export default async function DashboardAssociazione() {
     .order('created_at', { ascending: false })
 
   // Riformattiamo tutto in modo che la PosizioneCard legga array puliti {id, name}
+  // (L'immagine non ha bisogno di formattazione, la Card legge direttamente media_associazioni.url)
   const posizioni = posizioniRaw?.map(p => ({
     ...p,
     tags: p.tags?.map((t: any) => t.tag).filter(Boolean),
-    competenze: p.competenze?.map((c: any) => c.competenza).filter(Boolean) // LA NOVITÀ PER LE COMPETENZE!
+    competenze: p.competenze?.map((c: any) => c.competenza).filter(Boolean)
   }))
 
   return (
@@ -50,7 +52,7 @@ export default async function DashboardAssociazione() {
         </Link>
       </div>
 
-      {/* ELENCO POSIZIONI CON LA CARD CONDIVISA */}
+      {/* ELENCO POSIZIONI CON LA CARD CONDIVISA E IMMAGINI */}
       <div className="grid md:grid-cols-2 gap-6">
         {posizioni?.length === 0 ? (
           <div className="col-span-full text-center py-20 bg-slate-50 rounded-3xl border-2 border-dashed border-slate-200">
@@ -61,7 +63,7 @@ export default async function DashboardAssociazione() {
           </div>
         ) : (
           posizioni?.map(p => (
-            // Passiamo ruolo="associazione" e i dati riformattati
+            // Passiamo ruolo="associazione" e i dati riformattati (che ora includono l'url dell'immagine)
             <PosizioneCard key={p.id} posizione={p} ruolo="associazione" />
           ))
         )}

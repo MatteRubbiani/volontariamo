@@ -491,3 +491,304 @@ $$;
 ALTER TABLE volontari ADD COLUMN cap VARCHAR(5);
 ALTER TABLE associazioni ADD COLUMN cap VARCHAR(5);
 ALTER TABLE imprese ADD COLUMN cap VARCHAR(5);
+
+
+
+-- 1. Creazione della tabella per la Libreria Media delle Associazioni
+CREATE TABLE IF NOT EXISTS public.media_associazioni (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    created_at TIMESTAMPTZ DEFAULT now() NOT NULL,
+    associazione_id UUID NOT NULL REFERENCES public.associazioni(id) ON DELETE CASCADE,
+    url TEXT NOT NULL, -- URL pubblico dell'immagine
+    storage_path TEXT NOT NULL, -- Percorso interno al bucket (utile per la cancellazione)
+    nome TEXT, -- Nome opzionale per la ricerca interna alla gallery
+    
+    CONSTRAINT unique_url_per_associazione UNIQUE(url, associazione_id)
+);
+
+-- 2. Aggiunta del riferimento all'immagine nella tabella delle posizioni
+ALTER TABLE public.posizioni 
+ADD COLUMN IF NOT EXISTS immagine_id UUID REFERENCES public.media_associazioni(id) ON DELETE SET NULL;
+
+-- 3. Abilitazione Row Level Security (RLS)
+ALTER TABLE public.media_associazioni ENABLE ROW LEVEL SECURITY;
+
+-- 4. Policy di sicurezza: Le associazioni possono vedere solo i propri media
+CREATE POLICY "Le associazioni vedono i propri media" 
+ON public.media_associazioni FOR SELECT 
+USING (auth.uid() = associazione_id);
+
+-- 5. Policy di sicurezza: Le associazioni possono caricare i propri media
+CREATE POLICY "Le associazioni possono inserire i propri media" 
+ON public.media_associazioni FOR INSERT 
+WITH CHECK (auth.uid() = associazione_id);
+
+-- 6. Policy di sicurezza: Le associazioni possono eliminare i propri media
+CREATE POLICY "Le associazioni possono eliminare i propri media" 
+ON public.media_associazioni FOR DELETE 
+USING (auth.uid() = associazione_id);
+
+-- 7. Policy pubblica: Chiunque può vedere i media (necessario per visualizzare le posizioni)
+CREATE POLICY "Accesso pubblico in lettura ai media" 
+ON public.media_associazioni FOR SELECT 
+USING (true);
+
+-- 1. Permette a tutti di leggere (scaricare) le immagini
+CREATE POLICY "Immagini visibili a tutti"
+ON storage.objects FOR SELECT
+USING ( bucket_id = 'posizioni-immagini' );
+
+-- 2. Permette di caricare (upload) file SOLO agli utenti che hanno fatto il login
+CREATE POLICY "Upload solo per utenti loggati"
+ON storage.objects FOR INSERT
+WITH CHECK ( bucket_id = 'posizioni-immagini' AND auth.role() = 'authenticated' );
+
+-- 3. Permette agli utenti loggati di aggiornare o cancellare le proprie foto
+CREATE POLICY "Modifica e cancellazione proprie foto"
+ON storage.objects FOR UPDATE
+USING ( bucket_id = 'posizioni-immagini' AND auth.role() = 'authenticated' );
+
+CREATE POLICY "Eliminazione proprie foto"
+ON storage.objects FOR DELETE
+USING ( bucket_id = 'posizioni-immagini' AND auth.role() = 'authenticated' );
+
+
+
+CREATE OR REPLACE FUNCTION public.ricerca_avanzata_posizioni(
+    min_lat double precision,
+    min_lng double precision,
+    max_lat double precision,
+    max_lng double precision,
+    search_q text DEFAULT NULL,
+    filter_tipo text DEFAULT NULL,
+    filter_tags text[] DEFAULT NULL,
+    filter_competenze text[] DEFAULT NULL
+)
+RETURNS TABLE (
+    id uuid,
+    associazione_id uuid,
+    titolo text,
+    descrizione text,
+    tipo text,
+    dove text,
+    ora_inizio time without time zone,
+    ora_fine time without time zone,
+    quando text,
+    data_esatta date,
+    giorni_settimana text[],
+    created_at timestamp with time zone,
+    lat double precision,
+    lng double precision,
+    tags text[],
+    competenze text[],
+    immagine_url text -- 🚨 NUOVO CAMPO
+)
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    RETURN QUERY
+    WITH pos_base AS (
+        SELECT 
+            p.id,
+            p.associazione_id,
+            p.titolo,
+            p.descrizione,
+            p.tipo,
+            p.dove,
+            p.ora_inizio,
+            p.ora_fine,
+            p.quando,
+            p.data_esatta,
+            p.giorni_settimana,
+            p.created_at,
+            ST_Y(p.coords::geometry) as lat,
+            ST_X(p.coords::geometry) as lng,
+            p.immagine_id -- 🚨 Prendiamo l'ID dell'immagine
+        FROM public.posizioni p
+        WHERE p.coords IS NOT NULL 
+          AND p.coords::geometry && ST_MakeEnvelope(min_lng, min_lat, max_lng, max_lat, 4326)
+    ),
+    filtered_by_text AS (
+        SELECT pb.*
+        FROM pos_base pb
+        WHERE search_q IS NULL 
+           OR pb.titolo ILIKE '%' || search_q || '%' 
+           OR pb.descrizione ILIKE '%' || search_q || '%'
+    ),
+    filtered_by_type AS (
+        SELECT ft.*
+        FROM filtered_by_text ft
+        WHERE filter_tipo IS NULL OR ft.tipo = filter_tipo
+    )
+    SELECT 
+        f.id,
+        f.associazione_id,
+        f.titolo,
+        f.descrizione,
+        f.tipo,
+        f.dove,
+        f.ora_inizio,
+        f.ora_fine,
+        f.quando,
+        f.data_esatta,
+        f.giorni_settimana,
+        f.created_at,
+        f.lat,
+        f.lng,
+        -- ARRAY DEI TAG
+        ARRAY(
+            SELECT t.name 
+            FROM public.posizione_tags pt 
+            JOIN public.tags t ON pt.tag_id = t.id 
+            WHERE pt.posizione_id = f.id
+        ) as tags,
+        -- ARRAY DELLE COMPETENZE
+        ARRAY(
+            SELECT c.name 
+            FROM public.posizione_competenze pc 
+            JOIN public.competenze c ON pc.competenza_id = c.id 
+            WHERE pc.posizione_id = f.id
+        ) as competenze,
+        -- 🚨 ESTRAZIONE URL IMMAGINE TRAMITE JOIN
+        ma.url as immagine_url
+    FROM filtered_by_type f
+    LEFT JOIN public.media_associazioni ma ON f.immagine_id = ma.id -- JOIN CON LA LIBRERIA
+    WHERE 
+        (filter_tags IS NULL OR EXISTS (
+            SELECT 1 FROM public.posizione_tags pt
+            JOIN public.tags t ON pt.tag_id = t.id
+            WHERE pt.posizione_id = f.id AND t.id = ANY(filter_tags::uuid[])
+        ))
+        AND
+        (filter_competenze IS NULL OR EXISTS (
+            SELECT 1 FROM public.posizione_competenze pc
+            WHERE pc.posizione_id = f.id AND pc.competenza_id = ANY(filter_competenze::uuid[])
+        ));
+END;
+$$;
+
+
+
+-- 1. ELIMINIAMO LA VECCHIA FUNZIONE SPECIFICANDO I PARAMETRI ESATTI
+DROP FUNCTION IF EXISTS public.ricerca_avanzata_posizioni(
+    double precision,
+    double precision,
+    double precision,
+    double precision,
+    text,
+    text,
+    text[],
+    text[]
+);
+
+-- 2. CREIAMO LA NUOVA FUNZIONE COMPLETA DI IMMAGINI
+CREATE OR REPLACE FUNCTION public.ricerca_avanzata_posizioni(
+    min_lat double precision,
+    min_lng double precision,
+    max_lat double precision,
+    max_lng double precision,
+    search_q text DEFAULT NULL,
+    filter_tipo text DEFAULT NULL,
+    filter_tags text[] DEFAULT NULL,
+    filter_competenze text[] DEFAULT NULL
+)
+RETURNS TABLE (
+    id uuid,
+    associazione_id uuid,
+    titolo text,
+    descrizione text,
+    tipo text,
+    dove text,
+    ora_inizio time without time zone,
+    ora_fine time without time zone,
+    quando text,
+    data_esatta date,
+    giorni_settimana text[],
+    created_at timestamp with time zone,
+    lat double precision,
+    lng double precision,
+    tags text[],
+    competenze text[],
+    immagine_url text -- 📸 ECCO IL NOSTRO NUOVO CAMPO
+)
+LANGUAGE plpgsql
+AS $$
+BEGIN
+    RETURN QUERY
+    WITH pos_base AS (
+        SELECT 
+            p.id,
+            p.associazione_id,
+            p.titolo,
+            p.descrizione,
+            p.tipo,
+            p.dove,
+            p.ora_inizio,
+            p.ora_fine,
+            p.quando,
+            p.data_esatta,
+            p.giorni_settimana,
+            p.created_at,
+            ST_Y(p.coords::geometry) as lat,
+            ST_X(p.coords::geometry) as lng,
+            p.immagine_id -- Recuperiamo il riferimento all'immagine
+        FROM public.posizioni p
+        WHERE p.coords IS NOT NULL 
+          AND p.coords::geometry && ST_MakeEnvelope(min_lng, min_lat, max_lng, max_lat, 4326)
+    ),
+    filtered_by_text AS (
+        SELECT pb.*
+        FROM pos_base pb
+        WHERE search_q IS NULL 
+           OR pb.titolo ILIKE '%' || search_q || '%' 
+           OR pb.descrizione ILIKE '%' || search_q || '%'
+    ),
+    filtered_by_type AS (
+        SELECT ft.*
+        FROM filtered_by_text ft
+        WHERE filter_tipo IS NULL OR ft.tipo = filter_tipo
+    )
+    SELECT 
+        f.id,
+        f.associazione_id,
+        f.titolo,
+        f.descrizione,
+        f.tipo,
+        f.dove,
+        f.ora_inizio,
+        f.ora_fine,
+        f.quando,
+        f.data_esatta,
+        f.giorni_settimana,
+        f.created_at,
+        f.lat,
+        f.lng,
+        ARRAY(
+            SELECT t.name 
+            FROM public.posizione_tags pt 
+            JOIN public.tags t ON pt.tag_id = t.id 
+            WHERE pt.posizione_id = f.id
+        ) as tags,
+        ARRAY(
+            SELECT c.name 
+            FROM public.posizione_competenze pc 
+            JOIN public.competenze c ON pc.competenza_id = c.id 
+            WHERE pc.posizione_id = f.id
+        ) as competenze,
+        -- INCOLLIAMO L'URL DELL'IMMAGINE DALLA LIBRERIA
+        ma.url as immagine_url
+    FROM filtered_by_type f
+    LEFT JOIN public.media_associazioni ma ON f.immagine_id = ma.id
+    WHERE 
+        (filter_tags IS NULL OR EXISTS (
+            SELECT 1 FROM public.posizione_tags pt
+            JOIN public.tags t ON pt.tag_id = t.id
+            WHERE pt.posizione_id = f.id AND t.id = ANY(filter_tags::uuid[])
+        ))
+        AND
+        (filter_competenze IS NULL OR EXISTS (
+            SELECT 1 FROM public.posizione_competenze pc
+            WHERE pc.posizione_id = f.id AND pc.competenza_id = ANY(filter_competenze::uuid[])
+        ));
+END;
+$$;

@@ -31,7 +31,7 @@ export default async function ProfiloAssociazione({ params }: { params: Promise<
   // Manteniamo la tua query originale
   const { data: posizioniRaw } = await supabase
     .from('posizioni')
-    .select('*, tags:posizione_tags(tag:tags(id, name))')
+    .select('*, media_associazioni(url), tags:posizione_tags(tag:tags(id, name))')
     .eq('associazione_id', id)
     .order('created_at', { ascending: false })
 
