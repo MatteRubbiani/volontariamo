@@ -11,7 +11,7 @@ interface PosizioneCardProps {
   isFocused?: boolean;
   onMouseEnter?: () => void;
   onMouseLeave?: () => void;
-  layout?: 'vertical' | 'horizontal'; // 🚨 NUOVA PROP PREMIUM
+  layout?: 'vertical' | 'horizontal';
 }
 
 export default function PosizioneCard({ 
@@ -22,12 +22,16 @@ export default function PosizioneCard({
   isFocused = false,
   onMouseEnter,
   onMouseLeave,
-  layout = 'vertical' // Di default rimane verticale per liste e dashboard
+  layout = 'vertical' 
 }: PosizioneCardProps) { 
   
   const pathname = usePathname()
   const isAssociazione = ruolo === 'associazione'
-  const isHorizontal = layout === 'horizontal' // Flag per il layout
+  const isHorizontal = layout === 'horizontal' 
+  
+  // Tema dinamico in base al ruolo
+  const themeTextHover = isAssociazione ? 'group-hover:text-emerald-600' : 'group-hover:text-blue-600'
+  const themeTextActive = isAssociazione ? 'text-emerald-700' : 'text-blue-700'
 
   const formattaOra = (ora: string | null) => {
     if (!ora) return '--:--'
@@ -42,7 +46,17 @@ export default function PosizioneCard({
     urlDestinazione += '?from=mappa'
   }
 
-  const iconaAzione = isAssociazione ? '✏️' : '→'
+  // 🚨 ICONE SVG PREMIUM (Basta emoji!)
+  const IconaAzione = isAssociazione ? (
+    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L6.832 19.82a4.5 4.5 0 01-1.89 1.147l-3.141 1.047a.875.875 0 01-1.11-.11l-.11-1.11a4.5 4.5 0 011.147-1.89L16.862 4.487z" />
+      <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 7.125L16.862 4.487" />
+    </svg>
+  ) : (
+    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-4 h-4">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
+    </svg>
+  )
   
   const estraiCompetenze = () => {
     if (posizione.competenze_nomi) return posizione.competenze_nomi.map((n: string) => ({ name: n }));
@@ -68,13 +82,12 @@ export default function PosizioneCard({
           ? 'border-slate-300 shadow-xl ring-4 ring-slate-900/5 -translate-y-1' 
           : 'border-slate-100 hover:shadow-xl hover:-translate-y-1'
       } ${
-        // 🚨 CAMBIO STRUTTURA IN BASE AL LAYOUT
-        isHorizontal ? 'flex flex-row h-28 sm:h-32 w-full' : 'flex flex-col h-full'
+        isHorizontal ? 'flex flex-row h-32 w-full' : 'flex flex-col h-full'
       }`}>
         
         {/* 📸 HEADER VISIVO */}
         <div className={`relative shrink-0 overflow-hidden bg-slate-50 flex items-center justify-center ${
-          isHorizontal ? 'w-28 sm:w-32 h-full border-r border-slate-100' : 'w-full h-28 sm:h-32 border-b border-slate-100'
+          isHorizontal ? 'w-28 sm:w-36 h-full border-r border-slate-100' : 'w-full h-32 md:h-40 border-b border-slate-100'
         }`}>
           {imgUrl ? (
             <img 
@@ -93,34 +106,38 @@ export default function PosizioneCard({
         </div>
 
         {/* 📝 SEZIONE CONTENUTO */}
-        <div className={`flex flex-col flex-grow min-w-0 ${isHorizontal ? 'p-3.5 sm:p-4 justify-center' : 'p-5 md:p-6'}`}>
+        <div className={`flex flex-col flex-grow min-w-0 ${isHorizontal ? 'p-4' : 'p-5 md:p-6'}`}>
           
-          {/* LAYOUT ORIZZONTALE (COMPATTO PER MAPPA) */}
+          {/* LAYOUT ORIZZONTALE (COMPATTO PER DASHBOARD MOBILE E MAPPA) */}
           {isHorizontal ? (
-            <>
-              <div className="flex justify-between items-center mb-0.5 gap-2">
-                <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest truncate">
-                  {posizione.tipo === 'una_tantum' ? 'Singolo' : 'Ricorrente'}
+            <div className="flex h-full items-center gap-3">
+              <div className="flex flex-col min-w-0 flex-grow h-full justify-center">
+                <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest truncate mb-1">
+                  {posizione.tipo === 'una_tantum' ? 'Evento Singolo' : 'Ricorrente'}
                 </span>
+
+                <h3 className={`text-sm sm:text-base font-bold leading-tight line-clamp-2 transition-colors ${isAttiva ? themeTextActive : `text-slate-900 ${themeTextHover}`}`}>
+                  {posizione.titolo || 'Senza Titolo'}
+                </h3>
+                
+                <div className="flex items-center gap-1.5 mt-auto pt-1">
+                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-3 h-3 text-slate-400 shrink-0"><path strokeLinecap="round" strokeLinejoin="round" d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1115 0z" /></svg>
+                  <p className="text-[11px] text-slate-500 font-medium truncate">
+                    {posizione.dove || 'Da definire'}
+                  </p>
+                </div>
               </div>
 
-              <h3 className={`text-sm sm:text-base font-bold mb-0.5 truncate transition-colors ${isAttiva ? 'text-blue-700' : 'text-slate-900 group-hover:text-blue-600'}`}>
-                {posizione.titolo || 'Senza Titolo'}
-              </h3>
-              
-              <p className="text-[11px] sm:text-xs text-slate-500 font-medium truncate mb-auto">
-                {posizione.dove || 'Da definire'}
-              </p>
-
-              <div className="flex items-center text-[10px] sm:text-[11px] font-bold text-slate-700 mt-2 truncate">
-                <span className="truncate max-w-[100px] sm:max-w-[150px]">{posizione.quando}</span>
-                <span className="mx-1.5 text-slate-300">•</span>
-                <span className="flex-shrink-0">{formattaOra(posizione.ora_inizio)}</span>
+              {/* L'Icona a destra isolata */}
+              <div className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors shrink-0 ${
+                isAttiva ? 'bg-slate-900 text-white' : 'bg-slate-50 text-slate-400 group-hover:bg-slate-900 group-hover:text-white'
+              }`}>
+                {IconaAzione}
               </div>
-            </>
+            </div>
           ) : (
             
-            /* LAYOUT VERTICALE (ORIGINALE PER LISTE) */
+            /* LAYOUT VERTICALE (ORIGINALE PER LISTE ESPLORA) */
             <>
               <div className="flex flex-col mb-3">
                 <div className="flex justify-between items-start mb-3 gap-2">
@@ -134,14 +151,14 @@ export default function PosizioneCard({
                     </span>
                   )}
 
-                  <div className={`w-7 h-7 rounded-full flex items-center justify-center font-black transition-colors flex-shrink-0 text-sm ${
+                  <div className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors shrink-0 ${
                     isAttiva ? 'bg-slate-900 text-white' : 'bg-slate-50 text-slate-400 group-hover:bg-slate-900 group-hover:text-white'
                   }`}>
-                    {iconaAzione}
+                    {IconaAzione}
                   </div>
                 </div>
 
-                <h3 className={`text-lg md:text-xl font-bold mb-1.5 leading-tight transition-colors ${isAttiva ? 'text-blue-700' : 'text-slate-900 group-hover:text-blue-600'}`}>
+                <h3 className={`text-lg font-bold mb-1.5 leading-tight transition-colors line-clamp-2 ${isAttiva ? themeTextActive : `text-slate-900 ${themeTextHover}`}`}>
                   {posizione.titolo || 'Senza Titolo'}
                 </h3>
                 
@@ -164,13 +181,13 @@ export default function PosizioneCard({
                   </div>
                 )}
 
-                <div className="flex flex-col gap-2 pt-3 border-t border-slate-100">
-                  <div className="flex items-center text-xs font-bold text-slate-700 min-w-0">
-                    <span className="mr-2 text-sm flex-shrink-0 text-slate-400">📍</span> 
+                <div className="flex flex-col gap-2 pt-4 border-t border-slate-100">
+                  <div className="flex items-center text-xs font-bold text-slate-700 min-w-0 gap-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4 text-slate-400 shrink-0"><path strokeLinecap="round" strokeLinejoin="round" d="M15 10.5a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1115 0z" /></svg>
                     <span className="truncate">{posizione.dove || 'Da definire'}</span>
                   </div>
-                  <div className="flex items-center text-xs font-bold text-slate-700 min-w-0">
-                    <span className="mr-2 text-sm flex-shrink-0 text-slate-400">🕒</span> 
+                  <div className="flex items-center text-xs font-bold text-slate-700 min-w-0 gap-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4 text-slate-400 shrink-0"><path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
                     <span className="flex-shrink-0">{posizione.quando} · {formattaOra(posizione.ora_inizio)}</span>
                   </div>
                 </div>
