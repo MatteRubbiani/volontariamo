@@ -3,7 +3,8 @@
 import { useState, useEffect, useRef } from 'react'
 import { getTagColor } from '@/lib/tagColors'
 import CompetenzaSelector from './CompetenzaSelector'
-import MediaGalleryPicker from '@/components/MediaGalleryPicker' // 🚨 IMPORTATO IL NUOVO COMPONENTE
+import MediaGalleryPicker from '@/components/MediaGalleryPicker'
+import { generaDescrizioneAI } from '@/app/ai-actions' // 🚨 IMPORTAZIONE DELLA TUA AZIONE AI
 
 const GIORNI = [
   { etichetta: 'L', valore: 'Lunedì' },
@@ -21,7 +22,7 @@ export default function FormPosizione({
   tagsSelezionati: tagsIniziali = [],
   competenzeDisponibili = [],           
   competenzeSelezionate = [],
-  mediaDisponibili = [], // 🚨 AGGIUNTA PROP PER LA GALLERIA         
+  mediaDisponibili = [],         
   salvaAction 
 }: { 
   posizione?: any
@@ -29,17 +30,24 @@ export default function FormPosizione({
   tagsSelezionati?: string[]
   competenzeDisponibili?: any[]         
   competenzeSelezionate?: string[]
-  mediaDisponibili?: any[] // 🚨 TIPO PER LA GALLERIA
+  mediaDisponibili?: any[]
   salvaAction: (formData: FormData) => Promise<void>
 }) {
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [tipo, setTipo] = useState<'una_tantum' | 'ricorrente'>(posizione?.tipo || 'una_tantum')
   const [giorniSelezionati, setGiorniSelezionati] = useState<string[]>(posizione?.giorni_settimana || [])
   const [tagSelezionati, setTagSelezionati] = useState<string[]>(tagsIniziali)
-  
-  // 🚨 STATO PER L'IMMAGINE
   const [immagineId, setImmagineId] = useState<string | null>(posizione?.immagine_id || null)
   
+  // 🚨 STATI CONTROLLATI PER L'AI
+  const [titolo, setTitolo] = useState(posizione?.titolo || '')
+  const [descrizione, setDescrizione] = useState(posizione?.descrizione || '')
+  
+  // 🚨 STATI PER L'UI DEL MAGIC COPYWRITER
+  const [showAiBox, setShowAiBox] = useState(false)
+  const [aiSpunto, setAiSpunto] = useState('')
+  const [isGenerating, setIsGenerating] = useState(false)
+
   const [coordinate, setCoordinate] = useState<{lat: number, lng: number} | null>(null)
   const inputRef = useRef<HTMLInputElement>(null)
 
@@ -93,6 +101,26 @@ export default function FormPosizione({
     )
   }
 
+  // 🚨 FUNZIONE PER GENERARE LA DESCRIZIONE
+  const handleMagicGeneration = async () => {
+    if (!titolo.trim()) {
+      alert("Scrivi prima il Titolo dell'annuncio in alto!")
+      return
+    }
+    
+    setIsGenerating(true)
+    const result = await generaDescrizioneAI(titolo, aiSpunto)
+    
+    if (result.error) {
+      alert(result.error)
+    } else if (result.text) {
+      setDescrizione(result.text) // Inietta il testo nell'area principale!
+      setShowAiBox(false)         // Chiude il box magico
+      setAiSpunto('')
+    }
+    setIsGenerating(false)
+  }
+
   return (
     <div className="w-full max-w-3xl mx-auto pb-20">
       <form 
@@ -128,7 +156,7 @@ export default function FormPosizione({
           <input type="hidden" name="tipo" value={tipo} />
         </div>
 
-        {/* 🚨 2. IMMAGINE DI COPERTINA (GALLERIA MEDIA) */}
+        {/* 2. IMMAGINE DI COPERTINA (GALLERIA MEDIA) */}
         <div className="pt-4 pb-2 border-b border-slate-100">
           <MediaGalleryPicker 
             mediaIniziali={mediaDisponibili} 
@@ -141,11 +169,75 @@ export default function FormPosizione({
         <div className="grid gap-6">
           <div className="space-y-1">
             <label className="text-[10px] font-black uppercase text-slate-400 ml-4 tracking-widest">Titolo Posizione</label>
-            <input name="titolo" defaultValue={posizione?.titolo} placeholder="es: Aiuto Mensa Sociale" className="w-full p-5 border-2 border-slate-50 rounded-2xl focus:border-blue-500 focus:bg-white outline-none font-bold text-xl bg-slate-50/50 transition-all" required />
+            <input 
+              name="titolo" 
+              value={titolo}
+              onChange={(e) => setTitolo(e.target.value)}
+              placeholder="es: Aiuto Mensa Sociale" 
+              className="w-full p-5 border-2 border-slate-50 rounded-2xl focus:border-blue-500 focus:bg-white outline-none font-bold text-xl bg-slate-50/50 transition-all" 
+              required 
+            />
           </div>
-          <div className="space-y-1">
-            <label className="text-[10px] font-black uppercase text-slate-400 ml-4 tracking-widest">Descrizione</label>
-            <textarea name="descrizione" defaultValue={posizione?.descrizione} placeholder="Cosa faranno i volontari?" className="w-full p-5 border-2 border-slate-50 rounded-2xl h-32 focus:border-blue-500 focus:bg-white outline-none bg-slate-50/50 transition-all" required />
+          
+          <div className="space-y-2 relative">
+            <div className="flex items-center justify-between mb-1">
+              <label className="text-[10px] font-black uppercase text-slate-400 ml-4 tracking-widest">Descrizione</label>
+              
+              {/* BOTTONE MAGICO */}
+              <button 
+                type="button" 
+                onClick={() => setShowAiBox(!showAiBox)}
+                className="flex items-center gap-1.5 text-xs font-bold text-blue-600 hover:text-blue-700 bg-blue-50 hover:bg-blue-100 px-3 py-1.5 rounded-full transition-colors mr-2"
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09l2.846.813-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 00-2.456 2.456z" />
+                </svg>
+                Scrivi con AI
+              </button>
+            </div>
+
+            {/* BOX GENERATORE AI */}
+            {showAiBox && (
+              <div className="mb-4 bg-slate-900 p-5 rounded-2xl border border-slate-800 shadow-xl relative overflow-hidden animate-in slide-in-from-top-2 duration-200">
+                <div className="relative z-10 flex flex-col gap-3">
+                  <p className="text-white text-sm font-bold flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full bg-blue-400 animate-pulse"></span>
+                    L'AI scriverà un testo professionale per te.
+                  </p>
+                  <div className="flex gap-2">
+                    <input 
+                      type="text" 
+                      value={aiSpunto}
+                      onChange={(e) => setAiSpunto(e.target.value)}
+                      placeholder="Di cosa si tratta? (es. servono 5 volontari giovedì mattina)" 
+                      className="flex-1 bg-white/10 border border-white/20 text-white placeholder:text-slate-400 rounded-xl px-4 py-2.5 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-blue-500"
+                      onKeyDown={(e) => e.key === 'Enter' && handleMagicGeneration()}
+                    />
+                    <button 
+                      type="button" 
+                      onClick={handleMagicGeneration}
+                      disabled={isGenerating || !aiSpunto}
+                      className="bg-blue-600 text-white px-5 py-2.5 rounded-xl font-bold hover:bg-blue-500 disabled:opacity-50 transition-all active:scale-95 flex items-center gap-2 shrink-0"
+                    >
+                      {isGenerating ? (
+                        <div className="w-4 h-4 border-2 border-white border-t-transparent animate-spin rounded-full" />
+                      ) : 'Genera'}
+                    </button>
+                  </div>
+                </div>
+                {/* Effetto luce di sfondo */}
+                <div className="absolute -top-10 -right-10 w-32 h-32 bg-blue-500/20 blur-3xl rounded-full pointer-events-none"></div>
+              </div>
+            )}
+
+            <textarea 
+              name="descrizione" 
+              value={descrizione}
+              onChange={(e) => setDescrizione(e.target.value)}
+              placeholder="Cosa faranno i volontari?" 
+              className="w-full p-5 border-2 border-slate-50 rounded-2xl h-32 focus:border-blue-500 focus:bg-white outline-none bg-slate-50/50 transition-all resize-none" 
+              required 
+            />
           </div>
         </div>
 
@@ -153,12 +245,18 @@ export default function FormPosizione({
         <div className="p-8 bg-blue-50 rounded-[2rem] border border-blue-100 transition-all">
           {tipo === 'una_tantum' ? (
             <div className="space-y-3 animate-in fade-in zoom-in-95">
-              <label className="text-sm font-black text-blue-700 uppercase tracking-tighter">📅 Data dell'evento</label>
+              <label className="text-sm font-black text-blue-700 uppercase tracking-tighter flex items-center gap-2">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5"><path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0v-7.5A2.25 2.25 0 0 1 5.25 9h13.5A2.25 2.25 0 0 1 21 11.25v7.5" /></svg>
+                Data dell'evento
+              </label>
               <input type="date" name="data_esatta" defaultValue={posizione?.data_esatta} className="w-full p-5 rounded-2xl border-none shadow-lg focus:ring-4 ring-blue-500/20 text-lg font-medium outline-none" required={tipo === 'una_tantum'} />
             </div>
           ) : (
             <div className="space-y-4 animate-in fade-in zoom-in-95">
-              <label className="text-sm font-black text-blue-700 uppercase tracking-tighter">🗓️ Giorni della settimana</label>
+              <label className="text-sm font-black text-blue-700 uppercase tracking-tighter flex items-center gap-2">
+                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-5 h-5"><path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0v-7.5A2.25 2.25 0 0 1 5.25 9h13.5A2.25 2.25 0 0 1 21 11.25v7.5" /></svg>
+                Giorni della settimana
+              </label>
               <div className="flex justify-between gap-2">
                 {GIORNI.map(g => (
                   <button key={g.valore} type="button" onClick={() => toggleGiorno(g.valore)}
@@ -175,7 +273,10 @@ export default function FormPosizione({
         {/* 5. ORARI E LUOGO */}
         <div className="grid md:grid-cols-2 gap-8">
           <div className="space-y-2">
-            <label className="text-[10px] font-black uppercase text-slate-400 ml-2 tracking-widest">⏳ Orario</label>
+            <label className="text-[10px] font-black uppercase text-slate-400 ml-2 tracking-widest flex items-center gap-1">
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-3.5 h-3.5"><path strokeLinecap="round" strokeLinejoin="round" d="M12 6v6h4.5m4.5 0a9 9 0 1 1-18 0 9 9 0 0 1 18 0Z" /></svg>
+              Orario
+            </label>
             <div className="flex items-center gap-2">
               <input type="time" name="ora_inizio" defaultValue={posizione?.ora_inizio?.substring(0,5)} className="flex-1 p-4 border-2 border-slate-50 rounded-2xl bg-slate-50/50 font-bold outline-none focus:border-blue-500" required />
               <input type="time" name="ora_fine" defaultValue={posizione?.ora_fine?.substring(0,5)} className="flex-1 p-4 border-2 border-slate-50 rounded-2xl bg-slate-50/50 font-bold outline-none focus:border-blue-500" required />
@@ -183,7 +284,10 @@ export default function FormPosizione({
           </div>
           
           <div className="space-y-2">
-            <label className="text-[10px] font-black uppercase text-slate-400 ml-2 tracking-widest">📍 Luogo</label>
+            <label className="text-[10px] font-black uppercase text-slate-400 ml-2 tracking-widest flex items-center gap-1">
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-3.5 h-3.5"><path strokeLinecap="round" strokeLinejoin="round" d="M15 10.5a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" /><path strokeLinecap="round" strokeLinejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1 1 15 0Z" /></svg>
+              Luogo
+            </label>
             <input 
               ref={inputRef} name="dove" defaultValue={posizione?.dove} placeholder="Cerca via o città..." 
               className="w-full p-4 border-2 border-slate-50 rounded-2xl focus:border-blue-500 outline-none font-bold bg-slate-50/50" 
