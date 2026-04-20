@@ -2,42 +2,59 @@
 
 import Groq from "groq-sdk"
 
-// Inizializza il client di Groq in modo sicuro sul server
 const groq = new Groq({ apiKey: process.env.GROQ_API_KEY })
 
-export async function generaDescrizioneAI(titolo: string, spunto: string) {
-  if (!titolo) return { error: "Inserisci prima il titolo dell'annuncio per dare contesto all'AI." }
+export async function analizzaTestoPosizione(testoLibero: string, catalogTags: any[], catalogCompetenze: any[]) {
+  if (!testoLibero) return { error: "Scrivi qualcosa per permettermi di aiutarti!" }
+
+  const prompt = `
+    Sei un assistente AI esperto in estrazione dati e copywriting.
+    L'utente ti fornisce un testo grezzo per un annuncio di volontariato.
+    
+    IL TUO COMPITO:
+    1. Estrarre i dati strutturati.
+    2. Creare un TITOLO professionale e una DESCRIZIONE persuasiva (max 3 frasi, tono empatico).
+
+    TESTO UTENTE: "${testoLibero}"
+
+    LISTA TAG: ${JSON.stringify(catalogTags.map(t => ({id: t.id, name: t.name})))}
+    LISTA COMPETENZE: ${JSON.stringify(catalogCompetenze.map(c => ({id: c.id, name: c.name})))}
+
+    REGOLE RIGIDE PER IL CAMPO "DOVE":
+    - Se l'utente cita un luogo noto, un monumento o un punto di interesse (es: "Duomo di Modena", "Parco Sempione", "Stazione Centrale Milano"), DEVI convertirlo nel suo INDIRIZZO STRADALE COMPLETO (Via/Piazza, Numero Civico se noto, Città).
+    - Esempio: "Duomo di Modena" -> "Corso Duomo, 41121 Modena MO".
+    - Se l'utente fornisce già un indirizzo, formattalo correttamente.
+    - Se il luogo è vago o privato (es: "in sede", "a casa mia", "al parchetto dietro l'angolo", "in centro"), restituisci NULL. Non inventare indirizzi per luoghi che non puoi localizzare con certezza su una mappa globale.
+
+    SCHEMA JSON RICHIESTO:
+    {
+      "titolo": "string",
+      "descrizione": "string",
+      "tipo": "una_tantum" | "ricorrente",
+      "data_esatta": "YYYY-MM-DD",
+      "giorni_settimana": ["Lunedì", ...],
+      "ora_inizio": "HH:MM",
+      "ora_fine": "HH:MM",
+      "dove": "Indirizzo Completo o null", 
+      "tags": ["id_tag"],
+      "competenze": ["id_comp"]
+    }
+
+    Restituisci solo il JSON.
+  `
 
   try {
-    const prompt = `
-      Sei un eccellente copywriter specializzato in impatto sociale. Scrivi una descrizione BREVISSIMA e incisiva per un annuncio di volontariato.
-      Titolo dell'annuncio: "${titolo}"
-      Spunti e dettagli dall'associazione: "${spunto}"
-
-      REGOLE RIGIDE DI FORMATTAZIONE:
-      - LUNGHEZZA MASSIMA: 3 frasi (circa 50-80 parole totali). Devi essere sintetico, diretto e rimuovere il superfluo.
-      - STRUTTURA OBBLIGATORIA:
-        1. Gancio: Perché questa causa è urgente o importante.
-        2. Azione: Cosa farà concretamente il volontario.
-        3. Impatto: Il risultato pratico o emotivo del suo aiuto.
-      - Tono empatico, persuasivo e giovanile.
-      - NESSUNA EMOJI. Zero. Assolutamente vietate.
-      - NESSUN HASHTAG.
-      - Restituisci SOLO il testo finale pronto da incollare, senza saluti o convenevoli iniziali.
-    `
-
     const chatCompletion = await groq.chat.completions.create({
       messages: [{ role: "user", content: prompt }],
-      // 🚨 FIX: Modello aggiornato all'ultima versione supportata!
-      model: "llama-3.3-70b-versatile", 
-      temperature: 0.7, 
+      model: "llama-3.3-70b-versatile",
+      response_format: { type: "json_object" },
+      temperature: 0.2, 
     })
-    const testoGenerato = chatCompletion.choices[0]?.message?.content?.trim() || ''
-    
-    return { success: true, text: testoGenerato }
-    
+
+    const data = JSON.parse(chatCompletion.choices[0]?.message?.content || "{}")
+    return { success: true, data }
   } catch (error: any) {
-    console.error("Errore Groq API:", error)
-    return { error: "I server AI sono al momento occupati. Riprova tra poco." }
+    console.error("Errore AI Parser:", error)
+    return { error: "Impossibile decifrare il testo." }
   }
 }
