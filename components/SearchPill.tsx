@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { createPortal } from 'react-dom'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useRouter, useSearchParams, usePathname } from 'next/navigation' // 🚨 Aggiunto usePathname
 
 const TAGS_DISPONIBILI = ["Ambiente", "Sociale", "Animali", "Sport", "Cultura", "Sanità", "Educazione", "Emergenza"];
 const COMPETENZE_DISPONIBILI = ["Patente B", "Forza Fisica", "Ascolto Attivo", "Informatica", "Lingue", "Fotografia", "Primo Soccorso"];
@@ -11,12 +11,12 @@ const GIORNI_SETTIMANA = ['Lunedì', 'Martedì', 'Mercoledì', 'Giovedì', 'Vene
 export default function SearchPill() {
   const router = useRouter()
   const searchParams = useSearchParams()
+  const pathname = usePathname() // 🚨 Serve per forzare il refresh corretto dell'URL
 
   const [mounted, setMounted] = useState(false)
   const [isSearchOpen, setIsSearchOpen] = useState(false)
-  const [isGeocoding, setIsGeocoding] = useState(false) // 🚨 Nuovo stato per il loader
+  const [isGeocoding, setIsGeocoding] = useState(false)
 
-  // Evita errori di idratazione SSR con createPortal
   useEffect(() => {
     setMounted(true)
   }, [])
@@ -45,29 +45,37 @@ export default function SearchPill() {
     }
   }
 
-  // 🚨 FUNZIONE AGGIORNATA CON GEOCODING E LOADER
   const handleApplicaRicerca = async () => {
     setIsGeocoding(true)
     const params = new URLSearchParams(searchParams.toString())
     
-    // GEOCODING: Traduciamo il testo in coordinate
-    if (tempIndirizzo && tempIndirizzo !== indirizzo) {
-      try {
-        const res = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(tempIndirizzo)}&country=italy&format=json&limit=1`)
-        const responseData = await res.json()
-        
-        if (responseData && responseData.length > 0) {
-          params.set('lat', responseData[0].lat)
-          params.set('lng', responseData[0].lon)
+    // 🌍 GEOCODING FIXATO (Senza Header che bloccano il browser)
+    if (tempIndirizzo) {
+      if (!searchParams.get('lat') || tempIndirizzo !== indirizzo) {
+        try {
+          console.log("Cerco coordinate per:", tempIndirizzo);
+          
+          // 🚨 Rimosso l'header custom e usato countrycodes=it per massima precisione
+          const res = await fetch(`https://nominatim.openstreetmap.org/search?q=${encodeURIComponent(tempIndirizzo)}&countrycodes=it&format=json&limit=1`)
+          const responseData = await res.json()
+          
+          if (responseData && responseData.length > 0) {
+            console.log("Città trovata!", responseData[0].lat, responseData[0].lon);
+            params.set('lat', responseData[0].lat)
+            params.set('lng', responseData[0].lon)
+          } else {
+            console.warn("Città non trovata da Nominatim.");
+          }
+        } catch (error) {
+          console.error("Errore Geocoding Nominatim:", error)
         }
-      } catch (error) {
-        console.error("Errore durante la ricerca della città:", error)
       }
-    } else if (!tempIndirizzo) {
+    } else {
       params.delete('lat')
       params.delete('lng')
     }
 
+    // Salvataggio di tutti gli altri parametri
     if (tempSearch) params.set('q', tempSearch); else params.delete('q');
     if (tempIndirizzo) params.set('indirizzo', tempIndirizzo); else params.delete('indirizzo');
     
@@ -90,7 +98,8 @@ export default function SearchPill() {
     if (tempTags.length > 0) params.set('tags', tempTags.join(',')); else params.delete('tags');
     if (tempCompetenze.length > 0) params.set('competenze', tempCompetenze.join(',')); else params.delete('competenze');
 
-    router.push(`?${params.toString()}`)
+    // 🚨 Usiamo pathname per assicurarci che Next.js inietti l'URL nel posto giusto
+    router.push(`${pathname}?${params.toString()}`)
     setIsGeocoding(false)
     setIsSearchOpen(false)
   }
@@ -230,7 +239,6 @@ export default function SearchPill() {
           <button onClick={handlePulisciTutto} className="text-base font-semibold text-slate-900 underline hover:text-slate-600 transition-colors px-2">
             Pulisci tutto
           </button>
-          {/* 🚨 BOTTONE AGGIORNATO CON STATO DI CARICAMENTO */}
           <button 
             onClick={handleApplicaRicerca} 
             disabled={isGeocoding}

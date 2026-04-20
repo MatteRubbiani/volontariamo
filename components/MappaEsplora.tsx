@@ -2,18 +2,9 @@
 
 import { useEffect, useState, useRef } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
-import { MapContainer, TileLayer, Marker, Popup, useMap, useMapEvents } from 'react-leaflet'
+import { MapContainer, TileLayer, Marker, useMap, useMapEvents } from 'react-leaflet'
 import 'leaflet/dist/leaflet.css'
 import L from 'leaflet'
-
-const fixLeafletIcons = () => {
-  delete (L.Icon.Default.prototype as any)._getIconUrl
-  L.Icon.Default.mergeOptions({
-    iconRetinaUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon-2x.png',
-    iconUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-icon.png',
-    shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
-  })
-}
 
 // ==========================================
 // GLI EVENTI INTERNI ALLA MAPPA (Non toccare!)
@@ -54,28 +45,40 @@ function MapEvents({ onBoundsChange, onMapReady, forcedLat, forcedLng, forcedZoo
 }
 
 // ==========================================
-// FUNZIONE PER CREARE I PIN BELLISSIMI
+// FUNZIONE PER CREARE I PIN "PREMIUM" (PILLOLE SOSPESE)
 // ==========================================
 const createPositionIcon = (tipo: string, isActive: boolean) => {
   const isUnaTantum = tipo === 'una_tantum';
-  const color = isActive ? '#ea580c' : (isUnaTantum ? '#334155' : '#2563eb');
-  const scale = isActive ? 'scale-125 -translate-y-2' : 'hover:scale-110';
+  
+  // Airbnb Style: Pin inattivi sono bianchi con icona nera/grigia e bordo sottile. 
+  // Pin attivi invertono diventando neri con icona bianca e crescono.
+  
+  const bgColor = isActive ? 'bg-slate-900' : 'bg-white';
+  const textColor = isActive ? 'text-white' : 'text-slate-800';
+  const shadow = isActive ? 'shadow-[0_10px_20px_rgba(0,0,0,0.2)]' : 'shadow-[0_4px_12px_rgba(0,0,0,0.1)]';
+  const scale = isActive ? 'scale-125 z-50' : 'scale-100 z-10 hover:scale-110';
+  const border = isActive ? 'border border-slate-900' : 'border border-slate-200';
 
   const svgContent = isUnaTantum 
     ? `<path stroke-linecap="round" stroke-linejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 012.25-2.25h13.5A2.25 2.25 0 0121 7.5v11.25m-18 0A2.25 2.25 0 005.25 21h13.5A2.25 2.25 0 0021 18.75m-18 0v-7.5A2.25 2.25 0 015.25 9h13.5A2.25 2.25 0 0121 11.25v7.5" />`
     : `<path stroke-linecap="round" stroke-linejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182m0-4.991v4.99" />`;
 
   const html = `
-    <div class="flex flex-col items-center transition-all duration-300 ${scale}">
-      <div class="w-10 h-10 rounded-2xl flex items-center justify-center border-2 border-white shadow-lg flex-shrink-0" style="background-color: ${color}">
-        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="white" class="w-5 h-5">
+    <div class="transition-transform duration-300 ease-[cubic-bezier(0.34,1.56,0.64,1)] ${scale}">
+      <div class="flex items-center justify-center w-8 h-8 rounded-full ${bgColor} ${textColor} ${shadow} ${border} transition-colors duration-200">
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor" class="w-4 h-4">
            ${svgContent}
         </svg>
       </div>
-      <div class="w-3 h-3 rotate-45 -mt-2 shadow-sm border-r-[2px] border-b-[2px] border-white flex-shrink-0" style="background-color: ${color}"></div>
     </div>
   `
-  return L.divIcon({ html, className: '', iconSize: [40, 48], iconAnchor: [20, 48], popupAnchor: [0, -45] })
+  // Sostituiamo il divIcon nativo. Togliamo la codina e centriamo esattamente il cerchio.
+  return L.divIcon({ 
+      html, 
+      className: 'custom-leaflet-marker', // Va disattivato in CSS globale se ha background
+      iconSize: [32, 32], 
+      iconAnchor: [16, 16] // Il centro del pin coincide con le coordinate esatte
+  })
 }
 
 // ==========================================
@@ -102,11 +105,10 @@ export default function MappaEsplora({
   const [locating, setLocating] = useState(false)
 
   useEffect(() => {
-    fixLeafletIcons()
     setIsMounted(true)
   }, [])
 
-  // 🎯 LA LOGICA DEL MIRINO (Elegante e a prova di errore)
+  // 🎯 LA LOGICA DEL MIRINO
   const handleLocate = (e: React.MouseEvent) => {
     e.preventDefault();
     
@@ -164,14 +166,6 @@ export default function MappaEsplora({
 
   return (
     <div className="relative h-full w-full z-0 bg-slate-100">
-      
-      {/* 🚨 IL FIX PER IL MOBILE: Spegne i popup nativi solo su schermi piccoli (<1024px) */}
-      <style>{`
-        @media (max-width: 1023px) {
-          .leaflet-popup-pane { display: none !important; }
-        }
-      `}</style>
-
       {/* MAP CONTAINER */}
       <MapContainer 
         center={[41.8719, 12.5674]} 
@@ -191,7 +185,6 @@ export default function MappaEsplora({
         />
 
         {posizioni.map((pos: any) => {
-          // La query ora restituisce direttamente i numeri! Addio Regex!
           if (!pos.lat || !pos.lng) return null;
           const lat = pos.lat;
           const lng = pos.lng;
@@ -206,17 +199,17 @@ export default function MappaEsplora({
               eventHandlers={{
                 mouseover: () => setHoveredId(pos.id),
                 mouseout: () => setHoveredId(null),
-                click: () => setFocusedId(pos.id)
+                // Al click settiamo il focus e facciamo scivolare la mappa per centrare meglio il pin,
+                // il Popup nativo rimosso perché gestiamo la Card custom!
+                click: () => {
+                   setFocusedId(pos.id);
+                   if (mapInstance) {
+                      // Pan "furbo": alza leggermente il centro così la tua card fluttuante non copre il pin cliccato!
+                      mapInstance.panTo([lat + 0.005, lng], { animate: true });
+                   }
+                }
               }}
-            >
-              <Popup className="premium-popup">
-                <div className="p-1">
-                   <h3 className="font-black text-slate-800 text-sm mb-2 leading-tight">{pos.titolo}</h3>
-                   {/* 🚨 AGGIUNTO IL PARAMETRO ?from=mappa QUI SOTTO */}
-                   <a href={`/posizione/${pos.id}?from=mappa`} className="block w-full text-center bg-slate-900 text-white text-[10px] font-black py-2 rounded-xl hover:bg-slate-800 transition-colors">DETTAGLI</a>
-                </div>
-              </Popup>
-            </Marker>
+            />
           )
         })}
       </MapContainer>
@@ -226,17 +219,21 @@ export default function MappaEsplora({
         <button 
           onClick={handleLocate}
           title="Trova la mia posizione"
-          className="group relative flex h-14 w-14 items-center justify-center rounded-full bg-white text-blue-600 shadow-[0_10px_30px_rgba(0,0,0,0.2)] transition-all hover:scale-110 hover:bg-blue-50 active:scale-95 border border-slate-100"
+          className="group relative flex h-14 w-14 items-center justify-center rounded-full bg-white text-slate-800 shadow-[0_4px_16px_rgba(0,0,0,0.15)] transition-all hover:scale-110 active:scale-95 border border-slate-100"
         >
           {locating ? (
-             <div className="h-6 w-6 animate-spin rounded-full border-2 border-blue-600 border-t-transparent"></div>
+             <div className="h-5 w-5 animate-spin rounded-full border-2 border-slate-800 border-t-transparent"></div>
           ) : (
-            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="h-7 w-7 transition-transform group-hover:scale-90">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="h-6 w-6 transition-transform group-hover:scale-90">
               <path strokeLinecap="round" strokeLinejoin="round" d="M12 2.25v4.5m0 10.5v4.5m-9.75-9.75h4.5m10.5 0h4.5m-14.25 0a4.5 4.5 0 1 1 9 0 4.5 4.5 0 0 1-9 0Z" />
             </svg>
           )}
         </button>
       </div>
+      
+      {/* IMPORTANTE: Nel tuo `globals.css` ricordati di avere:
+          .custom-leaflet-marker { background: none; border: none; }
+      */}
 
     </div>
   )

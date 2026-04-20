@@ -46,7 +46,6 @@ export default function VistaEsplora() {
   const checkedCap = useRef(false)
   const debounceTimer = useRef<any>(null)
 
-  // 🚨 ESTRAZIONE PARAMETRI (Con fix per il loop infinito)
   const q = searchParams.get('q') || null
   const tipo = searchParams.get('tipo') || null
   const lat = searchParams.get('lat') ? parseFloat(searchParams.get('lat')!) : null
@@ -55,7 +54,7 @@ export default function VistaEsplora() {
   const tagsStr = searchParams.get('tags') || null
   const competenzeStr = searchParams.get('competenze') || null
   const filterData = searchParams.get('data') || null
-  const giorniStr = searchParams.get('giorni') || null // <- Usiamo la stringa per le dipendenze!
+  const giorniStr = searchParams.get('giorni') || null
 
   const filterTags = tagsStr ? tagsStr.split(',') : null
   const filterCompetenze = competenzeStr ? competenzeStr.split(',') : null
@@ -63,7 +62,6 @@ export default function VistaEsplora() {
 
   const selectedPos = posizioni.find(p => p.id === focusedId)
 
-  // --- LOGICA DI DRAGGING MAPPA ---
   const handlePointerDown = (e: React.PointerEvent) => {
     e.currentTarget.setPointerCapture(e.pointerId)
     pointerStartY.current = e.clientY
@@ -91,7 +89,6 @@ export default function VistaEsplora() {
     e.currentTarget.releasePointerCapture(e.pointerId)
   }
 
-  // --- AUTO CENTER ---
   useEffect(() => {
     async function autoCenterUser() {
       if (checkedCap.current) return
@@ -117,7 +114,6 @@ export default function VistaEsplora() {
     autoCenterUser()
   }, [searchParams, router, supabase])
 
-  // --- FETCH DATI ---
   const fetchPosizioni = async (targetBounds: MapBounds) => {
     setLoading(true)
     try {
@@ -148,10 +144,9 @@ export default function VistaEsplora() {
     if (debounceTimer.current) clearTimeout(debounceTimer.current);
     debounceTimer.current = setTimeout(() => {
       fetchPosizioni(b);
-    }, 700); 
+    }, 1500); 
   }
 
-  // 🚨 GESTIONE DIPENDENZE (No Array, solo Stringhe!)
   const handleMapReady = useCallback((initialBounds: MapBounds) => {
     boundsRef.current = initialBounds;
     if (isFirstLoad.current) {
@@ -220,7 +215,6 @@ export default function VistaEsplora() {
             </div>
           )}
 
-          {/* 🚨 MAGIA: LA "KEY" FORZA IL RE-CENTERING DELLA MAPPA */}
           <MappaWrapper 
             key={`map-${lat}-${lng}`}
             posizioni={posizioni} 
@@ -260,12 +254,14 @@ export default function VistaEsplora() {
                 ? 'translateY(100%)' 
                 : isDrawerOpen 
                     ? `translateY(${Math.max(0, dragY)}px)` 
-                    : `translateY(calc(100% - 85px - env(safe-area-inset-bottom) + ${Math.min(0, dragY)}px))`,
+                    // 🚨 CALCOLO AGGIORNATO A 65px! Più spazio per la mappa
+                    : `translateY(calc(100% - 65px - env(safe-area-inset-bottom) + ${Math.min(0, dragY)}px))`,
             touchAction: 'none'
           }}
         >
+          {/* 🚨 AREA MANIGLIA RIDOTTA A 65px */}
           <div 
-            className="w-full h-[85px] flex-shrink-0 flex flex-col items-center justify-start pt-5 cursor-grab active:cursor-grabbing touch-none"
+            className="w-full h-[65px] flex-shrink-0 flex flex-col items-center justify-start pt-4 cursor-grab active:cursor-grabbing touch-none"
             onPointerDown={handlePointerDown}
             onPointerMove={handlePointerMove}
             onPointerUp={handlePointerUp}
@@ -273,13 +269,13 @@ export default function VistaEsplora() {
                if (!wasDragging.current) setIsDrawerOpen(!isDrawerOpen); 
             }}
           >
-            <div className="w-12 h-1.5 bg-slate-300 rounded-full mb-3" />
-            <span className="text-[11px] font-bold uppercase tracking-widest text-slate-500 select-none">
-              {isDrawerOpen ? 'Scorri in basso per chiudere' : `Mostra ${posizioni.length} attività`}
+            <div className="w-12 h-1.5 bg-slate-300 rounded-full mb-2.5" />
+            <span className="text-[10px] font-bold uppercase tracking-widest text-slate-500 select-none">
+              {isDrawerOpen ? 'Scorri in basso per chiudere' : `${posizioni.length} attività`}
             </span>
           </div>
 
-          <div className="px-5 pb-[calc(env(safe-area-inset-bottom)+2rem)] overflow-y-auto flex-grow flex flex-col gap-5 pt-2">
+          <div className="px-5 pb-[calc(env(safe-area-inset-bottom)+2rem)] overflow-y-auto flex-grow flex flex-col gap-5 pt-1">
             {posizioni.map((pos: any) => (
               <div key={pos.id} onClick={() => { if (!wasDragging.current) { setFocusedId(pos.id); setIsDrawerOpen(false); } }}>
                 <PosizioneCard posizione={pos} isHovered={hoveredId === pos.id} isFocused={focusedId === pos.id} />
