@@ -38,12 +38,9 @@ export default async function PaginaCandidati({ params }: { params: Promise<{ id
   const { data: profiliVolontari } = await supabase
     .rpc('get_profili_candidati', { p_posizione_id: id })
 
-    // 🚨 AGGIUNGI QUESTA RIGA PER IL DEBUG:
-  console.log("🔥 DEBUG PROFILI:", profiliVolontari);
-  
   // 3. Generazione link sicuri (solo se serve)
   const paths = profiliVolontari
-    ?.map((p: any) => p.avatar_url)
+    ?.map((p: any) => p.foto_profilo_url)
     .filter((url: string) => url && !url.startsWith('http')) || []
 
   let signedUrls: any[] = []
@@ -56,9 +53,9 @@ export default async function PaginaCandidati({ params }: { params: Promise<{ id
   const candidatureArricchite = posizione.candidature?.map((cand: any) => {
     const profiloBase = profiliVolontari?.find((p: any) => p.id === cand.volontario_id)
     
-    let finalAvatar = profiloBase?.avatar_url
-    if (profiloBase?.avatar_url && !profiloBase.avatar_url.startsWith('http')) {
-      const linkFirmato = signedUrls.find(s => s.path === profiloBase.avatar_url)
+    let finalAvatar = profiloBase?.foto_profilo_url
+    if (profiloBase?.foto_profilo_url && !profiloBase.foto_profilo_url.startsWith('http')) {
+      const linkFirmato = signedUrls.find(s => s.path === profiloBase.foto_profilo_url)
       if (linkFirmato?.signedUrl) finalAvatar = linkFirmato.signedUrl
     }
 
@@ -67,7 +64,7 @@ export default async function PaginaCandidati({ params }: { params: Promise<{ id
       volontario: {
         profili_volontari: profiloBase ? {
           ...profiloBase,
-          avatar_url: finalAvatar
+          foto_profilo_url: finalAvatar
         } : null
       }
     }
@@ -95,6 +92,7 @@ export default async function PaginaCandidati({ params }: { params: Promise<{ id
       <GestioneCandidatiClient 
         candidatureIniziali={candidatureArricchite} 
         posizioneId={posizione.id}
+        associazioneId={user.id}
       />
     </div>
   )

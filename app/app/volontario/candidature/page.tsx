@@ -58,15 +58,21 @@ export default async function MieCandidature() {
   }
 
   // Stili e label premium per gli stati (Senza Emoji)
+  const normalizzaStato = (stato: string) => {
+    if (stato === 'accettata') return 'accettato'
+    if (stato === 'rifiutata') return 'rifiutato'
+    return stato
+  }
+
   const getStatusProps = (stato: string) => {
     switch (stato) {
-      case 'accettata':
+      case 'accettato':
         return {
           label: 'Assegnata',
           style: 'bg-emerald-50 text-emerald-700 border-emerald-200',
           dot: 'bg-emerald-500'
         }
-      case 'rifiutata':
+      case 'rifiutato':
         return {
           label: 'Non Selezionato',
           style: 'bg-slate-100 text-slate-500 border-slate-200',
@@ -120,7 +126,8 @@ export default async function MieCandidature() {
               const imgUrl = pos.media_associazioni?.url;
               const iniziale = pos.titolo ? pos.titolo.charAt(0).toUpperCase() : 'V';
               const nomeAssoc = Array.isArray(pos.associazioni) ? pos.associazioni[0]?.nome : pos.associazioni?.nome || 'Associazione';
-              const status = getStatusProps(cand.stato);
+              const statoNormalizzato = normalizzaStato(cand.stato);
+              const status = getStatusProps(statoNormalizzato);
               const dataFormattata = formattaData(pos.quando, pos.tipo);
 
               return (
@@ -184,7 +191,7 @@ export default async function MieCandidature() {
                       Vedi annuncio
                     </Link>
                     
-                    {cand.stato === 'accettata' && (
+                    {statoNormalizzato === 'accettato' && (
                       <Link 
                         href={`/app/volontario/chat/${cand.id}`}
                         className="flex items-center justify-center gap-2 px-4 py-3 rounded-xl bg-slate-900 text-white font-semibold hover:bg-black shadow-lg shadow-slate-200 text-center transition-all text-sm"

@@ -79,18 +79,24 @@ export default async function GestioneCandidature() {
   }
 
   // Stili per i badge
+  const normalizzaStato = (stato: string) => {
+    if (stato === 'accettata') return 'accettato'
+    if (stato === 'rifiutata') return 'rifiutato'
+    return stato
+  }
+
   const getBadgeStyle = (stato: string) => {
     switch (stato) {
-      case 'accettata': return 'bg-green-100 text-green-700 border-green-200'
-      case 'rifiutata': return 'bg-red-100 text-red-700 border-red-200'
+      case 'accettato': return 'bg-green-100 text-green-700 border-green-200'
+      case 'rifiutato': return 'bg-red-100 text-red-700 border-red-200'
       default: return 'bg-amber-100 text-amber-700 border-amber-200'
     }
   }
 
   const getStatoLabel = (stato: string) => {
     switch (stato) {
-      case 'accettata': return 'Accettata 🎉'
-      case 'rifiutata': return 'Rifiutata ❌'
+      case 'accettato': return 'Accettata 🎉'
+      case 'rifiutato': return 'Rifiutata ❌'
       default: return 'Nuova Richiesta 🔔'
     }
   }
@@ -116,14 +122,16 @@ export default async function GestioneCandidature() {
           </div>
         ) : (
           <div className="grid gap-6">
-            {candidature.map((cand: any) => (
+            {candidature.map((cand: any) => {
+              const statoNormalizzato = normalizzaStato(cand.stato)
+              return (
               <div key={cand.id} className="bg-white p-8 rounded-[2.5rem] shadow-sm border border-slate-100 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-6 transition-all hover:shadow-md">
                 
                 {/* Info Candidatura */}
                 <div className="space-y-3 flex-1">
                   <div className="flex items-center gap-3">
-                    <span className={`px-4 py-1.5 rounded-full text-xs font-black uppercase tracking-widest border ${getBadgeStyle(cand.stato)}`}>
-                      {getStatoLabel(cand.stato)}
+                    <span className={`px-4 py-1.5 rounded-full text-xs font-black uppercase tracking-widest border ${getBadgeStyle(statoNormalizzato)}`}>
+                      {getStatoLabel(statoNormalizzato)}
                     </span>
                     <span className="text-xs font-bold text-slate-400">
                       Inviata il {new Date(cand.created_at).toLocaleDateString('it-IT')}
@@ -147,11 +155,11 @@ export default async function GestioneCandidature() {
                 {/* Azioni dell'Associazione */}
                 <div className="flex flex-wrap items-center gap-3 w-full lg:w-auto mt-4 lg:mt-0 pt-4 lg:pt-0 border-t lg:border-t-0 border-slate-100">
                   
-                  {cand.stato === 'in_attesa' ? (
+                  {statoNormalizzato === 'in_attesa' ? (
                     <>
                       <form action={aggiornaStato} className="flex-1 lg:flex-none">
                         <input type="hidden" name="candidaturaId" value={cand.id} />
-                        <input type="hidden" name="nuovoStato" value="rifiutata" />
+                        <input type="hidden" name="nuovoStato" value="rifiutato" />
                         <button type="submit" className="w-full px-6 py-4 rounded-2xl bg-slate-100 text-slate-600 font-bold hover:bg-red-50 hover:text-red-600 transition-colors">
                           Rifiuta
                         </button>
@@ -159,13 +167,13 @@ export default async function GestioneCandidature() {
 
                       <form action={aggiornaStato} className="flex-1 lg:flex-none">
                         <input type="hidden" name="candidaturaId" value={cand.id} />
-                        <input type="hidden" name="nuovoStato" value="accettata" />
+                        <input type="hidden" name="nuovoStato" value="accettato" />
                         <button type="submit" className="w-full px-8 py-4 rounded-2xl bg-blue-600 text-white font-black hover:bg-blue-700 hover:-translate-y-1 shadow-lg shadow-blue-200 transition-all">
                           Accetta
                         </button>
                       </form>
                     </>
-                  ) : cand.stato === 'accettata' ? (
+                  ) : statoNormalizzato === 'accettato' ? (
                     <div className="flex gap-3 w-full lg:w-auto">
                       <div className="px-6 py-4 rounded-2xl bg-green-50 text-green-700 font-bold border border-green-200 flex-1 lg:flex-none text-center">
                         Accettata ✅
@@ -185,7 +193,7 @@ export default async function GestioneCandidature() {
 
                 </div>
               </div>
-            ))}
+            )})}
           </div>
         )}
       </div>

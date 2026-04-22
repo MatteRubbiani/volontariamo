@@ -37,7 +37,9 @@ export default async function AssociazioneChat({
     .eq('posizioni.associazione_id', user.id)
     .single()
 
-  if (candError || !candidatura || candidatura.stato !== 'accettata') {
+  const candidaturaAccettata = candidatura?.stato === 'accettato' || candidatura?.stato === 'accettata'
+
+  if (candError || !candidatura || !candidaturaAccettata) {
     return (
       <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50">
         <h1 className="text-2xl font-black text-slate-800 mb-4">Accesso Negato 🔒</h1>

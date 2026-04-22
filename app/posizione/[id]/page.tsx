@@ -7,6 +7,7 @@ import type { Metadata, ResolvingMetadata } from 'next'
 import Link from 'next/link'
 import TagBadge from '@/components/TagBadge'
 import CompetenzaBadge from '@/components/CompetenzaBadge'
+import PosizioneQuestionPanel from '@/components/PosizioneQuestionPanel'
 
 export async function generateMetadata(
   { params }: { params: Promise<{ id: string }> },
@@ -54,6 +55,7 @@ export default async function DettaglioPosizioneVolontario({
   const from = sp?.from
 
   const backUrl = from === 'mappa' ? '/esplora?from=mappa' : '/esplora'
+  const loginHref = `/auth/login?redirectTo=${encodeURIComponent(`/posizione/${id}`)}`
 
   const publicSupabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -144,7 +146,12 @@ export default async function DettaglioPosizioneVolontario({
 
   const imgUrl = pos.media_associazioni?.url || null;
   const inizialePosizione = pos.titolo ? pos.titolo.charAt(0).toUpperCase() : 'V';
-  
+  const statoCandidatura = candidatura?.stato === 'accettata'
+    ? 'accettato'
+    : candidatura?.stato === 'rifiutata'
+      ? 'rifiutato'
+      : candidatura?.stato
+
   // Applichiamo la formattazione calda
   const dataFormattata = formattaData(pos.quando, pos.tipo);
 
@@ -152,7 +159,7 @@ export default async function DettaglioPosizioneVolontario({
   const CallToActionButton = ({ className = "" }: { className?: string }) => {
     if (!user) {
       return (
-        <Link href={`/auth/login?redirectTo=${encodeURIComponent(`/posizione/${id}`)}`} className={`flex items-center justify-center bg-slate-900 hover:bg-black text-white font-semibold py-3.5 rounded-xl text-base transition-colors ${className}`}>
+        <Link href={loginHref} className={`flex items-center justify-center bg-slate-900 hover:bg-black text-white font-semibold py-3.5 rounded-xl text-base transition-colors ${className}`}>
           Accedi
         </Link>
       )
@@ -168,13 +175,15 @@ export default async function DettaglioPosizioneVolontario({
     }
     return (
       <div className={`flex items-center justify-center font-semibold py-3.5 rounded-xl text-sm border ${
-        candidatura.stato === 'in_attesa' ? 'bg-amber-50 text-amber-700 border-amber-200' :
-        candidatura.stato === 'accettata' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
+        statoCandidatura === 'in_attesa' ? 'bg-amber-50 text-amber-700 border-amber-200' :
+        statoCandidatura === 'in_contatto' ? 'bg-blue-50 text-blue-700 border-blue-200' :
+        statoCandidatura === 'accettato' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
         'bg-slate-100 text-slate-500 border-slate-200'
       } ${className}`}>
-        {candidatura.stato === 'in_attesa' && 'In Attesa'}
-        {candidatura.stato === 'accettata' && 'Assegnata'}
-        {candidatura.stato === 'rifiutata' && 'Rifiutata'}
+        {statoCandidatura === 'in_attesa' && 'In Attesa'}
+        {statoCandidatura === 'in_contatto' && 'In Contatto'}
+        {statoCandidatura === 'accettato' && 'Assegnata'}
+        {statoCandidatura === 'rifiutato' && 'Rifiutata'}
       </div>
     )
   }
@@ -319,7 +328,17 @@ export default async function DettaglioPosizioneVolontario({
                 <span className="text-xl font-semibold text-slate-900 capitalize block leading-tight">{dataFormattata}</span>
                 <p className="text-sm text-slate-500 mt-1">{formattaOra(pos.ora_inizio)} - {formattaOra(pos.ora_fine)}</p>
               </div>
-              <CallToActionButton className="w-full" />
+              <div className="grid grid-cols-2 gap-3">
+                <CallToActionButton className="w-full col-span-1" />
+                <PosizioneQuestionPanel
+                  posizioneId={id}
+                  associazioneNome={nomeAssociazione}
+                  userId={user?.id ?? null}
+                  loginHref={loginHref}
+                  initialCandidaturaId={candidatura?.id ?? null}
+                  buttonClassName="w-full col-span-1"
+                />
+              </div>
               <p className="text-center text-xs text-slate-500 mt-4">
                 L'associazione valuterà il tuo profilo.
               </p>
@@ -330,13 +349,21 @@ export default async function DettaglioPosizioneVolontario({
       </div>
 
       {/* 📱 STICKY BOTTOM BAR (SOLO MOBILE) - Fix Layout e Flexbox */}
-      <div className="md:hidden fixed bottom-0 left-0 w-full bg-white border-t border-slate-200 px-5 py-4 z-50 flex items-center justify-between pb-[calc(1rem+env(safe-area-inset-bottom))] shadow-[0_-8px_24px_rgba(0,0,0,0.06)]">
-        <div className="flex flex-col flex-1 min-w-0 mr-4">
+      <div className="md:hidden fixed bottom-0 left-0 w-full bg-white border-t border-slate-200 px-5 py-4 z-50 flex flex-col gap-3 pb-[calc(1rem+env(safe-area-inset-bottom))] shadow-[0_-8px_24px_rgba(0,0,0,0.06)]">
+        <div className="flex flex-col min-w-0">
           <span className="font-semibold text-slate-900 truncate capitalize">{dataFormattata}</span>
           <span className="text-sm text-slate-500">{formattaOra(pos.ora_inizio)} - {formattaOra(pos.ora_fine)}</span>
         </div>
-        <div className="w-[140px] flex-shrink-0">
-          <CallToActionButton className="w-full text-sm" />
+        <div className="grid grid-cols-2 gap-2">
+          <CallToActionButton className="w-full text-sm col-span-1" />
+          <PosizioneQuestionPanel
+            posizioneId={id}
+            associazioneNome={nomeAssociazione}
+            userId={user?.id ?? null}
+            loginHref={loginHref}
+            initialCandidaturaId={candidatura?.id ?? null}
+            buttonClassName="w-full col-span-1"
+          />
         </div>
       </div>
 
