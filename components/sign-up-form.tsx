@@ -1,3 +1,6 @@
+"use client";
+
+import { useState } from "react";
 import { cn } from "@/lib/utils";
 import { signUp } from "@/app/auth/actions";
 import { Button } from "@/components/ui/button";
@@ -18,6 +21,40 @@ export function SignUpForm({
   className,
   ...props
 }: React.ComponentPropsWithoutRef<"div"> & { redirectTo?: string; errorMessage?: string }) {
+  // Stato per gli errori locali (es. password non combaciano)
+  const [localError, setLocalError] = useState<string>("");
+  // Stato per il caricamento visivo del bottone
+  const [isPending, setIsPending] = useState(false);
+
+  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+    // Leggiamo i dati dal form prima di inviarli
+    const formData = new FormData(e.currentTarget);
+    const password = formData.get("password") as string;
+    const confirmPassword = formData.get("confirmPassword") as string;
+
+    // 1. Controllo lunghezza minima
+    if (password.length < 6) {
+      e.preventDefault(); // Blocca l'invio al server
+      setLocalError("La password deve essere di almeno 6 caratteri.");
+      return;
+    }
+
+    // 2. Controllo password combacianti
+    if (password !== confirmPassword) {
+      e.preventDefault(); // Blocca l'invio al server
+      setLocalError("Le password non coincidono. Riprova.");
+      return;
+    }
+
+    // Se tutto è ok, puliamo gli errori, attiviamo il caricamento 
+    // e lasciamo che il form prosegua nativamente verso l'action={signUp}
+    setLocalError("");
+    setIsPending(true);
+  };
+
+  // Mostriamo l'errore locale se c'è, altrimenti quello che arriva dal server
+  const displayError = localError || errorMessage;
+
   return (
     <div className={cn("flex flex-col gap-6", className)} {...props}>
       <Card>
@@ -26,7 +63,7 @@ export function SignUpForm({
           <CardDescription>Create a new account</CardDescription>
         </CardHeader>
         <CardContent>
-          <form action={signUp}>
+          <form action={signUp} onSubmit={handleSubmit}>
             <input type="hidden" name="redirectTo" value={redirectTo || ""} />
             <div className="flex flex-col gap-6">
               <div className="grid gap-2">
@@ -40,14 +77,23 @@ export function SignUpForm({
                 />
               </div>
               <div className="grid gap-2">
-                <div className="flex items-center">
-                  <Label htmlFor="password">Password</Label>
-                </div>
+                <Label htmlFor="password">Password</Label>
                 <Input
                   id="password"
                   type="password"
                   required
                   name="password"
+                />
+              </div>
+
+              {/* 🚨 NUOVO CAMPO CONFERMA PASSWORD */}
+              <div className="grid gap-2">
+                <Label htmlFor="confirmPassword">Conferma Password</Label>
+                <Input
+                  id="confirmPassword"
+                  type="password"
+                  required
+                  name="confirmPassword"
                 />
               </div>
 
@@ -66,9 +112,15 @@ export function SignUpForm({
               </div>
               {/* FINE SEZIONE PRIVACY POLICY */}
 
-              {errorMessage && <p className="text-sm text-red-500">{errorMessage}</p>}
-              <Button type="submit" className="w-full">
-                Sign up
+              {/* MOSTRA ERRORI */}
+              {displayError && (
+                <div className="rounded-md bg-red-50 p-3 text-sm font-medium text-red-500">
+                  {displayError}
+                </div>
+              )}
+
+              <Button type="submit" className="w-full" disabled={isPending}>
+                {isPending ? "Registrazione in corso..." : "Sign up"}
               </Button>
             </div>
             <div className="mt-4 text-center text-sm">

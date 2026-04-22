@@ -2,34 +2,39 @@ import { createClient } from "@/lib/supabase/server";
 import { NextResponse } from "next/server";
 import { type NextRequest } from "next/server";
 
+
 export async function GET(request: NextRequest) {
   const { searchParams, origin } = new URL(request.url);
   
-  // 1. Prendiamo il "code" che ci ha inviato Supabase via mail
+  // 1. Recuperiamo il codice e la destinazione successiva
   const code = searchParams.get("code");
-  
-  // 2. Decidiamo dove mandarlo dopo. 
-  // Se non c'è un parametro "next", lo mandiamo all'onboarding 
-  // perché se ha appena confermato la mail, deve ancora presentarsi!
   const next = searchParams.get("next") ?? "/app/onboarding";
 
   if (code) {
     const supabase = await createClient();
 
-    // 3. SCAMBIO MAGICO: Trasformiamo il codice in una sessione reale
-    // Questo comando valida la mail e logga l'utente contemporaneamente
+    // 2. SCAMBIO DEL CODICE
+    // Qui Supabase convalida l'email nel database.
     const { error } = await supabase.auth.exchangeCodeForSession(code);
 
     if (!error) {
-      // Tutto ok! L'utente è loggato. Lo mandiamo a destinazione.
-      // Usiamo NextResponse.redirect(`${origin}${next}`) per essere sicuri dei path
+      // Caso A: Stesso dispositivo. 
+      // L'utente è loggato automaticamente e va all'onboarding.
       return NextResponse.redirect(`${origin}${next}`);
     }
+
+    // Caso B: Errore nello scambio (es. Dispositivo diverso o PKCE mismatch)
+    // In questo scenario l'email è quasi certamente stata confermata, 
+    // ma la sessione non può essere creata automaticamente.
+    console.warn("Avviso: Scambio sessione fallito, possibile accesso cross-device.");
+    
+    return NextResponse.redirect(
+      `${origin}/auth/login?message=Email+confermata+con+successo!+Inserisci+le+tue+credenziali+per+accedere.`
+    );
   }
 
-  // 4. ERROR HANDLING: Se il codice è scaduto o manca
-  // Rimandiamo alla registrazione con un messaggio chiaro
+  // 3. Caso C: Codice mancante o link corrotto
   return NextResponse.redirect(
-    `${origin}/auth/registrazione?error=Il+link+di+conferma+è+scaduto+o+non+è+valido.+Riprova+a+registrarti.`
+    `${origin}/auth/registrazione?error=Link+non+valido.+Riprova+a+registrarti.`
   );
 }
