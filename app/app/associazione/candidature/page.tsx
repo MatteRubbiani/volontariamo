@@ -3,6 +3,7 @@ import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
 import { revalidatePath } from 'next/cache'
 import Link from 'next/link'
+import ChatModalButton from '@/components/ChatModalButton' // 🚨 IMPORTIAMO IL NOSTRO BOTTONE MAGICO
 
 export default async function GestioneCandidature() {
   const cookieStore = await cookies()
@@ -26,7 +27,6 @@ export default async function GestioneCandidature() {
   if (!user) redirect('/auth/login')
 
   // 2. Recuperiamo le candidature SOLO per le posizioni create da questa associazione
-  // Usiamo !inner per filtrare direttamente tramite la tabella posizioni
   const { data: candidature, error } = await supabase
     .from('candidature')
     .select(`
@@ -142,8 +142,6 @@ export default async function GestioneCandidature() {
                     {cand.posizioni?.titolo}
                   </h3>
                   
-                  {/* NOTA: Per ora mostriamo l'ID del volontario. 
-                      Nel prossimo step lo collegheremo al vero Nome/Cognome del volontario! */}
                   <div className="bg-slate-50 inline-block px-4 py-2 rounded-xl border border-slate-100">
                     <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest mb-1">Candidato</p>
                     <p className="font-bold text-slate-700 text-sm">
@@ -178,12 +176,14 @@ export default async function GestioneCandidature() {
                       <div className="px-6 py-4 rounded-2xl bg-green-50 text-green-700 font-bold border border-green-200 flex-1 lg:flex-none text-center">
                         Accettata ✅
                       </div>
-                      <Link 
-                        href={`/app/associazione/chat/${cand.id}`}
-                        className="px-6 py-4 rounded-2xl bg-blue-600 text-white font-black hover:bg-blue-700 hover:-translate-y-1 shadow-lg shadow-blue-200 transition-all text-center flex-1 lg:flex-none"
-                      >
-                        Chatta 💬
-                      </Link>
+                      
+                      {/* 🚨 SOSTITUZIONE: DA LINK AL NOSTRO NUOVO BOTTONE MODAL */}
+                      <ChatModalButton 
+                        candidaturaId={cand.id} 
+                        associazioneId={user.id} 
+                        titoloPosizione={cand.posizioni?.titolo || ''} 
+                      />
+                      
                     </div>
                   ) : (
                     <div className="px-6 py-4 rounded-2xl bg-slate-100 text-slate-500 font-bold border border-slate-200 w-full lg:w-auto text-center">

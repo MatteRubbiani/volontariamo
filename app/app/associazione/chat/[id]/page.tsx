@@ -2,7 +2,7 @@ import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
 import Link from 'next/link'
-import ChatRealtime from '@/components/ChatRealtime'
+import SharedChatWidget from '@/components/SharedChatWidget'
 
 export default async function AssociazioneChat({
   params,
@@ -55,11 +55,8 @@ export default async function AssociazioneChat({
     ? candidatura.posizioni[0] 
     : candidatura.posizioni
 
-  const { data: messaggi } = await supabase
-    .from('messaggi')
-    .select('*')
-    .eq('candidatura_id', id)
-    .order('created_at', { ascending: true })
+  const currentCandidaturaId = id
+  const associationId = user.id
 
   return (
     <div className="h-[100dvh] flex flex-col bg-slate-50 overflow-hidden">
@@ -84,12 +81,7 @@ export default async function AssociazioneChat({
 
       {/* CHAT REALTIME */}
       <div className="flex-1 w-full max-w-4xl mx-auto overflow-hidden relative">
-        <ChatRealtime 
-          candidaturaId={id}
-          userId={user.id}
-          messaggiIniziali={messaggi || []}
-          coloreUtente="emerald" 
-        />
+        <SharedChatWidget candidaturaId={currentCandidaturaId} currentUserId={associationId} />
       </div>
 
     </div>
