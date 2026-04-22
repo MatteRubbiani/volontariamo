@@ -1,7 +1,7 @@
 'use server'
 
 import { createServerClient } from '@supabase/ssr'
-import { cookies } from 'next/headers'
+import { cookies, headers } from 'next/headers'
 import { redirect } from 'next/navigation'
 
 /**
@@ -85,6 +85,17 @@ export async function signUp(formData: FormData) {
   const email = String(formData.get('email') ?? '')
   const password = String(formData.get('password') ?? '')
   const redirectTo = getSafeRedirectTo(formData.get('redirectTo'))
+  const headersList = await headers()
+  const forwardedHost = headersList.get('x-forwarded-host')
+  const host = headersList.get('host')
+  const protocol = headersList.get('x-forwarded-proto') ?? 'https'
+  const origin =
+    headersList.get('origin') ??
+    (forwardedHost
+      ? `${protocol}://${forwardedHost}`
+      : host
+        ? `${protocol}://${host}`
+        : process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000')
 
   const cookieStore = await cookies()
   const supabase = createServerClient(
@@ -100,12 +111,11 @@ export async function signUp(formData: FormData) {
     }
   )
 
-  const { data, error } = await supabase.auth.signUp({
+  const { error } = await supabase.auth.signUp({
     email,
     password,
     options: {
-      // Usiamo l'URL di conferma corretto configurato prima
-      emailRedirectTo: `${process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000'}/auth/confirm`,
+      emailRedirectTo: `${origin}/auth/confirm`,
     },
   })
 
@@ -114,18 +124,7 @@ export async function signUp(formData: FormData) {
     redirect(buildErrorRedirect('/auth/registrazione', error.message, redirectTo))
   }
 
-  // --- LOGICA DATA-DRIVEN ---
-  // Se non c'è sessione, significa che Supabase aspetta la conferma mail (PROD)
-  if (data.user && !data.session) {
-    redirect('/auth/check-email')
-  }
-
-  // Se c'è sessione (DEV), andiamo all'onboarding
-  const onboardingRedirect = redirectTo
-    ? `/app/onboarding?redirectTo=${encodeURIComponent(redirectTo)}`
-    : '/app/onboarding'
-  
-  redirect(onboardingRedirect)
+  redirect('/auth/sign-up-success')
 }
 
 export async function logout() {
