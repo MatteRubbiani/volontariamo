@@ -34,6 +34,9 @@ export async function proxy(request: NextRequest) {
   const isAuthRoute = pathname.startsWith('/auth')
   const isHomeRoute = pathname === '/' 
   const isAccettaInvitoRoute = pathname.startsWith('/accetta-invito') 
+  
+  // 🚨 NUOVA ROTTA WHITELISTATA
+  const isUpdatePasswordRoute = pathname === '/auth/update-password'
 
   // Salviamo i cookie di Supabase anche quando facciamo redirect
   const redirectWithCookies = (url: URL) => {
@@ -49,6 +52,13 @@ export async function proxy(request: NextRequest) {
   }
 
   if (user) {
+    // 🚨 IL LASCIAPASSARE: 
+    // Se l'utente è loggato (tramite OTP) ed è sulla pagina di reset password, 
+    // fermiamo tutti i controlli successivi e lo lasciamo passare.
+    if (isUpdatePasswordRoute) {
+      return supabaseResponse
+    }
+
     // SINGOLA QUERY ALLA TABELLA HUB
     const { data: profilo } = await supabase
       .from('profili')

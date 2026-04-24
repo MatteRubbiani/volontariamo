@@ -50,7 +50,8 @@ export async function signIn(formData: FormData) {
   if (error) {
     // STATO: Utente esiste ma non ha confermato la mail (PROD)
     if (error.message === 'Email not confirmed') {
-      redirect('/auth/check-email')
+      // 🚨 AGGIORNATO: Mandiamo l'utente distratto alla nostra nuova pagina OTP!
+      redirect(`/auth/verifica?email=${encodeURIComponent(email)}`)
     }
     // STATO: Credenziali errate o utente inesistente
     console.error("❌ Errore Login:", error.message)
@@ -85,6 +86,9 @@ export async function signUp(formData: FormData) {
   const email = String(formData.get('email') ?? '')
   const password = String(formData.get('password') ?? '')
   const redirectTo = getSafeRedirectTo(formData.get('redirectTo'))
+  
+  // N.B. Ho lasciato questa logica degli headers intatta nel caso ti serva per altre cose,
+  // ma per l'OTP nativo di Supabase non è più strettamente necessaria.
   const headersList = await headers()
   const forwardedHost = headersList.get('x-forwarded-host')
   const host = headersList.get('host')
@@ -114,9 +118,8 @@ export async function signUp(formData: FormData) {
   const { error } = await supabase.auth.signUp({
     email,
     password,
-    options: {
-      emailRedirectTo: `${origin}/auth/confirm`,
-    },
+    // 🚨 RIMOSSO options.emailRedirectTo: Supabase ora manderà il codice OTP a 6 cifre 
+    // basandosi sul template email che abbiamo modificato.
   })
 
   if (error) {
@@ -124,7 +127,8 @@ export async function signUp(formData: FormData) {
     redirect(buildErrorRedirect('/auth/registrazione', error.message, redirectTo))
   }
 
-  redirect('/auth/sign-up-success')
+  // 🚨 IL TELETRASPORTO: Lo mandiamo ai nostri 6 quadratini passando l'email
+  redirect(`/auth/verifica?email=${encodeURIComponent(email)}`)
 }
 
 export async function logout() {
@@ -146,4 +150,33 @@ export async function logout() {
 
   await supabase.auth.signOut()
   redirect('/')
+}
+
+
+export async function resetPassword(formData: FormData) {
+  const email = String(formData.get('email') ?? '')
+  const cookieStore = await cookies()
+  
+  const supabase = createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        getAll() { return cookieStore.getAll() },
+        setAll(cookiesToSet) {
+          cookiesToSet.forEach(({ name, value, options }) => cookieStore.set(name, value, options))
+        },
+      },
+    }
+  )
+
+  const { error } = await supabase.auth.resetPasswordForEmail(email)
+
+  if (error) {
+    console.error("❌ Errore Reset:", error.message)
+    return redirect(`/auth/forgot-password?error=${encodeURIComponent(error.message)}`)
+  }
+
+  // Lo mandiamo a una pagina di verifica dedicata al recupero
+  redirect(`/auth/forgot-password/verify?email=${encodeURIComponent(email)}`)
 }
