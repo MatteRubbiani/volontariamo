@@ -70,6 +70,11 @@ export async function eliminaInvito(invitoId: string) {
     { cookies: { getAll() { return cookieStore.getAll() } } }
   )
 
+  const { data: { user }, error: authError } = await supabase.auth.getUser()
+  if (authError || !user) {
+    throw new Error('Unauthorized action. User must be logged in.')
+  }
+
   const { error } = await supabase
     .from('inviti_impresa')
     .delete()
@@ -87,6 +92,11 @@ export async function rimuoviDipendente(dipendenteId: string) {
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     { cookies: { getAll() { return cookieStore.getAll() } } }
   )
+
+  const { data: { user }, error: authError } = await supabase.auth.getUser()
+  if (authError || !user) {
+    throw new Error('Unauthorized action. User must be logged in.')
+  }
 
   const { error } = await supabase
     .from('impresa_dipendenti')

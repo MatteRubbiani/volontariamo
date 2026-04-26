@@ -4,6 +4,13 @@ import { createClient } from '@/lib/supabase/server'
 import { redirect } from 'next/navigation'
 import { revalidatePath } from 'next/cache'
 
+function getSafeRedirectTo(value: FormDataEntryValue | null) {
+  if (typeof value !== 'string') return null
+  if (!value.startsWith('/')) return null
+  if (value.startsWith('//')) return null
+  return value
+}
+
 export async function completeOnboarding(formData: FormData) {
   const supabase = await createClient()
   
@@ -11,7 +18,7 @@ export async function completeOnboarding(formData: FormData) {
   if (authError || !user) throw new Error('Utente non autenticato')
 
   const role = formData.get('role') as string
-  const redirectTo = formData.get('redirectTo') as string || `/app/${role}`
+  const redirectTo = getSafeRedirectTo(formData.get('redirectTo')) || `/app/${role}`
 
   // --- LOGICA VOLONTARIO ---
   if (role === 'volontario') {

@@ -60,7 +60,7 @@ export async function signIn(formData: FormData) {
 
   // --- IL VIGILE URBANO: Smistamento per Ruolo ---
   const { data: profile } = await supabase
-    .from('profiles')
+    .from('profili')
     .select('role')
     .eq('id', data.user.id)
     .single()
