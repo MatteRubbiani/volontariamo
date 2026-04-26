@@ -74,11 +74,23 @@ function AssociazioneWizardForm() {
           </div>
         </div>
 
-        <form action={async (fd) => {
+        {/* 🚨 IL TRUCCO È QUI: FormData generato dallo stato, non dal DOM */}
+        <form action={async () => {
           setIsSubmitting(true)
-          fd.append('role', 'associazione')
-          fd.append('redirectTo', redirectTo)
-          await completeOnboarding(fd)
+          
+          const payload = new FormData()
+          payload.append('role', 'associazione')
+          payload.append('redirectTo', redirectTo)
+          
+          Object.entries(formData).forEach(([key, value]) => {
+            if (Array.isArray(value)) {
+              value.forEach(v => payload.append(key, v))
+            } else {
+              payload.append(key, value as string)
+            }
+          })
+
+          await completeOnboarding(payload)
         }} className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm md:p-10">
           
           {step === 1 && (
@@ -117,7 +129,6 @@ function AssociazioneWizardForm() {
                   {tagsCatalog.map((tag) => (
                     <button key={tag.id} type="button" onClick={() => toggleTag(tag.id)} className={`rounded-xl transition-all ${formData.tags.includes(tag.id) ? 'ring-2 ring-emerald-500 ring-offset-2 scale-105' : 'grayscale opacity-50'}`}>
                       <TagBadge nome={tag.name} size="md" />
-                      <input type="hidden" name="tags" value={tag.id} disabled={!formData.tags.includes(tag.id)} />
                     </button>
                   ))}
                 </div>

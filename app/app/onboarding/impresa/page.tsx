@@ -57,11 +57,23 @@ function ImpresaWizardForm() {
           </div>
         </div>
 
-        <form action={async (fd) => {
+        {/* 🚨 IL TRUCCO È QUI: FormData generato dallo stato, non dal DOM */}
+        <form action={async () => {
           setIsSubmitting(true)
-          fd.append('role', 'impresa')
-          fd.append('redirectTo', redirectTo)
-          await completeOnboarding(fd)
+          
+          const payload = new FormData()
+          payload.append('role', 'impresa')
+          payload.append('redirectTo', redirectTo)
+          
+          Object.entries(formData).forEach(([key, value]) => {
+            if (Array.isArray(value)) {
+              value.forEach(v => payload.append(key, v))
+            } else {
+              payload.append(key, value as string)
+            }
+          })
+
+          await completeOnboarding(payload)
         }} className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm md:p-10">
           
           {step === 1 && (

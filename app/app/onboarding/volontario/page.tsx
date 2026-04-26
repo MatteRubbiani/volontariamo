@@ -91,11 +91,23 @@ function VolontarioWizardForm() {
           </div>
         </div>
 
-        <form action={async (fd) => {
+        {/* 🚨 IL TRUCCO È QUI: Creiamo il FormData manualmente dallo stato! */}
+        <form action={async () => {
             setIsSubmitting(true)
-            fd.append('role', 'volontario')
-            fd.append('redirectTo', redirectTo)
-            await completeOnboarding(fd)
+            
+            const payload = new FormData()
+            payload.append('role', 'volontario')
+            payload.append('redirectTo', redirectTo)
+            
+            Object.entries(formData).forEach(([key, value]) => {
+              if (Array.isArray(value)) {
+                value.forEach(v => payload.append(key, v))
+              } else {
+                payload.append(key, value as string)
+              }
+            })
+
+            await completeOnboarding(payload)
         }} className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm md:p-10">
           
           {step === 1 && (
@@ -164,7 +176,6 @@ function VolontarioWizardForm() {
                     return (
                       <button key={tag.id} type="button" onClick={() => toggleMulti('tags', tag.id)} className={`rounded-xl transition-all duration-200 ${active ? 'scale-105 ring-2 ring-blue-500 ring-offset-2 opacity-100' : 'grayscale opacity-50 hover:grayscale-0 hover:opacity-100'}`}>
                         <TagBadge nome={tag.name} size="md" />
-                        <input type="hidden" name="tags" value={tag.id} disabled={!active} />
                       </button>
                     )
                   })}
@@ -179,7 +190,6 @@ function VolontarioWizardForm() {
                     return (
                       <button key={comp.id} type="button" onClick={() => toggleMulti('competenze', comp.id)} className={`rounded-lg transition-all duration-200 ${active ? 'scale-105 ring-2 ring-slate-800 ring-offset-2 opacity-100' : 'grayscale opacity-50 hover:grayscale-0 hover:opacity-100'}`}>
                         <CompetenzaBadge nome={comp.name} />
-                        <input type="hidden" name="competenze" value={comp.id} disabled={!active} />
                       </button>
                     )
                   })}
