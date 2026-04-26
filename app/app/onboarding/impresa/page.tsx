@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo } from 'react'
+import { useState, useMemo, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { completeOnboarding } from '@/app/app/onboarding/actions'
 
@@ -12,7 +12,7 @@ type ImpresaFormState = {
   obiettiviEsg: string; valoriCause: string; tipologiaImpatto: string;
 }
 
-export default function ImpresaWizard() {
+function ImpresaWizardForm() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const redirectTo = searchParams.get('redirectTo') || ''
@@ -108,5 +108,17 @@ export default function ImpresaWizard() {
         </form>
       </section>
     </main>
+  )
+}
+
+export default function ImpresaWizard() {
+  return (
+    <Suspense fallback={
+      <div className="flex min-h-screen items-center justify-center bg-slate-50">
+        <span className="w-8 h-8 border-4 border-violet-600 border-t-transparent rounded-full animate-spin"></span>
+      </div>
+    }>
+      <ImpresaWizardForm />
+    </Suspense>
   )
 }

@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo, useEffect } from 'react'
+import { useState, useMemo, useEffect, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { completeOnboarding } from '@/app/app/onboarding/actions'
@@ -13,7 +13,7 @@ type AssociazioneFormState = {
   mission: string; tags: string[];
 }
 
-export default function AssociazioneWizard() {
+function AssociazioneWizardForm() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const redirectTo = searchParams.get('redirectTo') || ''
@@ -133,5 +133,17 @@ export default function AssociazioneWizard() {
         </form>
       </section>
     </main>
+  )
+}
+
+export default function AssociazioneWizard() {
+  return (
+    <Suspense fallback={
+      <div className="flex min-h-screen items-center justify-center bg-slate-50">
+        <span className="w-8 h-8 border-4 border-emerald-600 border-t-transparent rounded-full animate-spin"></span>
+      </div>
+    }>
+      <AssociazioneWizardForm />
+    </Suspense>
   )
 }
