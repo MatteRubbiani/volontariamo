@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useMemo, useEffect, Suspense } from 'react'
+import { useState, useMemo, useEffect, useRef, Suspense } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { createClient } from '@/lib/supabase/client'
 import { completeOnboarding } from '@/app/app/onboarding/actions'
@@ -22,7 +22,6 @@ function VolontarioWizardForm() {
   const [step, setStep] = useState<1 | 2>(1)
   const [isSubmitting, setIsSubmitting] = useState(false)
   
-  // Stati per il CAP e Città
   const [isFetchingCity, setIsFetchingCity] = useState(false)
   const [citySuggestions, setCitySuggestions] = useState<string[]>([])
   const [showCityDropdown, setShowCityDropdown] = useState(false)
@@ -30,12 +29,14 @@ function VolontarioWizardForm() {
   const [tagsCatalog, setTagsCatalog] = useState<{id: string, name: string}[]>([])
   const [competenzeCatalog, setCompetenzeCatalog] = useState<{id: string, name: string}[]>([])
   
+  // Ref per centrare l'input quando si apre la tendina
+  const cityFieldWrapperRef = useRef<HTMLDivElement | null>(null)
+  
   const [formData, setFormData] = useState<VolontarioFormState>({
     nome: '', cognome: '', telefono: '', sesso: '', dataNascita: '',
     gradoIstruzione: '', cap: '', cittaResidenza: '', bio: '', tags: [], competenze: []
   })
 
-  // Caricamento Cataloghi (Cause e Competenze)
   useEffect(() => {
     async function loadCatalogs() {
       const [tagsRes, compRes] = await Promise.all([
@@ -49,9 +50,22 @@ function VolontarioWizardForm() {
     loadCatalogs()
   }, [supabase])
 
-  // Maschera per Data di Nascita (GG/MM/AAAA)
+  // L'auto-scroll elegante (unica cosa buona suggerita dal bot)
+  useEffect(() => {
+    if (!showCityDropdown) return
+
+    const scrollToCityField = setTimeout(() => {
+      cityFieldWrapperRef.current?.scrollIntoView({
+        behavior: 'smooth',
+        block: 'center',
+      })
+    }, 100)
+
+    return () => clearTimeout(scrollToCityField)
+  }, [showCityDropdown])
+
   const handleDateChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    let val = e.target.value.replace(/\D/g, '') // Solo numeri
+    let val = e.target.value.replace(/\D/g, '')
     if (val.length > 8) val = val.slice(0, 8)
     
     let formatted = val
@@ -64,7 +78,6 @@ function VolontarioWizardForm() {
     setFormData(p => ({ ...p, dataNascita: formatted }))
   }
 
-  // Logica CAP -> Città con API Zippopotam e Dropdown Premium
   const handleCapChange = async (val: string) => {
     const cleanedVal = val.replace(/\D/g, '').slice(0, 5)
     setFormData(prev => ({ ...prev, cap: cleanedVal }))
@@ -75,24 +88,42 @@ function VolontarioWizardForm() {
       setShowCityDropdown(false)
       
       try {
-        const res = await fetch(`https://api.zippopotam.us/it/${cleanedVal}`)
-        if (res.ok) {
-          const data = await res.json()
+        const resZip = await fetch(`https://api.zippopotam.us/it/${cleanedVal}`)
+        
+        if (resZip.ok) {
+          const data = await resZip.json()
           if (data && data.places && data.places.length > 0) {
             const allCities = data.places.map((p: any) => p['place name'])
-            
             setFormData(prev => ({ ...prev, cittaResidenza: allCities[0] }))
             
             if (allCities.length > 1) {
               setCitySuggestions(allCities)
               setShowCityDropdown(true)
             }
+            return
           }
-        } else {
-          setFormData(prev => ({ ...prev, cittaResidenza: '' }))
         }
+
+        const resOsm = await fetch(`https://nominatim.openstreetmap.org/search?postalcode=${cleanedVal}&country=italy&format=json&addressdetails=1`)
+        
+        if (resOsm.ok) {
+          const dataOsm = await resOsm.json()
+          if (dataOsm && dataOsm.length > 0 && dataOsm[0].address) {
+            const addr = dataOsm[0].address
+            const cityName = addr.city || addr.town || addr.village || addr.municipality || ''
+            
+            if (cityName) {
+              setFormData(prev => ({ ...prev, cittaResidenza: cityName }))
+              return
+            }
+          }
+        }
+
+        setFormData(prev => ({ ...prev, cittaResidenza: '' }))
+
       } catch (err) {
         console.error("Errore recupero CAP:", err)
+        setFormData(prev => ({ ...prev, cittaResidenza: '' }))
       } finally {
         setIsFetchingCity(false)
       }
@@ -115,19 +146,22 @@ function VolontarioWizardForm() {
   const progress = (step / 2) * 100
 
   return (
-    // 🚨 1. LAYOUT APP-VIEW: Blocchiamo la main e rendiamo scrollabile solo il div interno
+    // 🚨 1. IL BLOCCO TOTALE: h-[calc...] fisso e overflow-hidden. Niente scroll di pagina.
     <main className="h-[calc(100dvh-5rem)] bg-slate-50 flex flex-col overflow-hidden">
       
-      {/* 🚨 2. CONTENITORE SCROLLABILE: Qui dentro vive il form. "overscroll-none" uccide il rimbalzo su iOS */}
-      <div className="flex-1 overflow-y-auto overscroll-none px-4 py-8 md:py-10 flex flex-col items-center">
-        <section className="w-full max-w-4xl mx-auto">
-          <div className="mb-8">
-            <p className="text-[10px] font-black uppercase text-slate-500 tracking-widest">Onboarding Volontario • Step {step} / 2</p>
-            <div className="mt-2 h-2 overflow-hidden rounded-full bg-slate-200">
-              <div className="h-full rounded-full bg-blue-600 transition-all duration-300" style={{ width: `${progress}%` }} />
-            </div>
+      {/* 🚨 2. L'INTESTAZIONE FISSA: Non scorre mai, resta sempre visibile sotto la navbar */}
+      <div className="w-full max-w-4xl mx-auto px-4 pt-6 shrink-0">
+        <div className="mb-4">
+          <p className="text-[10px] font-black uppercase text-slate-500 tracking-widest">Onboarding Volontario • Step {step} / 2</p>
+          <div className="mt-2 h-2 overflow-hidden rounded-full bg-slate-200">
+            <div className="h-full rounded-full bg-blue-600 transition-all duration-300" style={{ width: `${progress}%` }} />
           </div>
+        </div>
+      </div>
 
+      {/* 🚨 3. IL FORM SCROLLABILE: Solo questo div ha il permesso di scorrere (overflow-y-auto) */}
+      <div className="flex-1 overflow-y-auto w-full px-4 pb-12">
+        <section className="w-full max-w-4xl mx-auto pb-48">
           <form action={async () => {
               setIsSubmitting(true)
               
@@ -209,7 +243,7 @@ function VolontarioWizardForm() {
                     </div>
                   </div>
 
-                  {/* Gruppo Istruzione (Pills) */}
+                  {/* Gruppo Istruzione */}
                   <div className="space-y-2.5">
                     <label className="text-xs font-bold text-slate-500 uppercase tracking-wide ml-1">Grado di Istruzione</label>
                     <div className="flex flex-wrap gap-2.5">
@@ -239,13 +273,12 @@ function VolontarioWizardForm() {
                       <input type="tel" name="telefono" value={formData.telefono} onChange={(e) => setFormData(p => ({ ...p, telefono: e.target.value }))} className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3.5 font-medium outline-none transition-all focus:border-blue-600 focus:ring-1 focus:ring-blue-600" />
                     </div>
                     
-                    <div className="space-y-1.5 relative">
+                    <div ref={cityFieldWrapperRef} className="space-y-1.5 relative">
                       <label className="text-xs font-bold text-slate-500 uppercase tracking-wide ml-1">CAP *</label>
                       <input type="text" name="cap" placeholder="Es. 20100" value={formData.cap} onChange={(e) => handleCapChange(e.target.value)} className="w-full rounded-xl border border-slate-200 bg-white px-4 py-3.5 font-medium outline-none transition-all focus:border-blue-600 focus:ring-1 focus:ring-blue-600" maxLength={5} required />
                       {isFetchingCity && <span className="absolute right-4 top-10 w-4 h-4 border-2 border-blue-500 border-t-transparent rounded-full animate-spin"></span>}
                     </div>
                     
-                    {/* DROPDOWN PREMIUM PER LA CITTÀ */}
                     <div className="space-y-1.5 relative">
                       <label className="text-xs font-bold text-slate-500 uppercase tracking-wide ml-1">Città</label>
                       
@@ -261,7 +294,6 @@ function VolontarioWizardForm() {
                           autoComplete="off"
                         />
                         
-                        {/* Freccina cliccabile a destra */}
                         {citySuggestions.length > 1 && (
                           <button 
                             type="button" 
@@ -275,16 +307,13 @@ function VolontarioWizardForm() {
                         )}
                       </div>
 
-                      {/* Elenco a cascata galleggiante */}
                       {showCityDropdown && citySuggestions.length > 1 && (
                         <>
                           <div className="fixed inset-0 z-40" onClick={() => setShowCityDropdown(false)}></div>
-                          
                           <div className="absolute z-50 top-full left-0 right-0 mt-2 bg-white border border-slate-200 rounded-xl shadow-[0_10px_40px_rgba(0,0,0,0.1)] overflow-hidden animate-in fade-in slide-in-from-top-2">
                             <div className="bg-slate-50/90 px-4 py-2 border-b border-slate-100 backdrop-blur-sm">
                               <span className="text-[10px] font-black uppercase text-slate-500 tracking-widest">Scegli il comune corretto</span>
                             </div>
-                            {/* 🚨 3. OVERSCROLL-CONTAIN: Qui blocchiamo lo scorrimento della pagina dietro! */}
                             <div className="max-h-56 overflow-y-auto overscroll-contain p-1">
                               {citySuggestions.map((city, idx) => (
                                 <button
