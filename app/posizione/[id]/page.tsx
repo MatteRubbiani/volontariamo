@@ -161,31 +161,60 @@ export default async function DettaglioPosizioneVolontario({
   const statoCandidatura = candidatura?.stato === 'accettata' ? 'accettato' : candidatura?.stato === 'rifiutata' ? 'rifiutato' : candidatura?.stato
   const dataFormattata = formattaData(pos.quando, pos.tipo);
 
-  // 🚨 2. DATI STRUTTURATI JSON-LD (PER GOOGLE JOBS & EVENTS)
-  const jsonLd = {
-    '@context': 'https://schema.org',
-    '@type': pos.tipo === 'una_tantum' ? 'Event' : 'JobPosting',
-    title: pos.titolo,
-    description: pos.descrizione,
-    identifier: {
-      '@type': 'PropertyValue',
-      name: nomeAssociazione,
-      value: id,
-    },
-    datePosted: new Date().toISOString(),
-    employmentType: 'VOLUNTEER',
-    hiringOrganization: {
-      '@type': 'NGO',
-      name: nomeAssociazione,
-    },
-    jobLocation: {
-      '@type': 'Place',
-      address: {
-        '@type': 'PostalAddress',
-        addressLocality: pos.dove,
-        addressCountry: 'IT',
+  // 🚨 L'ARMA SEGRETA SEO: Dati strutturati dinamici
+  let jsonLd = {}
+
+  if (pos.tipo === 'una_tantum') {
+    // FORMATO PER EVENTI SINGOLI (Event)
+    // Costruiamo le date ISO corrette se le abbiamo
+    const startDate = pos.data_esatta ? `${pos.data_esatta}T${pos.ora_inizio || '08:00'}:00` : new Date().toISOString()
+    const endDate = pos.data_esatta && pos.ora_fine ? `${pos.data_esatta}T${pos.ora_fine}:00` : undefined
+
+    jsonLd = {
+      '@context': 'https://schema.org',
+      '@type': 'Event',
+      name: pos.titolo, // 🚨 Gli eventi vogliono "name", non "title"
+      description: pos.descrizione,
+      startDate: startDate,
+      endDate: endDate,
+      eventAttendanceMode: 'https://schema.org/OfflineEventAttendanceMode',
+      eventStatus: 'https://schema.org/EventScheduled',
+      location: { // 🚨 Gli eventi vogliono "location", non "jobLocation"
+        '@type': 'Place',
+        name: pos.dove,
+        address: {
+          '@type': 'PostalAddress',
+          addressLocality: pos.dove,
+          addressCountry: 'IT',
+        },
       },
-    },
+      organizer: { // 🚨 Gli eventi vogliono "organizer", non "hiringOrganization"
+        '@type': 'NGO',
+        name: nomeAssociazione,
+      },
+    }
+  } else {
+    // FORMATO PER VOLONTARIATO RICORRENTE (JobPosting)
+    jsonLd = {
+      '@context': 'https://schema.org',
+      '@type': 'JobPosting',
+      title: pos.titolo, // 🚨 I JobPosting vogliono "title"
+      description: pos.descrizione,
+      datePosted: new Date().toISOString(), // Data di pubblicazione
+      employmentType: 'VOLUNTEER',
+      hiringOrganization: {
+        '@type': 'NGO',
+        name: nomeAssociazione,
+      },
+      jobLocation: {
+        '@type': 'Place',
+        address: {
+          '@type': 'PostalAddress',
+          addressLocality: pos.dove,
+          addressCountry: 'IT',
+        },
+      },
+    }
   }
 
   const CallToActionButton = ({ className = "" }: { className?: string }) => {
