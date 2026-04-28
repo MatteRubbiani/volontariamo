@@ -9,6 +9,7 @@ import TagBadge from '@/components/TagBadge'
 import CompetenzaBadge from '@/components/CompetenzaBadge'
 import PosizioneQuestionPanel from '@/components/PosizioneQuestionPanel'
 
+// 🚨 1. GENERAZIONE METADATI SEO & SOCIAL (OPEN GRAPH)
 export async function generateMetadata(
   { params }: { params: Promise<{ id: string }> },
   parent: ResolvingMetadata
@@ -37,10 +38,25 @@ export async function generateMetadata(
   const nomeAssociazione =
     (Array.isArray((posizione as any).associazione) ? (posizione as any).associazione[0]?.nome : (posizione as any).associazione?.nome) ||
     'Associazione'
-  const title = `${posizione.titolo} | Volontariando`
+    
+  const title = `${posizione.titolo} | ${nomeAssociazione}`
   const description = (posizione.descrizione || '').replace(/\s+/g, ' ').trim().slice(0, 160)
 
-  return { title, description }
+  return { 
+    title, 
+    description,
+    openGraph: {
+      title,
+      description,
+      type: 'article',
+      siteName: 'Volontariando',
+    },
+    twitter: {
+      card: 'summary_large_image',
+      title,
+      description,
+    }
+  }
 }
 
 export default async function DettaglioPosizioneVolontario({
@@ -120,7 +136,6 @@ export default async function DettaglioPosizioneVolontario({
     revalidatePath(`/posizione/${id}`)
   }
 
-  // FUNZIONI DI FORMATTAZIONE PIÙ UMANE E CALDE
   const formattaOra = (ora: string | null) => ora ? ora.substring(0, 5) : '--:--'
   
   const formattaData = (dataString: string | null, tipo: string) => {
@@ -133,29 +148,46 @@ export default async function DettaglioPosizioneVolontario({
         return dataString;
       }
     }
-    // Formato per le ricorrenti
     return `Ogni ${dataString}`;
   }
 
   const nomeAssociazione = pos.associazioni?.nome || pos.associazioni?.email_contatto || 'Associazione'
   const inizialeAssociazione = nomeAssociazione.charAt(0).toUpperCase()
-  
   const competenzeRichieste = pos.competenze?.map((c: any) => c.competenza).filter(Boolean) || []
   const competenzeMatch = competenzeRichieste.filter((c: any) => competenzeVolontario.includes(c.id))
   const competenzeMancanti = competenzeRichieste.filter((c: any) => !competenzeVolontario.includes(c.id))
-
   const imgUrl = pos.media_associazioni?.url || null;
   const inizialePosizione = pos.titolo ? pos.titolo.charAt(0).toUpperCase() : 'V';
-  const statoCandidatura = candidatura?.stato === 'accettata'
-    ? 'accettato'
-    : candidatura?.stato === 'rifiutata'
-      ? 'rifiutato'
-      : candidatura?.stato
-
-  // Applichiamo la formattazione calda
+  const statoCandidatura = candidatura?.stato === 'accettata' ? 'accettato' : candidatura?.stato === 'rifiutata' ? 'rifiutato' : candidatura?.stato
   const dataFormattata = formattaData(pos.quando, pos.tipo);
 
-  // Componente per il bottone CTA, riutilizzabile su desktop (sidebar) e mobile (bottom bar)
+  // 🚨 2. DATI STRUTTURATI JSON-LD (PER GOOGLE JOBS & EVENTS)
+  const jsonLd = {
+    '@context': 'https://schema.org',
+    '@type': pos.tipo === 'una_tantum' ? 'Event' : 'JobPosting',
+    title: pos.titolo,
+    description: pos.descrizione,
+    identifier: {
+      '@type': 'PropertyValue',
+      name: nomeAssociazione,
+      value: id,
+    },
+    datePosted: new Date().toISOString(),
+    employmentType: 'VOLUNTEER',
+    hiringOrganization: {
+      '@type': 'NGO',
+      name: nomeAssociazione,
+    },
+    jobLocation: {
+      '@type': 'Place',
+      address: {
+        '@type': 'PostalAddress',
+        addressLocality: pos.dove,
+        addressCountry: 'IT',
+      },
+    },
+  }
+
   const CallToActionButton = ({ className = "" }: { className?: string }) => {
     if (!user) {
       return (
@@ -190,14 +222,15 @@ export default async function DettaglioPosizioneVolontario({
 
   return (
     <div className="min-h-screen bg-white text-slate-900 font-sans selection:bg-slate-200">
+      {/* 🚨 INIEZIONE JSON-LD */}
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+      />
       
       <div className="w-full h-[35vh] md:h-[50vh] relative bg-slate-100">
         {imgUrl ? (
-          <img 
-            src={imgUrl} 
-            alt={pos.titolo} 
-            className="w-full h-full object-cover"
-          />
+          <img src={imgUrl} alt={pos.titolo} className="w-full h-full object-cover" />
         ) : (
           <div className="absolute inset-0 flex items-center justify-center bg-slate-100">
             <span className="text-slate-200 text-8xl font-black">{inizialePosizione}</span>
@@ -205,10 +238,7 @@ export default async function DettaglioPosizioneVolontario({
         )}
         
         <div className="absolute top-6 left-4 md:left-10 z-10">
-          <Link 
-            href={backUrl} 
-            className="inline-flex items-center justify-center w-10 h-10 bg-white text-slate-900 rounded-full shadow-md hover:scale-105 transition-transform"
-          >
+          <Link href={backUrl} className="inline-flex items-center justify-center w-10 h-10 bg-white text-slate-900 rounded-full shadow-md hover:scale-105 transition-transform">
             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-5 h-5">
               <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5 8.25 12l7.5-7.5" />
             </svg>
@@ -216,26 +246,18 @@ export default async function DettaglioPosizioneVolontario({
         </div>
       </div>
 
-      {/* Aumentato il padding-bottom per garantire che il mobile scorra oltre la sticky bar */}
       <div className="max-w-[1120px] mx-auto px-6 md:px-10 pb-40 md:pb-24">
-        
         <div className="flex flex-col md:flex-row pt-8 md:pt-12 md:gap-24">
-          
           <div className="w-full md:flex-1">
-            
             <div className="mb-8 border-b border-slate-100 pb-8">
               <div className="flex items-center gap-2 mb-4">
-                {pos.tipo === 'una_tantum' ? (
-                  <span className="text-[11px] font-black uppercase tracking-widest text-slate-500">Evento Singolo</span>
-                ) : (
-                  <span className="text-[11px] font-black uppercase tracking-widest text-slate-900">Ricorrente</span>
-                )}
+                <span className={`text-[11px] font-black uppercase tracking-widest ${pos.tipo === 'una_tantum' ? 'text-slate-500' : 'text-slate-900'}`}>
+                  {pos.tipo === 'una_tantum' ? 'Evento Singolo' : 'Ricorrente'}
+                </span>
               </div>
-              
               <h1 className="text-[1.75rem] md:text-4xl font-semibold text-slate-900 leading-[1.15] tracking-tight mb-4">
                 {pos.titolo}
               </h1>
-              
               <div className="text-sm font-medium text-slate-900 flex flex-wrap items-center gap-2">
                 <span className="underline">{pos.dove}</span>
                 <span>·</span>
@@ -248,15 +270,12 @@ export default async function DettaglioPosizioneVolontario({
                 {inizialeAssociazione}
               </Link>
               <div>
-                <p className="font-semibold text-slate-900 text-base">
-                  Organizzato da {nomeAssociazione}
-                </p>
+                <p className="font-semibold text-slate-900 text-base">Organizzato da {nomeAssociazione}</p>
                 <p className="text-sm text-slate-500">Iscritto a Volontariando</p>
               </div>
             </div>
 
             <hr className="border-slate-200 my-8" />
-            
             <div className="flex flex-col gap-6">
               <div className="flex items-start gap-4">
                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-7 h-7 text-slate-900 flex-shrink-0">
@@ -268,7 +287,6 @@ export default async function DettaglioPosizioneVolontario({
                   <p className="text-sm text-slate-500 mt-0.5">La posizione esatta verrà fornita dopo la candidatura.</p>
                 </div>
               </div>
-
               <div className="flex items-start gap-4">
                 <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-7 h-7 text-slate-900 flex-shrink-0">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0v-7.5A2.25 2.25 0 0 1 5.25 9h13.5A2.25 2.25 0 0 1 21 11.25v7.5" />
@@ -281,7 +299,6 @@ export default async function DettaglioPosizioneVolontario({
             </div>
 
             <hr className="border-slate-200 my-8" />
-
             <div>
               <h2 className="text-xl font-semibold text-slate-900 mb-4">Informazioni sull'attività</h2>
               <div className="prose prose-slate prose-lg max-w-none text-slate-700 leading-relaxed font-normal">
@@ -290,7 +307,6 @@ export default async function DettaglioPosizioneVolontario({
             </div>
 
             <hr className="border-slate-200 my-8" />
-
             {pos.tags && pos.tags.length > 0 && (
               <div>
                 <h2 className="text-xl font-semibold text-slate-900 mb-4">Settori di intervento</h2>
@@ -339,16 +355,12 @@ export default async function DettaglioPosizioneVolontario({
                   buttonClassName="w-full col-span-1"
                 />
               </div>
-              <p className="text-center text-xs text-slate-500 mt-4">
-                L'associazione valuterà il tuo profilo.
-              </p>
+              <p className="text-center text-xs text-slate-500 mt-4">L'associazione valuterà il tuo profilo.</p>
             </div>
           </div>
-
         </div>
       </div>
 
-      {/* 📱 STICKY BOTTOM BAR (SOLO MOBILE) - Fix Layout e Flexbox */}
       <div className="md:hidden fixed bottom-0 left-0 w-full bg-white border-t border-slate-200 px-5 py-4 z-50 flex flex-col gap-3 pb-[calc(1rem+env(safe-area-inset-bottom))] shadow-[0_-8px_24px_rgba(0,0,0,0.06)]">
         <div className="flex flex-col min-w-0">
           <span className="font-semibold text-slate-900 truncate capitalize">{dataFormattata}</span>
@@ -366,7 +378,6 @@ export default async function DettaglioPosizioneVolontario({
           />
         </div>
       </div>
-
     </div>
   )
 }
