@@ -162,24 +162,28 @@ export default async function DettaglioPosizioneVolontario({
   const dataFormattata = formattaData(pos.quando, pos.tipo);
 
   // 🚨 L'ARMA SEGRETA SEO: Dati strutturati dinamici
+  // Recuperiamo l'URL base per i link assoluti richiesti da Google
+  const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://volontariando.work';
+
+  // 🚨 L'ARMA SEGRETA SEO POTENZIATA
   let jsonLd = {}
 
   if (pos.tipo === 'una_tantum') {
-    // FORMATO PER EVENTI SINGOLI (Event)
-    // Costruiamo le date ISO corrette se le abbiamo
     const startDate = pos.data_esatta ? `${pos.data_esatta}T${pos.ora_inizio || '08:00'}:00` : new Date().toISOString()
     const endDate = pos.data_esatta && pos.ora_fine ? `${pos.data_esatta}T${pos.ora_fine}:00` : undefined
 
     jsonLd = {
       '@context': 'https://schema.org',
       '@type': 'Event',
-      name: pos.titolo, // 🚨 Gli eventi vogliono "name", non "title"
+      name: pos.titolo,
       description: pos.descrizione,
       startDate: startDate,
       endDate: endDate,
       eventAttendanceMode: 'https://schema.org/OfflineEventAttendanceMode',
       eventStatus: 'https://schema.org/EventScheduled',
-      location: { // 🚨 Gli eventi vogliono "location", non "jobLocation"
+      // 📸 AGGIUNTA IMMAGINE
+      image: imgUrl ? [imgUrl] : [],
+      location: {
         '@type': 'Place',
         name: pos.dove,
         address: {
@@ -188,23 +192,35 @@ export default async function DettaglioPosizioneVolontario({
           addressCountry: 'IT',
         },
       },
-      organizer: { // 🚨 Gli eventi vogliono "organizer", non "hiringOrganization"
+      // 🎫 AGGIUNTA OFFERS (Ingresso gratuito)
+      offers: {
+        '@type': 'Offer',
+        url: `${baseUrl}/posizione/${id}`,
+        price: '0',
+        priceCurrency: 'EUR',
+        availability: 'https://schema.org/InStock',
+        validFrom: new Date().toISOString()
+      },
+      organizer: {
         '@type': 'NGO',
         name: nomeAssociazione,
+        url: `${baseUrl}/associazione/${pos.associazioni?.id}` // 🔗 AGGIUNTO URL
       },
     }
   } else {
-    // FORMATO PER VOLONTARIATO RICORRENTE (JobPosting)
     jsonLd = {
       '@context': 'https://schema.org',
       '@type': 'JobPosting',
-      title: pos.titolo, // 🚨 I JobPosting vogliono "title"
+      title: pos.titolo,
       description: pos.descrizione,
-      datePosted: new Date().toISOString(), // Data di pubblicazione
+      datePosted: new Date().toISOString(),
       employmentType: 'VOLUNTEER',
+      // 📸 AGGIUNTA IMMAGINE
+      image: imgUrl ? imgUrl : undefined,
       hiringOrganization: {
         '@type': 'NGO',
         name: nomeAssociazione,
+        sameAs: `${baseUrl}/associazione/${pos.associazioni?.id}` // 🔗 AGGIUNTO URL
       },
       jobLocation: {
         '@type': 'Place',
