@@ -7,9 +7,22 @@ import Navbar from "@/components/Navbar";
 import FeedbackButton from "@/components/FeedbackButton";
 import { NavbarWrapper } from "@/components/NavbarWrapper";
 
-const defaultUrl = process.env.VERCEL_URL
+// 1. Configurazione dell'URL di base (priorità alla variabile d'ambiente di produzione)
+const defaultUrl = process.env.NEXT_PUBLIC_SITE_URL
+  ? `https://${process.env.NEXT_PUBLIC_SITE_URL}`
+  : process.env.VERCEL_URL
   ? `https://${process.env.VERCEL_URL}`
   : "http://localhost:3000";
+
+// 2. Controllo granulare per l'indicizzazione: 
+// Sblocchiamo Google solo su app.volontariando.it o sul dominio nudo
+let isProduction = false;
+try {
+  const hostname = new URL(defaultUrl).hostname;
+  isProduction = hostname === 'app.volontariando.it' || hostname === 'volontariando.it';
+} catch (e) {
+  isProduction = false;
+}
 
 export const metadata: Metadata = {
   metadataBase: new URL(defaultUrl),
@@ -21,11 +34,16 @@ export const metadata: Metadata = {
   icons: {
     icon: '/icon',
   },
-  // 🚨 ECCO IL CODICE DI VERIFICA DI GOOGLE SEARCH CONSOLE
+  // 🚨 COMANDO PER I BOT: indicizza solo in produzione
+  robots: {
+    index: isProduction,
+    follow: isProduction,
+  },
+  // 🎯 VERIFICA PROPRIETÀ GOOGLE SEARCH CONSOLE
   verification: {
     google: "4M7SfimwwLv-f_B58F-qbJVWbwgQzootomRGMjQlhNU",
   },
-  // 🚀 L'AGGIUNTA SOCIAL SEO PER LE CONDIVISIONI SU WHATSAPP/LINKEDIN
+  // Social SEO (Open Graph)
   openGraph: {
     type: "website",
     locale: "it_IT",
@@ -35,7 +53,7 @@ export const metadata: Metadata = {
     siteName: "Volontariando",
     images: [
       {
-        url: "/opengraph-image.png", // Ricordati di creare un'immagine 1200x630px nella cartella /public (o /app)
+        url: "/opengraph-image.png",
         width: 1200,
         height: 630,
         alt: "Anteprima piattaforma Volontariando",
@@ -72,7 +90,6 @@ export default function RootLayout({
         >
           <div className="min-h-screen flex flex-col">
             
-            {/* <-- IL NOSTRO SEMAFORO ENTRA IN AZIONE QUI --> */}
             <NavbarWrapper>
               <Navbar /> 
             </NavbarWrapper>
