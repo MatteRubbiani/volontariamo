@@ -254,12 +254,10 @@ export default function VistaEsplora() {
                 ? 'translateY(100%)' 
                 : isDrawerOpen 
                     ? `translateY(${Math.max(0, dragY)}px)` 
-                    // 🚨 CALCOLO AGGIORNATO A 65px! Più spazio per la mappa
                     : `translateY(calc(100% - 65px - env(safe-area-inset-bottom) + ${Math.min(0, dragY)}px))`,
             touchAction: 'none'
           }}
         >
-          {/* 🚨 AREA MANIGLIA RIDOTTA A 65px */}
           <div 
             className="w-full h-[65px] flex-shrink-0 flex flex-col items-center justify-start pt-4 cursor-grab active:cursor-grabbing touch-none"
             onPointerDown={handlePointerDown}

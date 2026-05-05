@@ -7,13 +7,12 @@ import 'leaflet/dist/leaflet.css'
 import L from 'leaflet'
 
 // ==========================================
-// GLI EVENTI INTERNI ALLA MAPPA (Non toccare!)
+// GLI EVENTI INTERNI ALLA MAPPA
 // ==========================================
 function MapEvents({ onBoundsChange, onMapReady, forcedLat, forcedLng, forcedZoom }: any) {
   const map = useMap()
   const didInit = useRef(false)
   
-  // Vola dove l'URL gli dice di volare
   useEffect(() => {
     if (forcedLat && forcedLng) {
       map.flyTo([forcedLat, forcedLng], forcedZoom, { animate: true, duration: 1.5 })
@@ -45,14 +44,10 @@ function MapEvents({ onBoundsChange, onMapReady, forcedLat, forcedLng, forcedZoo
 }
 
 // ==========================================
-// FUNZIONE PER CREARE I PIN "PREMIUM" (PILLOLE SOSPESE)
+// FUNZIONE PER CREARE I PIN "PREMIUM"
 // ==========================================
 const createPositionIcon = (tipo: string, isActive: boolean) => {
   const isUnaTantum = tipo === 'una_tantum';
-  
-  // Airbnb Style: Pin inattivi sono bianchi con icona nera/grigia e bordo sottile. 
-  // Pin attivi invertono diventando neri con icona bianca e crescono.
-  
   const bgColor = isActive ? 'bg-slate-900' : 'bg-white';
   const textColor = isActive ? 'text-white' : 'text-slate-800';
   const shadow = isActive ? 'shadow-[0_10px_20px_rgba(0,0,0,0.2)]' : 'shadow-[0_4px_12px_rgba(0,0,0,0.1)]';
@@ -66,98 +61,54 @@ const createPositionIcon = (tipo: string, isActive: boolean) => {
   const html = `
     <div class="transition-transform duration-300 ease-[cubic-bezier(0.34,1.56,0.64,1)] ${scale}">
       <div class="flex items-center justify-center w-8 h-8 rounded-full ${bgColor} ${textColor} ${shadow} ${border} transition-colors duration-200">
-        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor" class="w-4 h-4">
-           ${svgContent}
-        </svg>
+        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2.5" stroke="currentColor" class="w-4 h-4">${svgContent}</svg>
       </div>
     </div>
   `
-  // Sostituiamo il divIcon nativo. Togliamo la codina e centriamo esattamente il cerchio.
-  return L.divIcon({ 
-      html, 
-      className: 'custom-leaflet-marker', // Va disattivato in CSS globale se ha background
-      iconSize: [32, 32], 
-      iconAnchor: [16, 16] // Il centro del pin coincide con le coordinate esatte
-  })
+  return L.divIcon({ html, className: 'custom-leaflet-marker', iconSize: [32, 32], iconAnchor: [16, 16] })
 }
 
-// ==========================================
-// COMPONENTE PRINCIPALE DELLA MAPPA
-// ==========================================
 export default function MappaEsplora({ 
-  posizioni = [], 
-  hoveredId, 
-  setHoveredId, 
-  focusedId, 
-  setFocusedId, 
-  onMapReady,
-  onBoundsChange, 
-  forcedLat, 
-  forcedLng, 
-  forcedZoom 
+  posizioni = [], hoveredId, setHoveredId, focusedId, setFocusedId, onMapReady, onBoundsChange, forcedLat, forcedLng, forcedZoom 
 }: any) {
   const [isMounted, setIsMounted] = useState(false)
   const [mapInstance, setMapInstance] = useState<L.Map | null>(null)
-  
-  // Stati per il mirino
   const router = useRouter()
   const searchParams = useSearchParams()
   const [locating, setLocating] = useState(false)
 
-  useEffect(() => {
-    setIsMounted(true)
-  }, [])
+  useEffect(() => { setIsMounted(true) }, [])
 
-  // 🎯 LA LOGICA DEL MIRINO
   const handleLocate = (e: React.MouseEvent) => {
     e.preventDefault();
-    
     if (!("geolocation" in navigator)) {
-      alert("Ops! 🧭 Il tuo dispositivo non sembra supportare la geolocalizzazione. Prova a inserire la città a mano nella barra di ricerca.");
+      alert("Geolocalizzazione non supportata.");
       return;
     }
-
     setLocating(true);
     navigator.geolocation.getCurrentPosition(
       async (position) => {
         const { latitude, longitude } = position.coords;
-        
         try {
           const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&zoom=10&addressdetails=1`);
           const data = await res.json();
-          
-          const city = data?.address?.city || data?.address?.town || data?.address?.village || data?.address?.municipality || "La tua posizione";
-
+          const city = data?.address?.city || data?.address?.town || data?.address?.village || "La tua posizione";
           const params = new URLSearchParams(searchParams.toString());
           params.set('lat', latitude.toString());
           params.set('lng', longitude.toString());
           params.set('indirizzo', city);
           router.push(`?${params.toString()}`);
-          
-          if (mapInstance) {
-            mapInstance.flyTo([latitude, longitude], 13, { animate: true, duration: 1.5 });
-          }
+          if (mapInstance) mapInstance.flyTo([latitude, longitude], 13, { animate: true, duration: 1.5 });
         } catch (error) {
-           console.error("Errore recupero nome città:", error);
            const params = new URLSearchParams(searchParams.toString());
            params.set('lat', latitude.toString());
            params.set('lng', longitude.toString());
            params.set('indirizzo', "La tua posizione");
            router.push(`?${params.toString()}`);
-           
            if (mapInstance) mapInstance.flyTo([latitude, longitude], 13, { animate: true });
-        } finally {
-          setLocating(false);
-        }
+        } finally { setLocating(false); }
       },
-      (err) => {
-        setLocating(false);
-        if (err.code === err.PERMISSION_DENIED) {
-           alert("Accesso alla posizione bloccato 🛑.\n\nSe usi Safari o iPhone, assicurati di aver attivato la Localizzazione nelle Impostazioni di Sistema (Privacy > Localizzazione). In alternativa, scrivi la tua città nella barra di ricerca!");
-        } else {
-           alert("Non riusciamo a rilevare la tua posizione esatta 🌍. Il segnale GPS potrebbe essere debole in questo momento. Prova a scriverla manualmente.");
-        }
-      },
+      () => { setLocating(false); alert("Impossibile rilevare la posizione."); },
       { enableHighAccuracy: true, timeout: 10000 }
     );
   };
@@ -166,47 +117,24 @@ export default function MappaEsplora({
 
   return (
     <div className="relative h-full w-full z-0 bg-slate-100">
-      {/* MAP CONTAINER */}
-      <MapContainer 
-        center={[41.8719, 12.5674]} 
-        zoom={6} 
-        style={{ height: '100%', width: '100%' }} 
-        zoomControl={false}
-        ref={setMapInstance}
-      >
+      <MapContainer center={[41.8719, 12.5674]} zoom={6} style={{ height: '100%', width: '100%' }} zoomControl={false} ref={setMapInstance}>
         <TileLayer url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png" />
-        
-        <MapEvents 
-          onMapReady={onMapReady}
-          onBoundsChange={onBoundsChange} 
-          forcedLat={forcedLat} 
-          forcedLng={forcedLng} 
-          forcedZoom={forcedZoom} 
-        />
-
+        <MapEvents onMapReady={onMapReady} onBoundsChange={onBoundsChange} forcedLat={forcedLat} forcedLng={forcedLng} forcedZoom={forcedZoom} />
         {posizioni.map((pos: any) => {
           if (!pos.lat || !pos.lng) return null;
-          const lat = pos.lat;
-          const lng = pos.lng;
           const active = hoveredId === pos.id || focusedId === pos.id;
-
           return (
             <Marker 
               key={pos.id} 
-              position={[lat, lng]} 
+              position={[pos.lat, pos.lng]} 
               icon={createPositionIcon(pos.tipo, active)}
               zIndexOffset={active ? 1000 : 0}
               eventHandlers={{
                 mouseover: () => setHoveredId(pos.id),
                 mouseout: () => setHoveredId(null),
-                // Al click settiamo il focus e facciamo scivolare la mappa per centrare meglio il pin,
-                // il Popup nativo rimosso perché gestiamo la Card custom!
                 click: () => {
                    setFocusedId(pos.id);
-                   if (mapInstance) {
-                      // Pan "furbo": alza leggermente il centro così la tua card fluttuante non copre il pin cliccato!
-                      mapInstance.panTo([lat + 0.005, lng], { animate: true });
-                   }
+                   if (mapInstance) mapInstance.panTo([pos.lat + 0.005, pos.lng], { animate: true });
                 }
               }}
             />
@@ -214,8 +142,13 @@ export default function MappaEsplora({
         })}
       </MapContainer>
 
-      {/* 🚨 IL MIRINO OUTSIDE! */}
-      <div className="absolute bottom-6 right-6 z-[1000]">
+      {/* 🎯 IL MIRINO: Spostato a sinistra e alzato su mobile per scavalcare la tendina */}
+      {/* 🎯 IL MIRINO GEOLOCALIZZAZIONE */}
+      <div className="
+        absolute z-[1000] 
+        bottom-[90px] left-[15px]   /* 📱 MOBILE: Sopra la tendina, a sinistra */
+        lg:bottom-[30px] lg:left-[30px] /* 💻 DESKTOP: Ben distanziato dal bordo in basso a sx */
+      ">
         <button 
           onClick={handleLocate}
           title="Trova la mia posizione"
@@ -230,11 +163,6 @@ export default function MappaEsplora({
           )}
         </button>
       </div>
-      
-      {/* IMPORTANTE: Nel tuo `globals.css` ricordati di avere:
-          .custom-leaflet-marker { background: none; border: none; }
-      */}
-
     </div>
   )
 }

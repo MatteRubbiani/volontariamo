@@ -159,38 +159,38 @@ export default function SharedChatWidget({
   }
 
   return (
-    // 🚨 IL FIX: flex-1 min-h-0 overflow-hidden blinda il contenitore, impedendogli di crescere all'infinito
     <div className="flex flex-col flex-1 min-h-0 h-full overflow-hidden">
       
-      {/* AREA MESSAGGI (Autorizzata a scrollare internamente) */}
+      {/* AREA MESSAGGI: Resa più clean, senza bordi tratteggiati, con sfondo morbido */}
       <div
         ref={chatScrollRef}
-        className="flex-1 overflow-y-auto space-y-3 rounded-[1.5rem] border border-dashed border-slate-200 bg-white/80 p-4 shadow-sm scroll-smooth [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-slate-200 hover:[&::-webkit-scrollbar-thumb]:bg-slate-300 [&::-webkit-scrollbar-thumb]:rounded-full transition-colors"
+        className="flex-1 overflow-y-auto space-y-4 rounded-3xl bg-slate-50/50 p-4 scroll-smooth [&::-webkit-scrollbar]:w-1.5 [&::-webkit-scrollbar-track]:bg-transparent [&::-webkit-scrollbar-thumb]:bg-slate-200 hover:[&::-webkit-scrollbar-thumb]:bg-slate-300 [&::-webkit-scrollbar-thumb]:rounded-full transition-colors"
       >
         {isLoadingMessages ? (
           <div className="flex h-full items-center justify-center">
-            <div className="h-6 w-6 animate-spin rounded-full border-2 border-slate-300 border-t-emerald-600" />
+            <div className="h-6 w-6 animate-spin rounded-full border-2 border-slate-200 border-t-emerald-500" />
           </div>
         ) : messages.length === 0 ? (
           <div className="flex h-full items-center justify-center">
-            <p className="text-xs font-bold uppercase tracking-[0.2em] text-slate-300 italic">
+            <div className="rounded-full bg-white px-4 py-1.5 text-[13px] font-medium text-slate-400 shadow-sm border border-slate-100">
               Inizia la conversazione...
-            </p>
+            </div>
           </div>
         ) : (
           messages.map((message) => {
             const isMine = message.mittente_id === currentUserId
             return (
               <div key={message.id} className={`flex ${isMine ? 'justify-end' : 'justify-start'}`}>
+                {/* BOLLE DI TESTO: Stile moderno con angoli asimmetrici per indicare la coda del fumetto */}
                 <div
-                  className={`max-w-[85%] rounded-2xl px-4 py-2.5 text-sm shadow-sm ${
+                  className={`max-w-[80%] px-4 py-2.5 text-[15px] shadow-sm ${
                     isMine
-                      ? 'bg-emerald-600 text-white rounded-br-sm'
-                      : 'bg-white border border-slate-200 text-slate-800 rounded-bl-sm'
+                      ? 'bg-emerald-600 text-white rounded-[20px] rounded-br-[4px]'
+                      : 'bg-white border border-slate-100 text-slate-800 rounded-[20px] rounded-bl-[4px]'
                   }`}
                 >
                   <p className="leading-relaxed break-words">{message.testo}</p>
-                  <p className={`mt-1 text-[10px] font-bold ${isMine ? 'text-emerald-100' : 'text-slate-400'}`}>
+                  <p className={`mt-1 text-[11px] font-medium flex ${isMine ? 'text-emerald-100 justify-end' : 'text-slate-400 justify-start'}`}>
                     {new Date(message.created_at).toLocaleTimeString('it-IT', {
                       hour: '2-digit',
                       minute: '2-digit'
@@ -203,32 +203,32 @@ export default function SharedChatWidget({
         )}
       </div>
 
-      {/* BARRA INPUT (Blindata in fondo con shrink-0) */}
-      <form onSubmit={sendMessage} className="shrink-0 mt-4 pb-1">
+      {/* BARRA INPUT: Trasformata a "pillola" in stile iOS, pulsante invio perfettamente tondo */}
+      <form onSubmit={sendMessage} className="shrink-0 mt-3 pb-1">
         {chatError && (
-          <p className="mb-2 rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-xs font-semibold text-red-700 animate-in fade-in zoom-in slide-in-from-bottom-2 duration-300">
+          <p className="mb-3 rounded-2xl border border-red-100 bg-red-50 px-4 py-2.5 text-[13px] font-medium text-red-600 animate-in fade-in slide-in-from-bottom-2 duration-300">
             {chatError}
           </p>
         )}
-        <div className="relative">
+        <div className="relative flex items-center">
           <input
             type="text"
             value={newMessage}
             onChange={(event) => setNewMessage(event.target.value)}
             placeholder="Scrivi un messaggio..."
             disabled={isLoadingMessages || isSendingMessage}
-            className="w-full rounded-2xl border border-slate-200 bg-white p-4 pr-14 text-sm font-medium outline-none transition-all placeholder:text-slate-400 focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10 disabled:cursor-not-allowed disabled:opacity-60"
+            className="w-full rounded-full border border-slate-200 bg-white px-5 py-3.5 pr-14 text-[15px] outline-none transition-all placeholder:text-slate-400 focus:border-emerald-500 focus:ring-4 focus:ring-emerald-500/10 disabled:cursor-not-allowed disabled:bg-slate-50 disabled:opacity-70"
           />
           <button
             type="submit"
             disabled={isLoadingMessages || isSendingMessage || !newMessage.trim()}
-            className="absolute right-2 top-2 rounded-xl bg-emerald-600 p-2.5 text-white shadow-md transition-all hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50 active:scale-95"
+            className="absolute right-1.5 flex h-10 w-10 items-center justify-center rounded-full bg-emerald-600 text-white shadow-sm transition-all hover:bg-emerald-700 hover:scale-105 active:scale-95 disabled:cursor-not-allowed disabled:opacity-50 disabled:hover:scale-100"
           >
             {isSendingMessage ? (
-              <span className="block h-5 w-5 animate-spin rounded-full border-2 border-white/60 border-t-white" />
+              <span className="block h-4 w-4 animate-spin rounded-full border-2 border-white/60 border-t-white" />
             ) : (
-              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-5 h-5">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.27 20.876L5.999 12zm0 0h7.5" />
+              <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className="w-4 h-4 ml-0.5">
+                <path d="M3.478 2.404a.75.75 0 0 0-.926.941l2.432 7.905H13.5a.75.75 0 0 1 0 1.5H4.984l-2.432 7.905a.75.75 0 0 0 .926.94 60.519 60.519 0 0 0 18.445-8.986.75.75 0 0 0 0-1.218A60.517 60.517 0 0 0 3.478 2.404Z" />
               </svg>
             )}
           </button>
