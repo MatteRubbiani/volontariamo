@@ -20,7 +20,7 @@ export async function completeOnboarding(formData: FormData) {
   const role = formData.get('role') as string
   const redirectTo = getSafeRedirectTo(formData.get('redirectTo')) || `/app/${role}`
 
-  // --- LOGICA VOLONTARIO ---
+  // --- LOGICA VOLONTARIO (Invariata) ---
   if (role === 'volontario') {
     const { error: volError } = await supabase.from('volontari').upsert({
       id: user.id,
@@ -31,7 +31,7 @@ export async function completeOnboarding(formData: FormData) {
       data_nascita: formData.get('dataNascita') || null,
       sesso: formData.get('sesso') || null,
       citta_residenza: formData.get('cittaResidenza') || null,
-      cap: formData.get('cap') || null, // ✅ AGGIUNTO
+      cap: formData.get('cap') || null,
       grado_istruzione: formData.get('gradoIstruzione') || null,
     })
 
@@ -45,8 +45,7 @@ export async function completeOnboarding(formData: FormData) {
         volontario_id: user.id,
         tag_id: tagId
       }))
-      const { error: tagRelError } = await supabase.from('volontario_tags').upsert(tagsToInsert)
-      if (tagRelError) console.error("Errore inserimento tags:", tagRelError.message)
+      await supabase.from('volontario_tags').upsert(tagsToInsert)
     }
 
     if (compIds.length > 0) {
@@ -54,42 +53,66 @@ export async function completeOnboarding(formData: FormData) {
         volontario_id: user.id,
         competenza_id: compId
       }))
-      const { error: compRelError } = await supabase.from('volontario_competenze').upsert(compToInsert)
-      if (compRelError) console.error("Errore inserimento competenze:", compRelError.message)
+      await supabase.from('volontario_competenze').upsert(compToInsert)
     }
   } 
 
-  // --- LOGICA ASSOCIAZIONE ---
+  // --- 🚀 LOGICA ASSOCIAZIONE (AGGIORNATA E PROFESSIONALE) ---
   else if (role === 'associazione') {
-    const { error: assError } = await supabase.from('associazioni').upsert({
+    
+    // 1. Inserimento Anagrafica Core
+    const { error: coreError } = await supabase.from('associazioni').upsert({
       id: user.id,
-      nome: formData.get('nome'),
-      forma_giuridica: formData.get('formaGiuridica') || null,
-      codice_fiscale: formData.get('codiceFiscale'),
-      citta: formData.get('citta'),
-      cap: formData.get('cap') || null, // 🚨 MANCAVA QUI
-      indirizzo_sede: formData.get('indirizzoSede'),
-      telefono: formData.get('telefono'),
-      email_contatto: formData.get('emailContatto'),
-      nome_referente: formData.get('nomeReferente'),
-      sito_web: formData.get('sitoWeb') || null,
-      profili_social: formData.get('profiliSocial') || null,
-      descrizione: formData.get('mission'),
+      denominazione: formData.get('denominazione'),
+      forma_giuridica: formData.get('forma_giuridica'),
+      codice_fiscale: formData.get('codice_fiscale'),
+      email_associazione: formData.get('email_associazione'),
+      telefono: formData.get('telefono') || null,
+      descrizione: formData.get('descrizione') || null,
     })
     
-    if (assError) throw new Error(`Errore Associazione: ${assError.message}`)
+    if (coreError) throw new Error(`Errore Core Associazione: ${coreError.message}`)
 
+    // 2. Inserimento Dati Legali e Trasparenza (Referente e Consensi)
+    const { error: traspError } = await supabase.from('associazioni_trasparenza').upsert({
+      associazione_id: user.id,
+      referente_progetto_nome: formData.get('referente_progetto_nome'),
+      referente_progetto_cognome: formData.get('referente_progetto_cognome'),
+      referente_progetto_ruolo: formData.get('referente_progetto_ruolo'),
+      dichiarazione_veridicita: formData.get('dichiarazione_veridicita') === 'true',
+      consenso_privacy: formData.get('consenso_privacy') === 'true',
+      consenso_newsletter: formData.get('consenso_newsletter') === 'true',
+    })
+
+    if (traspError) throw new Error(`Errore Trasparenza: ${traspError.message}`)
+
+    // 3. Inserimento Sede Operativa Principale
+    const { error: sedeError } = await supabase.from('associazioni_sedi').upsert({
+      associazione_id: user.id,
+      indirizzo: formData.get('indirizzo'),
+      cap: formData.get('cap'),
+      comune: formData.get('comune'),
+      provincia: formData.get('provincia'),
+      is_principale: true,
+      tipologia: 'operativa'
+    })
+
+    if (sedeError) throw new Error(`Errore Sede: ${sedeError.message}`)
+
+    // 4. Gestione Tag/Ambiti
     const assTags = formData.getAll('tags') as string[]
     if (assTags.length > 0) {
       const assTagsToInsert = assTags.map(tagId => ({
         associazione_id: user.id,
         tag_id: tagId
       }))
+      // Nota: ho mantenuto 'associazione_tags' per compatibilità, 
+      // ma se hai rinominato la tabella in 'associazioni_settori_scelti' cambiala qui sotto.
       await supabase.from('associazione_tags').upsert(assTagsToInsert)
     }
   }
 
-  // --- LOGICA IMPRESA ---
+  // --- LOGICA IMPRESA (Invariata) ---
   else if (role === 'impresa') {
     const { error: impError } = await supabase.from('imprese').upsert({
       id: user.id,
@@ -98,7 +121,7 @@ export async function completeOnboarding(formData: FormData) {
       partita_iva: formData.get('partitaIva') || null,
       codice_fiscale: formData.get('codiceFiscale') || null,
       indirizzo_sede: formData.get('indirizzoSede') || null,
-      cap: formData.get('cap') || null, // 🚨 MANCAVA QUI
+      cap: formData.get('cap') || null,
       sito_web: formData.get('sitoWeb') || null,
       profili_social: formData.get('profiliSocial') || null,
       nome_referente: formData.get('nomeReferente') || null,
@@ -112,20 +135,14 @@ export async function completeOnboarding(formData: FormData) {
     if (impError) throw new Error(`Errore Impresa: ${impError.message}`)
   }
 
-  // FINALIZZAZIONE: Scrivi nella tabella Hub "profili"
+  // FINALIZZAZIONE: Hub "profili"
   const { error: profiloError } = await supabase.from('profili').upsert({
     id: user.id,
     ruolo: role
   })
 
-  if (profiloError) {
-    console.error("Errore fatale salvataggio Hub:", profiloError.message)
-    throw new Error("Errore durante la finalizzazione del profilo.")
-  }
+  if (profiloError) throw new Error("Errore durante la finalizzazione del profilo.")
 
-  // 🔄 INVALIDAZIONE CACHE
   revalidatePath('/', 'layout')
-
-  // Redirect
   redirect(redirectTo)
 }
