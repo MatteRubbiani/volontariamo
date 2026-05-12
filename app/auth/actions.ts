@@ -83,12 +83,11 @@ export async function signIn(formData: FormData) {
 }
 
 export async function signUp(formData: FormData) {
-  const email = String(formData.get('email') ?? '')
+  const email = String(formData.get('email') ?? '').trim()
   const password = String(formData.get('password') ?? '')
   const redirectTo = getSafeRedirectTo(formData.get('redirectTo'))
   
-  // N.B. Ho lasciato questa logica degli headers intatta nel caso ti serva per altre cose,
-  // ma per l'OTP nativo di Supabase non è più strettamente necessaria.
+  // Gestione dinamica dell'origin per il link di conferma
   const headersList = await headers()
   const forwardedHost = headersList.get('x-forwarded-host')
   const host = headersList.get('host')
@@ -115,20 +114,33 @@ export async function signUp(formData: FormData) {
     }
   )
 
-  const { error } = await supabase.auth.signUp({
+  // 🚀 1. ESECUZIONE SIGN UP
+  const { data, error } = await supabase.auth.signUp({
     email,
     password,
-    // 🚨 RIMOSSO options.emailRedirectTo: Supabase ora manderà il codice OTP a 6 cifre 
-    // basandosi sul template email che abbiamo modificato.
+    options: {
+      // Usiamo l'origin calcolato dinamicamente per supportare sia localhost che produzione
+      emailRedirectTo: `${origin}/api/auth/callback`,
+    },
   })
 
+  // Prepariamo la stringa di redirect in modo pulito
+  const redirectParam = redirectTo ? `&redirectTo=${encodeURIComponent(redirectTo)}` : ''
+
+  // 🚨 2. GESTIONE ERRORI STANDARD (es. password debole, formati errati)
   if (error) {
-    console.error("❌ Errore SignUp:", error.message)
-    redirect(buildErrorRedirect('/auth/registrazione', error.message, redirectTo))
+    redirect(`/auth/registrazione?error=${encodeURIComponent(error.message)}${redirectParam}`)
   }
 
-  // 🚨 IL TELETRASPORTO: Lo mandiamo ai nostri 6 quadratini passando l'email
-  redirect(`/auth/verifica?email=${encodeURIComponent(email)}`)
+  // 🛡️ 3. SENIOR DEV FIX: CONTROLLO ANTI-GHOSTING
+  // Se Supabase non restituisce identità, l'account esiste già nel database Auth.
+  if (data?.user && data.user.identities && data.user.identities.length === 0) {
+    const userExistsMessage = "Questa email è già associata a un account. Effettua il login."
+    redirect(`/auth/registrazione?error=${encodeURIComponent(userExistsMessage)}${redirectParam}`)
+  }
+
+  // ✨ 4. SUCCESSO: Invio alla pagina di inserimento OTP
+  redirect(`/auth/verifica?email=${encodeURIComponent(email)}${redirectParam}`)
 }
 
 export async function logout() {

@@ -223,12 +223,12 @@ function AssociazioneWizardForm() {
 
               <div className="space-y-4 pt-4 border-t border-slate-100">
                 <label className="flex items-start gap-3 cursor-pointer">
-                  <input type="checkbox" checked={formData.dichiarazione_veridicita} onChange={(e) => setFormData(p => ({...p, dichiarazione_veridicita: e.target.checked}))} className="mt-1 rounded text-emerald-600" required />
+                  <input type="checkbox" checked={formData.dichiarazione_veridicita} onChange={(e) => setFormData(p => ({...p, dichiarazione_veridicita: e.target.checked}))} className="mt-0.5 shrink-0 rounded text-emerald-600" required />
                   <span className="text-[11px] text-slate-500 leading-tight">Dichiaro che i dati forniti sono veritieri e l'ente opera senza fini di lucro. *</span>
                 </label>
 
                 <label className="flex items-start gap-3 cursor-pointer">
-                  <input type="checkbox" checked={formData.consenso_privacy} onChange={(e) => setFormData(p => ({...p, consenso_privacy: e.target.checked}))} className="mt-1 rounded text-emerald-600" required />
+                  <input type="checkbox" checked={formData.consenso_privacy} onChange={(e) => setFormData(p => ({...p, consenso_privacy: e.target.checked}))} className="mt-0.5 shrink-0 rounded text-emerald-600" required />
                   <span className="text-[11px] text-slate-500 leading-tight">Accetto i termini di servizio e il trattamento dei dati personali (GDPR). *</span>
                 </label>
 
@@ -237,7 +237,7 @@ function AssociazioneWizardForm() {
                     type="checkbox" 
                     checked={formData.consenso_newsletter} 
                     onChange={(e) => setFormData(p => ({...p, consenso_newsletter: e.target.checked}))} 
-                    className="mt-1 rounded text-emerald-600"
+                    className="mt-0.5 shrink-0 rounded text-emerald-600"
                   />
                   <span className="text-[11px] text-emerald-800 font-bold leading-tight">
                     Voglio ricevere aggiornamenti, nuovi volontari e consigli per la mia associazione tramite newsletter. (Facoltativo)
@@ -252,7 +252,7 @@ function AssociazioneWizardForm() {
                   disabled={isSubmitting || !formData.referente_progetto_nome || !formData.referente_progetto_cognome || !formData.dichiarazione_veridicita || !formData.consenso_privacy} 
                   className="w-2/3 rounded-xl bg-emerald-600 py-3 font-black text-white hover:bg-emerald-700 shadow-lg shadow-emerald-600/20 active:scale-95 transition-all disabled:opacity-50"
                 >
-                  {isSubmitting ? 'Inviando...' : 'Attiva Profilo 🚀'}
+                  {isSubmitting ? 'Inviando...' : 'Attiva Profilo'}
                 </button>
               </div>
             </div>
