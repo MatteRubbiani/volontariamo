@@ -1,3 +1,5 @@
+'use server'
+
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
@@ -25,25 +27,52 @@ export default async function ProfiloPage() {
 
   const role = profilo?.ruolo
 
-  // RENDER in base al ruolo
+  // ==========================================================
+  // 1. RENDER VOLONTARIO (Aggiornato con Categoria)
+  // ==========================================================
   if (role === 'volontario') {
     const { data: vol } = await supabase
       .from('volontari')
-      .select('*, tags:volontario_tags(tag:tags(id, name)), competenze:volontario_competenze(competenza:competenze(id, name))')
+      .select(`
+        *, 
+        tags:volontario_tags(tag:tags(id, name, description, categoria)), 
+        competenze:volontario_competenze(competenza:competenze(id, name))
+      `)
       .eq('id', user.id)
       .single()
+      
     return <ProfiloVolontario data={vol!} email={user.email!} />
   }
 
+  // ==========================================================
+  // 🚀 2. RENDER ASSOCIAZIONE (Fix Categoria & Description)
+  // ==========================================================
   if (role === 'associazione') {
-    const { data: ass } = await supabase
+    const { data: ass, error } = await supabase
       .from('associazioni')
-      .select('*, tags:associazione_tags(tag:tags(id, name))')
+      .select(`
+        *,
+        associazioni_trasparenza (*),
+        associazioni_sedi (*),
+        tags:associazione_tags(tag:tags(id, name, description, categoria))
+      `)
       .eq('id', user.id)
       .single()
-    return <ProfiloAssociazione data={ass!} email={user.email!} />
+
+    if (error || !ass) {
+      console.error("❌ Errore recupero dati associazione:", error?.message)
+      redirect('/app/onboarding?role=associazione')
+    }
+
+    // DEBUG: Ora dovresti vedere la categoria popolata nel terminale
+    console.log("🔍 DUMP PAYLOAD ASSOCIAZIONE:", JSON.stringify(ass.tags, null, 2))
+
+    return <ProfiloAssociazione data={ass} email={user.email!} />
   }
 
+  // ==========================================================
+  // 3. RENDER IMPRESA
+  // ==========================================================
   if (role === 'impresa') {
     const { data: imp } = await supabase
       .from('imprese')
@@ -53,6 +82,5 @@ export default async function ProfiloPage() {
     return <ProfiloImpresa data={imp!} email={user.email!} />
   }
 
-  // Non dovrebbe accadere mai: il middleware dovrebbe gestire questo
   redirect('/app/onboarding')
 }

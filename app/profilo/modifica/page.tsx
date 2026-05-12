@@ -1,7 +1,7 @@
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import { updateProfilo } from '../actions' // Controlla che il path sia giusto
-import FormModificaProfilo from '@/components/FormModificaProfilo'
+import FormModificaProfilo from './components/FormModificaProfilo'
 import { redirect } from 'next/navigation'
 
 export default async function ModificaProfiloPage() {
@@ -42,12 +42,50 @@ export default async function ModificaProfiloPage() {
       competenzeIniziali = volComp?.map(c => c.competenza_id) || []
 
     } else if (role === 'associazione') {
-      const { data: ass } = await supabase.from('associazioni').select('*').eq('id', user.id).maybeSingle()
-      profiloData = ass || { id: user.id }
+      const { data: ass } = await supabase
+        .from('associazioni')
+        .select(`
+          *,
+          associazioni_trasparenza (*),
+          associazioni_sedi (*)
+        `)
+        .eq('id', user.id)
+        .maybeSingle()
+
+      const base = ass || { id: user.id }
+      
+      // 🛡️ FIX SENIOR: Gestiamo sia Oggetto che Array per Trasparenza e Sedi
+      const trasp = Array.isArray(base.associazioni_trasparenza) 
+        ? base.associazioni_trasparenza[0] 
+        : base.associazioni_trasparenza || {}
+
+      const sede = Array.isArray(base.associazioni_sedi)
+        ? (base.associazioni_sedi.find((s: any) => s.is_principale) || base.associazioni_sedi[0] || {})
+        : base.associazioni_sedi || {}
+
+      profiloData = {
+        ...base,
+        nome: base.denominazione || '',
+        indirizzo: sede.indirizzo || '',
+        cap: sede.cap || '',
+        comune: sede.comune || '',
+        provincia: sede.provincia || '',
+        referente_progetto_nome: trasp.referente_progetto_nome || '',
+        referente_progetto_cognome: trasp.referente_progetto_cognome || '',
+        referente_progetto_ruolo: trasp.referente_progetto_ruolo || '',
+        legale_rappresentante_nome: trasp.legale_rappresentante_nome || '',
+        pec: trasp.pec || '',
+        num_soci: trasp.num_soci || 0,
+        num_volontari_attivi: trasp.num_volontari_attivi || 0,
+        num_dipendenti: trasp.num_dipendenti || 0,
+        runts_repertorio: trasp.runts_repertorio || '',
+        runts_sezione: trasp.runts_sezione || '',
+        runts_data_iscrizione: trasp.runts_data_iscrizione || '',
+        is_iscritto_runts: trasp.is_iscritto_runts || false,
+      }
       
       const { data: assTags } = await supabase.from('associazione_tags').select('tag_id').eq('associazione_id', user.id)
       tagsIniziali = assTags?.map(t => t.tag_id) || []
-
     } else if (role === 'impresa') {
       const { data: imp } = await supabase.from('imprese').select('*').eq('id', user.id).maybeSingle()
       profiloData = imp || { id: user.id }

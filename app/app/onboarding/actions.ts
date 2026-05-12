@@ -20,7 +20,7 @@ export async function completeOnboarding(formData: FormData) {
   const role = formData.get('role') as string
   const redirectTo = getSafeRedirectTo(formData.get('redirectTo')) || `/app/${role}`
 
-  // --- LOGICA VOLONTARIO (Invariata) ---
+  // --- 1. LOGICA VOLONTARIO (Sincronizzata) ---
   if (role === 'volontario') {
     const { error: volError } = await supabase.from('volontari').upsert({
       id: user.id,
@@ -35,32 +35,27 @@ export async function completeOnboarding(formData: FormData) {
       grado_istruzione: formData.get('gradoIstruzione') || null,
     })
 
-    if (volError) throw new Error(`Errore creazione Volontario: ${volError.message}`)
+    if (volError) throw new Error(`Errore Volontario: ${volError.message}`)
 
     const tagsIds = formData.getAll('tags') as string[]
     const compIds = formData.getAll('competenze') as string[]
 
+    // Pulizia e inserimento per tag e competenze
+    await supabase.from('volontario_tags').delete().eq('volontario_id', user.id)
     if (tagsIds.length > 0) {
-      const tagsToInsert = tagsIds.map(tagId => ({
-        volontario_id: user.id,
-        tag_id: tagId
-      }))
-      await supabase.from('volontario_tags').upsert(tagsToInsert)
+      await supabase.from('volontario_tags').insert(tagsIds.map(id => ({ volontario_id: user.id, tag_id: id })))
     }
 
+    await supabase.from('volontario_competenze').delete().eq('volontario_id', user.id)
     if (compIds.length > 0) {
-      const compToInsert = compIds.map(compId => ({
-        volontario_id: user.id,
-        competenza_id: compId
-      }))
-      await supabase.from('volontario_competenze').upsert(compToInsert)
+      await supabase.from('volontario_competenze').insert(compIds.map(id => ({ volontario_id: user.id, competenza_id: id })))
     }
   } 
 
-  // --- 🚀 LOGICA ASSOCIAZIONE (AGGIORNATA E PROFESSIONALE) ---
+  // --- 🚀 2. LOGICA ASSOCIAZIONE (ALLINEATA AL NUOVO SCHEMA) ---
   else if (role === 'associazione') {
     
-    // 1. Inserimento Anagrafica Core
+    // A. Anagrafica Core
     const { error: coreError } = await supabase.from('associazioni').upsert({
       id: user.id,
       denominazione: formData.get('denominazione'),
@@ -71,22 +66,27 @@ export async function completeOnboarding(formData: FormData) {
       descrizione: formData.get('descrizione') || null,
     })
     
-    if (coreError) throw new Error(`Errore Core Associazione: ${coreError.message}`)
+    if (coreError) throw new Error(`Errore Anagrafica: ${coreError.message}`)
 
-    // 2. Inserimento Dati Legali e Trasparenza (Referente e Consensi)
+    // B. Trasparenza (Con onConflict e Nomi Spaccati)
     const { error: traspError } = await supabase.from('associazioni_trasparenza').upsert({
       associazione_id: user.id,
+      // Dati Legale Rappresentante
+      legale_rappresentante_nome: formData.get('legale_rappresentante_nome'),
+      legale_rappresentante_cognome: formData.get('legale_rappresentante_cognome'),
+      // Dati Referente
       referente_progetto_nome: formData.get('referente_progetto_nome'),
       referente_progetto_cognome: formData.get('referente_progetto_cognome'),
       referente_progetto_ruolo: formData.get('referente_progetto_ruolo'),
+      // Consensi
       dichiarazione_veridicita: formData.get('dichiarazione_veridicita') === 'true',
       consenso_privacy: formData.get('consenso_privacy') === 'true',
       consenso_newsletter: formData.get('consenso_newsletter') === 'true',
-    })
+    }, { onConflict: 'associazione_id' }) // 🛡️ PROTEZIONE UNIQUE
 
     if (traspError) throw new Error(`Errore Trasparenza: ${traspError.message}`)
 
-    // 3. Inserimento Sede Operativa Principale
+    // C. Sede (Con onConflict)
     const { error: sedeError } = await supabase.from('associazioni_sedi').upsert({
       associazione_id: user.id,
       indirizzo: formData.get('indirizzo'),
@@ -94,25 +94,25 @@ export async function completeOnboarding(formData: FormData) {
       comune: formData.get('comune'),
       provincia: formData.get('provincia'),
       is_principale: true,
-      tipologia: 'operativa'
-    })
+      tipologia: 'legale_operativa'
+    }, { onConflict: 'associazione_id' }) // 🛡️ PROTEZIONE UNIQUE
 
     if (sedeError) throw new Error(`Errore Sede: ${sedeError.message}`)
 
-    // 4. Gestione Tag/Ambiti
+    // D. Gestione Tag/Ambiti (Delete + Insert per pulizia reale)
     const assTags = formData.getAll('tags') as string[]
+    await supabase.from('associazione_tags').delete().eq('associazione_id', user.id)
+    
     if (assTags.length > 0) {
       const assTagsToInsert = assTags.map(tagId => ({
         associazione_id: user.id,
         tag_id: tagId
       }))
-      // Nota: ho mantenuto 'associazione_tags' per compatibilità, 
-      // ma se hai rinominato la tabella in 'associazioni_settori_scelti' cambiala qui sotto.
-      await supabase.from('associazione_tags').upsert(assTagsToInsert)
+      await supabase.from('associazione_tags').insert(assTagsToInsert)
     }
   }
 
-  // --- LOGICA IMPRESA (Invariata) ---
+  // --- 3. LOGICA IMPRESA (Sincronizzata) ---
   else if (role === 'impresa') {
     const { error: impError } = await supabase.from('imprese').upsert({
       id: user.id,
@@ -135,13 +135,13 @@ export async function completeOnboarding(formData: FormData) {
     if (impError) throw new Error(`Errore Impresa: ${impError.message}`)
   }
 
-  // FINALIZZAZIONE: Hub "profili"
+  // HUB PROFILI
   const { error: profiloError } = await supabase.from('profili').upsert({
     id: user.id,
     ruolo: role
   })
 
-  if (profiloError) throw new Error("Errore durante la finalizzazione del profilo.")
+  if (profiloError) throw new Error("Errore finalizzazione profilo.")
 
   revalidatePath('/', 'layout')
   redirect(redirectTo)
