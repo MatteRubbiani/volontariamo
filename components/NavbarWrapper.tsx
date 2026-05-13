@@ -38,7 +38,9 @@ export function NavbarWrapper({ children }: { children: React.ReactNode }) {
   // Hide navbar only for volontario section (has its own navbar)
   const shouldHideNavbar =
     isReady &&
-    (pathname?.startsWith('/app/volontario') || pathname?.startsWith('/app/associazione'))
+    (pathname?.startsWith('/app/volontario') ||
+      pathname?.startsWith('/app/associazione') ||
+      pathname?.startsWith('/app/impresa'))
 
   if (shouldHideNavbar) {
     return null
