@@ -143,6 +143,13 @@ export async function completeOnboarding(formData: FormData) {
 
   if (profiloError) throw new Error("Errore finalizzazione profilo.")
 
+  // CRITICAL: Aggressive cache invalidation after profile creation
+  // Invalidate layout to refresh Navbar with new role
+  // Invalidate specific role page for fresh dashboard
+  // This prevents navbar disappearing and ensures UI consistency
   revalidatePath('/', 'layout')
+  revalidatePath(`/app/${role}`, 'layout')
+  revalidatePath(`/app/${role}`, 'page')
+  
   redirect(redirectTo)
 }

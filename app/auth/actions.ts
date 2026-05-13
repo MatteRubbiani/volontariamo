@@ -47,6 +47,13 @@ export async function signIn(formData: FormData) {
 
   const { data, error } = await supabase.auth.signInWithPassword({ email, password })
 
+  // Cache invalidation: Ensure fresh navbar data after login
+  // This is critical for users with existing profiles
+  if (!error) {
+    const { revalidatePath } = await import('next/cache')
+    revalidatePath('/', 'layout')
+  }
+
   if (error) {
     // STATO: Utente esiste ma non ha confermato la mail (PROD)
     if (error.message === 'Email not confirmed') {

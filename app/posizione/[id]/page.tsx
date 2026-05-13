@@ -94,19 +94,69 @@ export default async function DettaglioPosizioneVolontario({
     : { data: [] as { competenza_id: string }[] }
   const competenzeVolontario = userCompData?.map(c => c.competenza_id) || []
 
-  const { data: pos, error } = await publicSupabase
+  const { data: posBase, error: posError } = await publicSupabase
     .from('posizioni')
-    .select(`
-      *,
-      media_associazioni(url),
-      associazioni ( id, nome, email_contatto ),
-      tags:posizione_tags(tag:tags(name)),
-      competenze:posizione_competenze(competenza:competenze(id, name))
-    `)
+    .select('*')
     .eq('id', id)
     .single()
 
-  if (error || !pos) redirect(backUrl)
+  if (posError || !posBase) redirect(backUrl)
+
+  const [associazioneResult, immagineResult, tagsResult, competenzeResult] = await Promise.all([
+    publicSupabase
+      .from('associazioni')
+      .select('id, nome, email_contatto')
+      .eq('id', posBase.associazione_id)
+      .maybeSingle(),
+    posBase.immagine_id
+      ? publicSupabase
+          .from('media_associazioni')
+          .select('url')
+          .eq('id', posBase.immagine_id)
+          .maybeSingle()
+      : Promise.resolve({ data: null }),
+    publicSupabase
+      .from('posizione_tags')
+      .select('tag_id')
+      .eq('posizione_id', id),
+    publicSupabase
+      .from('posizione_competenze')
+      .select('competenza_id')
+      .eq('posizione_id', id),
+  ])
+
+  const tagIds = (tagsResult.data || []).map((row: any) => row.tag_id)
+  const competenzaIds = (competenzeResult.data || []).map((row: any) => row.competenza_id)
+
+  const [tagCatalogResult, competenzeCatalogResult] = await Promise.all([
+    tagIds.length
+      ? publicSupabase
+          .from('tags')
+          .select('id, name')
+          .in('id', tagIds)
+      : Promise.resolve({ data: [] as { id: string; name: string }[] }),
+    competenzaIds.length
+      ? publicSupabase
+          .from('competenze')
+          .select('id, name')
+          .in('id', competenzaIds)
+      : Promise.resolve({ data: [] as { id: string; name: string }[] }),
+  ])
+
+  const tagById = new Map((tagCatalogResult.data || []).map((tag: any) => [tag.id, tag.name]))
+  const competenzaById = new Map((competenzeCatalogResult.data || []).map((comp: any) => [comp.id, comp.name]))
+
+  const pos = {
+    ...posBase,
+    associazioni: associazioneResult.data,
+    media_associazioni: immagineResult.data,
+    tags: (tagsResult.data || []).map((row: any) => ({
+      tag: { name: tagById.get(row.tag_id) || '' },
+    })),
+    competenze: (competenzeResult.data || []).map((row: any) => ({
+      competenza: { id: row.competenza_id, name: competenzaById.get(row.competenza_id) || '' },
+    })),
+  }
 
   const { data: candidatura } = user
     ? await authSupabase
