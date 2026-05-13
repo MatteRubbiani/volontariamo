@@ -17,8 +17,40 @@ const GIORNI = [
   { etichetta: 'D', valore: 'Domenica' }
 ]
 
+const aiBarStyle = {
+  position: 'fixed',
+  bottom: '20px',
+  right: '20px',
+  backgroundColor: '#f8f9fa',
+  padding: '10px',
+  boxShadow: '0 2px 5px rgba(0, 0, 0, 0.2)',
+  zIndex: 1000,
+  borderRadius: '50px',
+  display: 'flex',
+  justifyContent: 'center',
+  alignItems: 'center',
+  transition: 'all 0.3s ease-in-out',
+}
+
+const collapsedStyle = {
+  ...aiBarStyle,
+  width: '50px',
+  height: '50px',
+  borderRadius: '50%',
+  overflow: 'hidden',
+  justifyContent: 'center',
+  alignItems: 'center',
+}
+
+const expandedStyle = {
+  ...aiBarStyle,
+  width: '300px',
+  height: 'auto',
+  borderRadius: '20px',
+}
+
 const SparkleIcon = ({ className = "w-5 h-5" }: { className?: string }) => (
-  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className={className}>
+  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className={className} style={{ flexShrink: 0 }}>
     <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904 9 18.75l-.813-2.846a4.5 4.5 0 0 0-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 0 0 3.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 0 0 3.09 3.09l2.846.813-2.846.813a4.5 4.5 0 0 0-3.09 3.09ZM18.259 8.715 18 9.75l-.259-1.035a3.375 3.375 0 0 0-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 0 0 2.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 0 0 2.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 0 0-2.456 2.456Z" />
   </svg>
 )
@@ -189,14 +221,66 @@ export default function FormPosizione({
     setIsAnalyzing(false)
   }
 
+  const [isAiBarExpanded, setIsAiBarExpanded] = useState(false);
+
   return (
     <div className="w-full max-w-3xl mx-auto pb-20">
       
       {/* 🪄 MAGIC PARSER UI - PRO COMMAND BAR */}
       <div className="mb-8 relative group z-10">
-        <div className="absolute inset-0 bg-emerald-500/10 rounded-3xl blur-xl transition-all duration-300 group-focus-within:bg-emerald-500/25" />
-        
-        <div className="relative bg-slate-900 border border-slate-800 p-2 sm:p-2.5 rounded-3xl shadow-[0_8px_30px_rgba(0,0,0,0.12)] flex flex-col sm:flex-row items-center gap-2 transition-all">
+        {/* Mobile: Collapsible AI Bar */}
+        <div className="sm:hidden">
+          {isAiBarExpanded ? (
+            <div className="relative bg-slate-900 border border-slate-800 p-2 rounded-3xl shadow-[0_8px_30px_rgba(0,0,0,0.12)] flex flex-col items-center gap-2 transition-all duration-300 ease-in-out">
+              <button
+                className="absolute top-2 right-2 text-slate-400 hover:text-white"
+                onClick={() => setIsAiBarExpanded(false)}
+              >
+                ✕
+              </button>
+              <div className="flex-1 w-full flex items-start gap-3 px-3 py-2">
+                <div className="mt-0.5 text-emerald-400 shrink-0">
+                  <SparkleIcon className="w-5 h-5" />
+                </div>
+                <textarea 
+                  value={magicText}
+                  onChange={(e) => setMagicText(e.target.value)}
+                  placeholder="Chiedi all'AI di compilare il form per te..."
+                  className="w-full bg-transparent text-white placeholder:text-slate-400 outline-none resize-none font-medium text-sm min-h-[24px] h-[24px] focus:min-h-[80px] transition-all overflow-hidden"
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault();
+                      handleMagicParse();
+                    }
+                  }}
+                />
+              </div>
+              <button
+                type="button"
+                onClick={handleMagicParse}
+                disabled={isAnalyzing || !magicText.trim()}
+                className="w-full bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 disabled:hover:bg-emerald-600 text-white font-bold px-6 py-3 rounded-2xl transition-all active:scale-95 flex items-center justify-center shrink-0"
+              >
+                {isAnalyzing ? (
+                  <div className="w-5 h-5 border-2 border-white border-t-transparent animate-spin rounded-full" />
+                ) : (
+                  "Compila"
+                )}
+              </button>
+            </div>
+          ) : (
+            <button
+              className="fixed bottom-4 right-4 bg-slate-900 border border-slate-800 shadow-lg text-emerald-400 font-bold px-4 py-2 rounded-full flex items-center gap-2 transition-all duration-300 ease-in-out"
+              onClick={() => setIsAiBarExpanded(true)}
+            >
+              <SparkleIcon className="w-5 h-5" />
+              AI Compila
+            </button>
+          )}
+        </div>
+
+        {/* Desktop: Always Expanded */}
+        <div className="hidden sm:block relative bg-slate-900 border border-slate-800 p-2 sm:p-2.5 rounded-3xl shadow-[0_8px_30px_rgba(0,0,0,0.12)] flex flex-col sm:flex-row items-center gap-2 transition-all">
           <div className="flex-1 w-full flex items-start gap-3 px-3 sm:px-4 py-2">
             <div className="mt-0.5 text-emerald-400 shrink-0">
               <SparkleIcon className="w-5 h-5" />
@@ -208,8 +292,8 @@ export default function FormPosizione({
               className="w-full bg-transparent text-white placeholder:text-slate-400 outline-none resize-none font-medium text-sm sm:text-base min-h-[24px] h-[24px] focus:min-h-[80px] transition-all overflow-hidden"
               onKeyDown={(e) => {
                 if (e.key === 'Enter' && !e.shiftKey) {
-                  e.preventDefault()
-                  handleMagicParse()
+                  e.preventDefault();
+                  handleMagicParse();
                 }
               }}
             />
