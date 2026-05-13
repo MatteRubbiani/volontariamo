@@ -1,20 +1,37 @@
+// src/components/CompetenzaSelector.tsx
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+
+interface CompetenzaSelectorProps {
+  allCompetenze: any[];
+  competenzeIniziali: string[];
+  onChange?: (ids: string[]) => void; // ✅ Aggiunta prop per comunicare col padre
+}
 
 export default function CompetenzaSelector({ 
   allCompetenze, 
-  competenzeIniziali 
-}: { 
-  allCompetenze: any[], 
-  competenzeIniziali: string[] 
-}) {
+  competenzeIniziali,
+  onChange
+}: CompetenzaSelectorProps) {
   const [selezionate, setSelezionate] = useState<string[]>(competenzeIniziali)
 
+  // 🔄 SINCRONIZZAZIONE: Se le competenze iniziali cambiano (es. via AI), aggiorna lo stato locale
+  useEffect(() => {
+    setSelezionate(competenzeIniziali)
+  }, [competenzeIniziali])
+
   const toggleCompetenza = (id: string) => {
-    setSelezionate(prev => 
-      prev.includes(id) ? prev.filter(c => c !== id) : [...prev, id]
-    )
+    const nextSelezionate = selezionate.includes(id)
+      ? selezionate.filter(c => c !== id)
+      : [...selezionate, id]
+    
+    setSelezionate(nextSelezionate)
+    
+    // Notifica il componente padre del cambiamento
+    if (onChange) {
+      onChange(nextSelezionate)
+    }
   }
 
   return (
@@ -42,9 +59,10 @@ export default function CompetenzaSelector({
         })}
       </div>
       
-      {/* Input nascosti per inviare le competenze selezionate alla Server Action */}
+      {/* ⚠️ NOTA: Gli input hidden qui servono come backup, ma il FormPosizione 
+          ora usa il JSON.stringify dello stato padre per la massima sicurezza. */}
       {selezionate.map(id => (
-        <input key={`comp-${id}`} type="hidden" name="competenze" value={id} />
+        <input key={`comp-${id}`} type="hidden" name="competenze_raw" value={id} />
       ))}
     </div>
   )
