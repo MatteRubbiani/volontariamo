@@ -16,9 +16,10 @@ export default async function NuovaPosizionePage() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/auth/login')
 
+  // Selezioniamo categoria e description per raggruppare le macro-aree nel client
   const [ { data: allTags }, { data: allCompetenze }, { data: mediaGallery } ] = await Promise.all([
-    supabase.from('tags').select('*').order('name'),
-    supabase.from('competenze').select('*').eq('is_official', true).order('name'),
+    supabase.from('tags').select('id, name, categoria, description').order('categoria').order('name'),
+    supabase.from('competenze').select('id, name, is_official').eq('is_official', true).order('name'),
     supabase.from('media_associazioni').select('*').eq('associazione_id', user.id).order('created_at', { ascending: false })
   ])
 
@@ -33,7 +34,7 @@ export default async function NuovaPosizionePage() {
         </div>
         <Link 
           href="/app/associazione" 
-          className="inline-flex items-center justify-center gap-2 px-6 py-3 bg-slate-100 text-slate-700 rounded-2xl text-sm font-bold hover:bg-slate-200 transition-colors active:scale-95 w-full sm:w-auto"
+          className="inline-flex items-center justify-center gap-2 px-6 py-3 bg-slate-100 text-slate-700 rounded-2xl text-sm font-bold hover:bg-slate-200 transition-colors active:scale-95 w-full sm:w-auto shrink-0"
         >
           <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-4 h-4">
             <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 19.5 3 12m0 0 7.5-7.5M3 12h18" />

@@ -1,7 +1,8 @@
+// src/components/FormPosizione.tsx
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
-import { getTagColor } from '@/lib/tagColors'
+import TagBadge from '@/components/TagBadge'
 import CompetenzaSelector from './CompetenzaSelector'
 import MediaGalleryPicker from '@/components/MediaGalleryPicker'
 import { analizzaTestoPosizione } from '@/app/ai-actions'
@@ -50,7 +51,9 @@ export default function FormPosizione({
   const [oraInizio, setOraInizio] = useState(posizione?.ora_inizio?.substring(0,5) || '')
   const [oraFine, setOraFine] = useState(posizione?.ora_fine?.substring(0,5) || '')
   const [dove, setDove] = useState(posizione?.dove || '')
-  const [coordinate, setCoordinate] = useState<{lat: number, lng: number} | null>(null)
+  const [coordinate, setCoordinate] = useState<{lat: number, lng: number} | null>(
+    posizione?.lat && posizione?.lng ? { lat: posizione.lat, lng: posizione.lng } : null
+  )
   
   const [tagSelezionati, setTagSelezionati] = useState<string[]>(tagsIniziali)
   const [competenzeState, setCompetenzeState] = useState<string[]>(competenzeSelezionate)
@@ -60,6 +63,46 @@ export default function FormPosizione({
   const [isAnalyzing, setIsAnalyzing] = useState(false)
 
   const inputRef = useRef<HTMLInputElement>(null)
+
+  // 🏷️ RAGGRUPPAMENTO TAGS PER MACRO-AREE
+  const tagsRaggruppati = tagsDisponibili?.reduce((acc: any, tag: any) => {
+    const cat = tag.categoria || 'Altro'
+    if (!acc[cat]) acc[cat] = []
+    acc[cat].push(tag)
+    return acc
+  }, {})
+
+  // 🌐 HELPER AGGIORNATO: Sfrutta la Places API già attiva invece del Geocoder
+  const findCoordinatesWithPlacesAPI = (addressQuery: string) => {
+    const google = (window as any).google
+    // Creiamo un elemento fittizio in memoria richiesto dal costruttore di PlacesService
+    const mapDiv = document.createElement('div')
+    
+    if (google && google.maps && google.maps.places) {
+      const service = new google.maps.places.PlacesService(mapDiv)
+      
+      const request = {
+        query: addressQuery,
+        fields: ['formatted_address', 'geometry'],
+      }
+
+      service.findPlaceFromQuery(request, (results: any, status: any) => {
+        if (status === google.maps.places.PlacesServiceStatus.OK && results && results[0]) {
+          const loc = results[0].geometry.location
+          setCoordinate({
+            lat: loc.lat(),
+            lng: loc.lng()
+          })
+          if (results[0].formatted_address) {
+            setDove(results[0].formatted_address)
+          }
+          console.log("📍 Coordinate trovate via Places API:", loc.lat(), loc.lng())
+        } else {
+          console.warn("⚠️ Ricerca Places API in background fallita per:", addressQuery)
+        }
+      })
+    }
+  }
 
   useEffect(() => {
     const initAutocomplete = () => {
@@ -110,17 +153,30 @@ export default function FormPosizione({
   const handleMagicParse = async () => {
     setIsAnalyzing(true)
     const result = await analizzaTestoPosizione(magicText, tagsDisponibili, competenzeDisponibili)
+    console.log("🤖 Risposta AI grezza:", result.data)
     
     if (result.success && result.data) {
       const d = result.data
       if (d.titolo) setTitolo(d.titolo)
       if (d.descrizione) setDescrizione(d.descrizione)
-      if (d.tipo) setTipo(d.tipo)
+      
+      if (d.giorni_settimana && d.giorni_settimana.length > 0) {
+        setTipo('ricorrente')
+        setGiorniSelezionati(d.giorni_settimana)
+      } else if (d.tipo) {
+        setTipo(d.tipo)
+      }
+
       if (d.data_esatta) setDataEsatta(d.data_esatta)
-      if (d.giorni_settimana && Array.isArray(d.giorni_settimana)) setGiorniSelezionati(d.giorni_settimana)
       if (d.ora_inizio) setOraInizio(d.ora_inizio)
       if (d.ora_fine) setOraFine(d.ora_fine)
-      if (d.dove) setDove(d.dove)
+      
+      // 📍 GEOLOCALIZZAZIONE NATIVA VIA PLACES API
+      if (d.dove) {
+        setDove(d.dove)
+        findCoordinatesWithPlacesAPI(d.dove)
+      }
+
       if (d.tags && Array.isArray(d.tags)) setTagSelezionati(d.tags)
       if (d.competenze && Array.isArray(d.competenze)) {
         setCompetenzeState(d.competenze)
@@ -138,7 +194,6 @@ export default function FormPosizione({
       
       {/* 🪄 MAGIC PARSER UI - PRO COMMAND BAR */}
       <div className="mb-8 relative group z-10">
-        {/* Glow effect on focus */}
         <div className="absolute inset-0 bg-emerald-500/10 rounded-3xl blur-xl transition-all duration-300 group-focus-within:bg-emerald-500/25" />
         
         <div className="relative bg-slate-900 border border-slate-800 p-2 sm:p-2.5 rounded-3xl shadow-[0_8px_30px_rgba(0,0,0,0.12)] flex flex-col sm:flex-row items-center gap-2 transition-all">
@@ -225,7 +280,7 @@ export default function FormPosizione({
               value={titolo}
               onChange={(e) => setTitolo(e.target.value)}
               placeholder="es: Aiuto Mensa Sociale" 
-              className="w-full p-4 border border-slate-200 rounded-2xl focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 bg-slate-50 focus:bg-white outline-none font-bold text-lg transition-all" 
+              className="w-full p-4 border border-slate-200 rounded-2xl focus:border-emerald-500 focus:ring-2 focus:ring-emerald-500/20 bg-slate-50 focus:bg-white outline-none font-bold text-lg transition-all text-slate-800" 
               required 
             />
           </div>
@@ -331,32 +386,46 @@ export default function FormPosizione({
           </div>
         </div>
 
-        {/* 6. TAGS */}
-        <div className="space-y-4 pt-6 border-t border-slate-100">
-          <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest block pl-2">
-            Ambiti dell'annuncio
-          </label>
-          <div className="flex flex-wrap gap-2 sm:gap-3">
-            {tagsDisponibili.map(t => {
-              const isSelected = tagSelezionati.includes(t.id);
-              const activeColorClass = getTagColor(t.name);
-              
-              return (
-                <button 
-                  key={t.id} 
-                  type="button" 
-                  onClick={() => toggleTag(t.id)}
-                  className={`px-4 sm:px-6 py-2.5 sm:py-3 rounded-2xl border-2 font-bold text-xs sm:text-sm transition-all duration-300 block ${
-                    isSelected 
-                      ? `${activeColorClass} shadow-md scale-[1.02] border-transparent` 
-                      : 'border-slate-100 bg-slate-50 text-slate-500 hover:border-slate-200 hover:bg-slate-100'
-                  }`}
-                >
-                  #{t.name}
-                </button>
-              )
-            })}
+        {/* 6. TAGS: Suddivisione in macro-aree + TagBadge */}
+        <div className="space-y-6 pt-6 border-t border-slate-100">
+          <div>
+            <label className="text-[10px] font-black uppercase text-slate-400 tracking-widest block pl-2">
+              Ambiti dell'annuncio (Macro-Aree)
+            </label>
+            <p className="text-xs text-slate-400 font-medium pl-2 mt-0.5">
+              Seleziona i settori per categorizzare l'annuncio.
+            </p>
           </div>
+
+          <div className="space-y-5">
+            {tagsRaggruppati && Object.entries(tagsRaggruppati).map(([categoria, tagsInCat]: [string, any]) => (
+              <div key={categoria} className="space-y-2.5">
+                <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 block pl-2">
+                  {categoria}
+                </span>
+                <div className="flex flex-wrap gap-2 sm:gap-3">
+                  {tagsInCat.map((t: any) => {
+                    const isSelected = tagSelezionati.includes(t.id)
+                    return (
+                      <button 
+                        key={t.id} 
+                        type="button" 
+                        onClick={() => toggleTag(t.id)}
+                        className={`transition-all duration-300 rounded-xl block cursor-pointer ${
+                          isSelected 
+                            ? 'ring-2 ring-slate-900 scale-105 shadow-md border-transparent' 
+                            : 'opacity-60 hover:opacity-100 border border-slate-100'
+                        }`}
+                      >
+                        <TagBadge nome={t.name} categoria={t.categoria} size="md" />
+                      </button>
+                    )
+                  })}
+                </div>
+              </div>
+            ))}
+          </div>
+
           {tagSelezionati.map(tId => (
             <input key={tId} type="hidden" name="tags" value={tId} />
           ))}

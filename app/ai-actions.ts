@@ -80,7 +80,6 @@ async function createChatCompletionWithFallback(
 ) {
   const primaryModel = "llama-3.3-70b-versatile"
   const fallbackModel = "llama-3.1-8b-instant"
-
   try {
     const { system, user } = promptGenerator(false)
     return await groq.chat.completions.create({
@@ -90,10 +89,8 @@ async function createChatCompletionWithFallback(
       temperature,
     })
   } catch (error: any) {
-    const isQuotaError = error?.status === 429 || error?.status === 413 || error?.error?.error?.code === 'rate_limit_exceeded'
-    
-    if (isQuotaError) {
-      console.warn(`⚠️ Ferrari (70B) satura o payload oltre limite. Attivazione Muletto (8B) con Compressione Dinamica...`)
+    const isQuota = error?.status === 429 || error?.status === 413 || error?.error?.error?.code === 'rate_limit_exceeded'
+    if (isQuota) {
       const { system, user } = promptGenerator(true)
       return await groq.chat.completions.create({
         messages: [{ role: "system", content: system }, { role: "user", content: user }],
@@ -109,77 +106,46 @@ async function createChatCompletionWithFallback(
 // ============================================================================
 // 1. ANALISI TESTO ANNUNCIO POSIZIONE (DOPPIA STRATEGIA IMPLEMENTATA)
 // ============================================================================
+
 export async function analizzaTestoPosizione(testoLibero: string, catalogTags: any[], catalogCompetenze: any[]) {
-  if (!testoLibero) return { error: "Scrivi qualcosa per permettermi di aiutarti!" }
+  if (!testoLibero) return { error: "Scrivi qualcosa!" }
 
   const generatePrompt = (isFallback: boolean) => {
-    // Mappiamo gli array per inviare solo dati essenziali ed evitare distrazioni semantiche
     const mappedTags = catalogTags.map(t => ({ id: t.id, name: t.name }))
-    const mappedCompetenze = catalogCompetenze.map(c => ({ id: c.id, name: c.name }))
+    const mappedComp = catalogCompetenze.map(c => ({ id: c.id, name: c.name }))
     
-    // Sicurezza: tronchiamo testi chilometrici per non sforare i token
-    const safeText = testoLibero.substring(0, isFallback ? 2000 : 4000)
-
-    const system = `Sei un assistente AI esperto in estrazione dati strutturati e copywriting persuasivo per il Terzo Settore italiano.
-Il tuo compito è analizzare un testo libero scritto da un'associazione per cercare volontari e compilarne i dati strutturati.
-
-REGOLE RIGIDE DI ESTRAZIONE E COPYWRITING:
-1. TITOLO E DESCRIZIONE: Crea un "titolo" professionale e sintetico. Scrivi una "descrizione" persuasiva, accattivante ed empatica (massimo 3 o 4 frasi) per invogliare i volontari a candidarsi, valorizzando l'impatto sociale.
-2. CAMPO "DOVE" (CRITICO):
-   - Se l'utente cita un luogo noto, un monumento o un punto di interesse (es: "Duomo di Modena", "Parco Sempione Milano", "Stazione Centrale"), DEVI convertirlo nel suo INDIRIZZO STRADALE COMPLETO (Via/Piazza, Civico se noto, Città). Esempio: "Duomo di Modena" -> "Corso Duomo, 41121 Modena MO".
-   - Se fornisce già un indirizzo stradale, formattalo in modo standard.
-   - Se il luogo è generico, logico o privato (es: "in sede", "da casa", "online", "da remoto", "in centro"), restituisci tassativamente null. Non inventare vie a caso.
-3. ANTI-ALLUCINAZIONE: Se un dato (data esatta, orari) non è deducibile con certezza assoluta dal testo, restituisci null. Non inserire mai testi riempitivi come "da definire", "non specificato", "N/A".`
-
-    const user = `LISTA TAG DISPONIBILI:
-${JSON.stringify(mappedTags)}
-
-LISTA COMPETENZE DISPONIBILI:
-${JSON.stringify(mappedCompetenze)}
-
-TESTO ANNUNCIO INSERITO DALL'UTENTE:
-<annuncio>
-${safeText}
-</annuncio>
-
-Restituisci ESCLUSIVAMENTE il seguente oggetto JSON compilato in modo valido, sostituendo i valori vuoti o null con i dati reali estratti:
-{
-  "titolo": "",
-  "descrizione": "",
-  "tipo": "una_tantum",
-  "data_esatta": null,
-  "giorni_settimana": [],
-  "ora_inizio": null,
-  "ora_fine": null,
-  "dove": null,
-  "tags": [],
-  "competenze": []
-}`
-
-    return { system, user }
+    return {
+      system: `Sei un esperto di Terzo Settore. Estrai dati da un annuncio di volontariato.
+      REGOLE RIGIDE:
+      1. TIPO: Se l'annuncio cita giorni ripetuti (es. "ogni martedì", "i weekend") imposta "ricorrente". Se cita una data singola o "domani", "una_tantum".
+      2. GIORNI: Usa solo: "Lunedì", "Martedì", "Mercoledì", "Giovedì", "Venerdì", "Sabato", "Domenica".
+      3. DOVE: Converti monumenti/luoghi famosi in indirizzi reali. Altrimenti null.
+      4. COPY: Titolo professionale, descrizione empatica (3-4 frasi).`,
+      user: `TAGS: ${JSON.stringify(mappedTags)}\nCOMPETENZE: ${JSON.stringify(mappedComp)}\nANNUNCIO: <text>${testoLibero}</text>\n\nRestituisci JSON: {"titolo":"","descrizione":"","tipo":"una_tantum"|"ricorrente","data_esatta":null,"giorni_settimana":[],"ora_inizio":null,"ora_fine":null,"dove":null,"tags":[],"competenze":[]}`
+    }
   }
 
   try {
     const chatCompletion = await createChatCompletionWithFallback(generatePrompt, 0.1)
     const data = JSON.parse(chatCompletion.choices[0]?.message?.content || "{}")
     
-    // Sanitizzazione al volo per garantire stabilità visiva
-    const badPhrases = ['non specificato', 'n/a', 'sconosciuto', 'da definire', 'string']
-    ;['titolo', 'descrizione', 'dove'].forEach(key => {
-      if (data[key] && typeof data[key] === 'string') {
-        data[key] = data[key].trim()
-        if (badPhrases.some(p => data[key].toLowerCase().includes(p))) data[key] = ""
-      }
-    })
+    // Normalizzazione Giorni per il Frontend
+    const mapG = { 
+      'lunedi': 'Lunedì', 'martedi': 'Martedì', 'mercoledi': 'Mercoledì', 'giovedi': 'Giovedì', 
+      'venerdi': 'Venerdì', 'sabato': 'Sabato', 'domenica': 'Domenica' 
+    }
+    if (Array.isArray(data.giorni_settimana)) {
+      data.giorni_settimana = data.giorni_settimana
+        .map((g: string) => (mapG as any)[g.toLowerCase().replace(/[^a-z]/g, '')] || g)
+        .filter((g: string) => Object.values(mapG).includes(g))
+    }
 
-    if (!Array.isArray(data.tags)) data.tags = []
-    if (!Array.isArray(data.competenze)) data.competenze = []
-    if (!Array.isArray(data.giorni_settimana)) data.giorni_settimana = []
+    // Forza 'ricorrente' se ci sono giorni selezionati
+    if (data.giorni_settimana?.length > 0) data.tipo = 'ricorrente'
 
     return { success: true, data }
-  } catch (error: any) {
-    console.error("❌ Errore AI Parser Posizione:", error)
-    return { error: "Impossibile elaborare l'annuncio in questo momento. Compila i campi manualmente." }
+  } catch (error) {
+    return { error: "Errore AI" }
   }
 }
 
