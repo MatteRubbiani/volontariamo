@@ -186,3 +186,29 @@ export async function updatePosizione(id: string, formData: FormData) {
   revalidatePath('/app/volontario');
   redirect('/app/associazione');
 }
+
+export async function deletePosizione(id: string) {
+  const supabase = await getSupabase();
+  const { data: { user } } = await supabase.auth.getUser();
+  
+  if (!user) redirect('/auth/login');
+
+  // 1. ELIMINAZIONE RECORD PRINCIPALE
+  // Nota di sicurezza: Rimuovendo la posizione, Supabase eliminerà in automatico 
+  // anche i record in 'posizione_tags' e 'posizione_competenze' 
+  // SE hai impostato "ON DELETE CASCADE" nelle Foreign Keys del database.
+  const { error } = await supabase
+    .from('posizioni')
+    .delete()
+    .eq('id', id)
+    .eq('associazione_id', user.id); // 🔒 BLINDATURA: Solo il proprietario può eliminarla
+
+  if (error) {
+    throw new Error("Impossibile eliminare l'annuncio: " + error.message);
+  }
+
+  // 2. RIGENERATE LE CACHE E REDIRECT
+  revalidatePath('/app/associazione');
+  revalidatePath('/app/volontario');
+  redirect('/app/associazione');
+}

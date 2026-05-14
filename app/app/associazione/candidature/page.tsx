@@ -16,56 +16,64 @@ export default async function HubCandidature() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/auth/login')
 
-  // 2. Recuperiamo tutte le candidature ricevute da questa associazione
-  const { data: candidature, error: errorCandidature } = await supabase
-    .from('candidature')
-    .select(`
-      id,
-      stato,
-      created_at,
-      volontario_id,
-      posizioni!inner (
+  // 2. FETCH PARALLELO: Tutte le candidature + Tutte le posizioni dell'associazione
+  const [ { data: candidature, error: errorCandidature }, { data: posizioni } ] = await Promise.all([
+    supabase
+      .from('candidature')
+      .select(`
         id,
-        titolo,
-        associazione_id
-      )
-    `)
-    .eq('posizioni.associazione_id', user.id)
-    .order('created_at', { ascending: false })
+        stato,
+        created_at,
+        volontario_id,
+        posizioni!inner (
+          id,
+          titolo,
+          associazione_id
+        )
+      `)
+      .eq('posizioni.associazione_id', user.id)
+      .order('created_at', { ascending: false }),
+      
+    // Fetch indipendente per popolare la tendina di filtro nel Client
+    supabase
+      .from('posizioni')
+      .select('id, titolo')
+      .eq('associazione_id', user.id)
+      .order('created_at', { ascending: false })
+  ])
 
   if (errorCandidature || !candidature) {
     console.error("Errore recupero candidature:", errorCandidature?.message)
-    return <div className="p-8 text-center text-red-500 font-bold">Impossibile caricare l'Inbox.</div>
+    return (
+      <div className="flex h-screen items-center justify-center bg-slate-50">
+        <div className="rounded-2xl bg-white p-6 text-center shadow-sm border border-slate-200">
+          <p className="text-sm font-bold text-rose-600">Impossibile caricare l'inbox delle candidature.</p>
+        </div>
+      </div>
+    )
   }
 
-  // ... (codice precedente intatto fino al controllo if (errorCandidature || !candidature))
-
-  // 3. ESTRAZIONE PROFILI TRAMITE RPC (Bypass RLS)
-  // Troviamo tutte le posizioni uniche in questa inbox
-  const idsPosizioni = Array.from(new Set(candidature.map((c: any) => c.posizioni?.id))).filter(Boolean)
+  // 3. Estrazione profili univoci tramite RPC in parallelo
+  // Usiamo gli ID delle posizioni trovate nelle candidature per mappare i volontari
+  const idsPosizioniCandidati = Array.from(new Set(candidature.map((c: any) => c.posizioni?.id))).filter(Boolean)
   
   let profili: any[] = []
   let signedUrls: any[] = []
 
-  if (idsPosizioni.length > 0) {
-    // Lanciamo la vostra RPC in parallelo per tutte le posizioni
-    const profiliPromises = idsPosizioni.map(posId => 
+  if (idsPosizioniCandidati.length > 0) {
+    const profiliPromises = idsPosizioniCandidati.map(posId => 
       supabase.rpc('get_profili_candidati', { p_posizione_id: posId })
     )
     
-    // Aspettiamo che finiscano tutte insieme
     const risultatiProfili = await Promise.all(profiliPromises)
     
-    // Uniamo tutti gli array di risultati in un unico grande calderone
     let tuttiIProfili: any[] = []
     risultatiProfili.forEach(res => {
       if (res.data) tuttiIProfili = [...tuttiIProfili, ...res.data]
     })
 
-    // Rimuoviamo eventuali duplicati (se un volontario si è candidato a più posizioni)
     profili = Array.from(new Map(tuttiIProfili.map(p => [p.id, p])).values())
 
-    // Generiamo i signed URLs per le foto caricate nello storage (esattamente come facevate)
     const pathsToSign = profili
       .map(p => p.foto_profilo_url)
       .filter(url => url && !url.startsWith('http'))
@@ -76,7 +84,7 @@ export default async function HubCandidature() {
     }
   }
 
-  // 4. MAPPATURA SICURA (Merge)
+  // 4. Mappatura e Merge finale
   const candidatureArricchite = candidature.map((cand: any) => {
     const profiloBase = profili.find(p => p.id === cand.volontario_id)
     
@@ -98,31 +106,41 @@ export default async function HubCandidature() {
   })
 
   return (
-    // 1. IL FIX MAGICO: Sottraiamo l'altezza della Navbar Globale (es. 76px su desktop e la bottom-bar su mobile)
     <div className="h-[calc(100dvh-90px)] lg:h-[calc(100dvh-76px)] overflow-hidden bg-slate-50 flex flex-col">
       
-      {/* NAVBAR SUPERIORE (Locale dell'Hub) */}
-      <div className="bg-white border-b border-slate-200 px-6 py-4 shrink-0 z-10">
+      {/* HEADER MINIMALE */}
+      <div className="bg-white border-b border-slate-200 px-4 sm:px-6 py-3.5 shrink-0 z-10">
         <div className="max-w-[1400px] mx-auto flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <Link href="/app/associazione" className="flex items-center justify-center w-10 h-10 rounded-full bg-slate-100 text-slate-500 hover:bg-slate-200 hover:text-slate-900 transition-colors">
-              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-5 h-5"><path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" /></svg>
+          <div className="flex items-center gap-3 sm:gap-4">
+            <Link 
+              href="/app/associazione" 
+              className="flex items-center justify-center w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-slate-100 text-slate-600 hover:bg-slate-900 hover:text-white transition-all active:scale-95"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-4 h-4 sm:w-5 sm:h-5">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5L8.25 12l7.5-7.5" />
+              </svg>
             </Link>
             <div>
-              <h1 className="font-black text-slate-900 text-xl leading-tight">Hub Candidature</h1>
-              <p className="text-[11px] font-bold uppercase tracking-widest text-emerald-600">Inbox Centralizzata</p>
+              <h1 className="font-black text-slate-900 text-lg sm:text-xl tracking-tight leading-tight">
+                Inbox Candidature
+              </h1>
+              <p className="text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                Flusso operativo globale
+              </p>
             </div>
           </div>
         </div>
       </div>
 
-      {/* 2. AGGIUNTO 'overflow-hidden' ANCHE QUI: per evitare che il padding (p-6) causi sbrodolamenti */}
+      {/* CORE CLIENT COMPONENT */}
       <div className="flex-1 min-h-0 w-full max-w-[1400px] mx-auto p-0 lg:p-6 flex flex-col overflow-hidden">
         <InboxCandidatureClient 
           candidatureIniziali={candidatureArricchite} 
+          posizioniDisponibili={posizioni || []} /* 🚨 PROP CRITICA AGGIUNTA */
           associazioneId={user.id} 
         />
       </div>
+
     </div>
   )
 }
