@@ -86,7 +86,7 @@ export function SignUpForm({
                 />
               </div>
 
-              {/* 🚨 NUOVO CAMPO CONFERMA PASSWORD */}
+              {/* 🚨 CAMPO CONFERMA PASSWORD */}
               <div className="grid gap-2">
                 <Label htmlFor="confirmPassword">Conferma Password</Label>
                 <Input
@@ -97,7 +97,7 @@ export function SignUpForm({
                 />
               </div>
 
-              {/* INIZIO SEZIONE PRIVACY POLICY */}
+              {/* SEZIONE PRIVACY E TERMINI */}
               <div className="flex items-start space-x-3 mt-1">
                 <input
                   type="checkbox"
@@ -107,10 +107,20 @@ export function SignUpForm({
                   className="mt-0.5 h-4 w-4 shrink-0 cursor-pointer rounded border-gray-300 text-slate-900 focus:ring-slate-900"
                 />
                 <Label htmlFor="privacy" className="text-sm font-normal text-muted-foreground leading-snug cursor-pointer">
-                  Ho letto e accetto i <Link href="/terms" className="text-foreground underline hover:text-primary">Termini di Servizio</Link> e la <Link href="/privacy" className="text-foreground underline hover:text-primary">Privacy Policy</Link>.
+                  Ho letto e accetto i{" "}
+                  <Link href="/terms" className="text-foreground underline hover:text-primary font-medium">
+                    Termini di Servizio
+                  </Link>{" "}
+                  e la{" "}
+                  <a 
+                    href="https://www.iubenda.com/privacy-policy/20796178" 
+                    className="iubenda-white iubenda-noiframe iubenda-embed text-foreground underline hover:text-primary font-medium transition-colors" 
+                    title="Privacy Policy"
+                  >
+                    Privacy Policy
+                  </a>.
                 </Label>
               </div>
-              {/* FINE SEZIONE PRIVACY POLICY */}
 
               {/* MOSTRA ERRORI */}
               {displayError && (

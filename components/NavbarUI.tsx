@@ -97,6 +97,15 @@ export default function NavbarUI({
               Esplora Mappa
             </Link>
           )}
+
+          {/* 🛡️ PRIVACY POLICY DESKTOP */}
+          <a 
+            href="https://www.iubenda.com/privacy-policy/20796178" 
+            className={`text-sm font-bold opacity-60 hover:opacity-100 transition-opacity ml-2 iubenda-white iubenda-noiframe iubenda-embed ${textColor}`}
+            title="Privacy Policy"
+          >
+            Privacy
+          </a>
         </div>
 
         {/* AREA DESTRA */}
@@ -157,7 +166,7 @@ export default function NavbarUI({
         </div>
       </div>
 
-      {/* MENU MOBILE - 🚨 Aggiunto backdrop-blur-xl e opacità per un effetto premium sopra la mappa */}
+      {/* MENU MOBILE */}
       {isOpen && (
         <div className={`md:hidden border-t px-6 py-6 flex flex-col gap-2 absolute w-full shadow-2xl backdrop-blur-xl transition-all ${isAziendale ? 'bg-slate-900/95 border-slate-800' : 'bg-white/95 border-slate-100'}`}>
           
@@ -263,6 +272,19 @@ export default function NavbarUI({
               </Link>
             </div>
           )}
+
+          {/* 🛡️ PRIVACY POLICY MOBILE */}
+          <div className={`mt-4 pt-4 border-t text-center ${isAziendale ? 'border-slate-800' : 'border-slate-100'}`}>
+            <a 
+              href="https://www.iubenda.com/privacy-policy/20796178" 
+              onClick={chiudiMenu}
+              className={`text-xs font-bold opacity-60 hover:opacity-100 transition-opacity inline-block iubenda-white iubenda-noiframe iubenda-embed ${isAziendale ? 'text-slate-400' : 'text-slate-500'}`}
+              title="Privacy Policy"
+            >
+              Privacy Policy
+            </a>
+          </div>
+
         </div>
       )}
     </nav>
