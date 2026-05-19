@@ -112,13 +112,9 @@ export function SignUpForm({
                     Termini di Servizio
                   </Link>{" "}
                   e la{" "}
-                  <a 
-                    href="https://www.iubenda.com/privacy-policy/20796178" 
-                    className="iubenda-white iubenda-noiframe iubenda-embed text-foreground underline hover:text-primary font-medium transition-colors" 
-                    title="Privacy Policy"
-                  >
+                  <Link href="/privacy" className="text-foreground underline hover:text-primary font-medium">
                     Privacy Policy
-                  </a>.
+                  </Link>.
                 </Label>
               </div>
 

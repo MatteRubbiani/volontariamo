@@ -99,13 +99,13 @@ export default function NavbarUI({
           )}
 
           {/* 🛡️ PRIVACY POLICY DESKTOP */}
-          <a 
-            href="https://www.iubenda.com/privacy-policy/20796178" 
-            className={`text-sm font-bold opacity-60 hover:opacity-100 transition-opacity ml-2 iubenda-white iubenda-noiframe iubenda-embed ${textColor}`}
+          <Link 
+            href="/privacy" 
+            className={`text-sm font-bold opacity-60 hover:opacity-100 transition-opacity ml-2 ${textColor}`}
             title="Privacy Policy"
           >
             Privacy
-          </a>
+          </Link>
         </div>
 
         {/* AREA DESTRA */}
@@ -275,14 +275,14 @@ export default function NavbarUI({
 
           {/* 🛡️ PRIVACY POLICY MOBILE */}
           <div className={`mt-4 pt-4 border-t text-center ${isAziendale ? 'border-slate-800' : 'border-slate-100'}`}>
-            <a 
-              href="https://www.iubenda.com/privacy-policy/20796178" 
+            <Link 
+              href="/privacy" 
               onClick={chiudiMenu}
-              className={`text-xs font-bold opacity-60 hover:opacity-100 transition-opacity inline-block iubenda-white iubenda-noiframe iubenda-embed ${isAziendale ? 'text-slate-400' : 'text-slate-500'}`}
+              className={`text-xs font-bold opacity-60 hover:opacity-100 transition-opacity inline-block ${isAziendale ? 'text-slate-400' : 'text-slate-500'}`}
               title="Privacy Policy"
             >
               Privacy Policy
-            </a>
+            </Link>
           </div>
 
         </div>
