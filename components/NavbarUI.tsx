@@ -79,12 +79,20 @@ export default function NavbarUI({
                   </>
                 )}
                 {isAssociazione && (
-                  <Link 
-                    href="/app/associazione/candidature" 
-                    className={`text-sm font-bold transition-colors ${textColor}`}
-                  >
-                    Candidature Ricevute
-                  </Link>
+                  <>
+                    <Link 
+                      href="/app/associazione/messaggi" 
+                      className={`text-sm font-bold transition-colors ${textColor}`}
+                    >
+                      Messaggi
+                    </Link>
+                    <Link 
+                      href="/app/associazione/rete" 
+                      className={`text-sm font-bold transition-colors ${textColor}`}
+                    >
+                      La mia Rete
+                    </Link>
+                  </>
                 )}
               </>
             )
@@ -208,13 +216,22 @@ export default function NavbarUI({
                   )}
 
                   {isAssociazione && (
-                    <Link 
-                      href="/app/associazione/candidature" 
-                      onClick={chiudiMenu}
-                      className={`p-3 rounded-xl font-bold transition-all ${isAziendale ? 'text-white hover:bg-slate-800' : 'text-slate-900 hover:bg-slate-50'}`}
-                    >
-                      Candidature Ricevute
-                    </Link>
+                    <>
+                      <Link 
+                        href="/app/associazione/messaggi" 
+                        onClick={chiudiMenu}
+                        className={`p-3 rounded-xl font-bold transition-all ${isAziendale ? 'text-white hover:bg-slate-800' : 'text-slate-900 hover:bg-slate-50'}`}
+                      >
+                        Messaggi
+                      </Link>
+                      <Link 
+                        href="/app/associazione/rete" 
+                        onClick={chiudiMenu}
+                        className={`p-3 rounded-xl font-bold transition-all ${isAziendale ? 'text-white hover:bg-slate-800' : 'text-slate-900 hover:bg-slate-50'}`}
+                      >
+                        La mia Rete
+                      </Link>
+                    </>
                   )}
                 </>
               )}

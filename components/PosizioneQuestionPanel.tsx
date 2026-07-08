@@ -10,7 +10,7 @@ interface PosizioneQuestionPanelProps {
   associazioneNome: string
   userId: string | null
   loginHref: string
-  initialCandidaturaId: string | null
+  initialCandidaturaId: string | null // Lo manteniamo nelle props per non rompere il componente padre, ma non ci serve più per la chat!
   buttonClassName?: string
 }
 
@@ -19,12 +19,11 @@ export default function PosizioneQuestionPanel({
   associazioneNome,
   userId,
   loginHref,
-  initialCandidaturaId,
   buttonClassName = ''
 }: PosizioneQuestionPanelProps) {
   const router = useRouter()
   const [isOpen, setIsOpen] = useState(false)
-  const [candidaturaId, setCandidaturaId] = useState<string | null>(initialCandidaturaId)
+  const [targetAssociazioneId, setTargetAssociazioneId] = useState<string | null>(null)
   const [isInitializing, setIsInitializing] = useState(false)
 
   const supabase = createBrowserClient(
@@ -39,33 +38,29 @@ export default function PosizioneQuestionPanel({
       return
     }
 
-    // 2. Se ha già una candidatura, apriamo subito il modal
-    if (candidaturaId) {
+    // 2. Se abbiamo già recuperato l'ID dell'associazione, apriamo subito
+    if (targetAssociazioneId) {
       setIsOpen(true)
       return
     }
 
-    // 3. Se non ha la candidatura, la creiamo in modo "silenzioso"
+    // 3. Altrimenti, recuperiamo al volo a quale associazione appartiene questo annuncio
     setIsInitializing(true)
     try {
       const { data, error } = await supabase
-        .from('candidature')
-        .insert({
-          posizione_id: posizioneId,
-          volontario_id: userId,
-          stato: 'in_attesa' // Lo mettiamo in attesa, così l'associazione lo vede nei "Nuovi"
-        })
-        .select('id')
+        .from('posizioni')
+        .select('associazione_id')
+        .eq('id', posizioneId)
         .single()
 
       if (error) throw error
 
-      if (data) {
-        setCandidaturaId(data.id)
+      if (data?.associazione_id) {
+        setTargetAssociazioneId(data.associazione_id)
         setIsOpen(true)
       }
     } catch (error) {
-      console.error('Errore durante la creazione della chat:', error)
+      console.error('Errore durante il recupero dell\'associazione:', error)
       alert('Impossibile avviare la chat. Riprova più tardi.')
     } finally {
       setIsInitializing(false)
@@ -90,17 +85,17 @@ export default function PosizioneQuestionPanel({
         )}
       </button>
 
-      {/* MODAL DELLA CHAT (Stesso design premium dell'associazione) */}
-      {isOpen && candidaturaId && userId && (
+      {/* MODAL DELLA CHAT */}
+      {isOpen && targetAssociazioneId && userId && (
         <>
           {/* BACKDROP */}
-<div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-[9990] animate-in fade-in duration-300" />
+          <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-[9990] animate-in fade-in duration-300" />
 
-{/* CONTENITORE MODAL */}
-<div 
-  className="fixed inset-0 z-[9999] flex items-center justify-center p-4 sm:p-6"
-  onClick={() => setIsOpen(false)}
->
+          {/* CONTENITORE MODAL */}
+          <div 
+            className="fixed inset-0 z-[9999] flex items-center justify-center p-4 sm:p-6"
+            onClick={() => setIsOpen(false)}
+          >
             {/* CARD BIANCA */}
             <div 
               className="w-full max-w-3xl bg-white rounded-[2rem] shadow-2xl overflow-hidden flex flex-col max-h-[90vh] h-[600px] animate-in zoom-in-95 slide-in-from-bottom-4 fade-in duration-500"
@@ -113,7 +108,7 @@ export default function PosizioneQuestionPanel({
                     {associazioneNome.charAt(0).toUpperCase()}
                   </div>
                   <div>
-                    <h3 className="font-black text-slate-900 text-lg">Chat con l'Associazione</h3>
+                    <h3 className="font-black text-slate-900 text-lg">Chat Unificata</h3>
                     <p className="text-sm font-medium text-slate-500">{associazioneNome}</p>
                   </div>
                 </div>
@@ -121,6 +116,7 @@ export default function PosizioneQuestionPanel({
                 <button 
                   onClick={() => setIsOpen(false)}
                   className="rounded-xl p-2 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700"
+                  title="Chiudi chat"
                 >
                   <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-6 h-6">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
@@ -130,10 +126,15 @@ export default function PosizioneQuestionPanel({
 
               {/* CONTENITORE CHAT CONDIVISA */}
               <div className="flex-1 overflow-hidden p-4 sm:p-6 bg-slate-50 flex flex-col relative">
-                {/* Passiamo il candidaturaId appena generato (o quello vecchio) 
-                  e lo userId del volontario. Il componente SharedChatWidget farà il resto! 
+                {/* 
+                  Oramai SharedChatWidget è universale! 
+                  Gli passiamo solo l'ID del volontario (userId) e quello dell'associazione appena recuperato.
                 */}
-                <SharedChatWidget candidaturaId={candidaturaId} currentUserId={userId} />
+                <SharedChatWidget 
+                  volontarioId={userId} 
+                  associazioneId={targetAssociazioneId} 
+                  currentUserId={userId} 
+                />
               </div>
             </div>
           </div>

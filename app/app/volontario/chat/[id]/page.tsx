@@ -21,7 +21,7 @@ export default async function VolontarioChat({
 
   const { id } = await params
 
-  // 1. Recupero dati candidatura
+  // 1. Recupero dati candidatura e associazione_id tramite la posizione
   const { data: candidatura, error: candError } = await supabase
     .from('candidature')
     .select(`
@@ -29,7 +29,8 @@ export default async function VolontarioChat({
       stato, 
       volontario_id, 
       posizioni (
-        titolo
+        titolo,
+        associazione_id
       )
     `)
     .eq('id', id)
@@ -54,8 +55,17 @@ export default async function VolontarioChat({
     ? candidatura.posizioni[0] 
     : candidatura.posizioni
 
-  const currentCandidaturaId = id
   const volunteerId = user.id
+  const associazioneId = infoPosizione?.associazione_id
+
+  // Se per qualche motivo manca l'ID associazione, mostriamo un errore pulito
+  if (!associazioneId) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50">
+        <h1 className="text-xl font-bold text-slate-800 mb-4">Errore caricamento chat</h1>
+      </div>
+    )
+  }
 
   return (
     <div className="h-[100dvh] flex flex-col bg-slate-50 overflow-hidden">
@@ -69,16 +79,19 @@ export default async function VolontarioChat({
           <div>
             <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Chat Associazione</p>
             <h1 className="font-black text-slate-800 text-lg leading-tight truncate">
-              {/* Usiamo la variabile sicura estratta sopra */}
               {infoPosizione?.titolo || 'Chat'}
             </h1>
           </div>
         </div>
       </div>
 
-      {/* COMPONENTE REALTIME */}
+      {/* COMPONENTE REALTIME AGGIORNATO */}
       <div className="flex-1 w-full max-w-4xl mx-auto overflow-hidden relative">
-        <SharedChatWidget candidaturaId={currentCandidaturaId} currentUserId={volunteerId} />
+        <SharedChatWidget 
+          volontarioId={volunteerId} 
+          associazioneId={associazioneId} 
+          currentUserId={volunteerId} 
+        />
       </div>
 
     </div>

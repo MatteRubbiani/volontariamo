@@ -107,7 +107,7 @@ export default async function DashboardAssociazione() {
                 <div className="bg-slate-50/50 border-t border-slate-100 p-3 sm:px-5">
                 
 <Link 
-  href={`/app/associazione/candidature?filterPosizione=${p.id}`}
+  href={`/app/associazione/messaggi?filterPosizione=${p.id}`}
   className="flex items-center justify-between p-3 rounded-xl hover:bg-white hover:shadow-xs transition-all duration-200 border border-transparent hover:border-slate-200/60 group"
 >
                     <div className="flex items-center gap-6">
@@ -143,7 +143,7 @@ export default async function DashboardAssociazione() {
 
                     {/* AZIONE DI NAVIGAZIONE */}
                     <div className="text-xs font-bold text-slate-500 group-hover:text-slate-900 flex items-center gap-1 transition-colors">
-                      <span>Candidature</span>
+                      <span>Messaggi</span>
                       <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-3.5 h-3.5">
                         <path strokeLinecap="round" strokeLinejoin="round" d="M8.25 4.5l7.5 7.5-7.5 7.5" />
                       </svg>

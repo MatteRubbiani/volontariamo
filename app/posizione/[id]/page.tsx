@@ -24,7 +24,7 @@ export async function generateMetadata(
 
   const { data: posizione } = await supabase
     .from('posizioni')
-    .select('titolo, descrizione, associazione:associazioni(nome)')
+    .select('titolo, descrizione, associazione:associazioni(denominazione)')
     .eq('id', resolvedParams.id)
     .maybeSingle()
 
@@ -36,7 +36,7 @@ export async function generateMetadata(
   }
 
   const nomeAssociazione =
-    (Array.isArray((posizione as any).associazione) ? (posizione as any).associazione[0]?.nome : (posizione as any).associazione?.nome) ||
+    (Array.isArray((posizione as any).associazione) ? (posizione as any).associazione[0]?.denominazione : (posizione as any).associazione?.denominazione) ||
     'Associazione'
     
   const title = `${posizione.titolo} | ${nomeAssociazione}`
@@ -105,7 +105,7 @@ export default async function DettaglioPosizioneVolontario({
   const [associazioneResult, immagineResult, tagsResult, competenzeResult] = await Promise.all([
     publicSupabase
       .from('associazioni')
-      .select('id, nome, email_contatto')
+      .select('id, denominazione, email_associazione')
       .eq('id', posBase.associazione_id)
       .maybeSingle(),
     posBase.immagine_id
@@ -167,6 +167,7 @@ export default async function DettaglioPosizioneVolontario({
         .single()
     : { data: null }
 
+  // ⚡ LA MAGIA AVVIENE NEL DATABASE ORA
   async function inviaCandidatura() {
     'use server'
     const cookieStore = await cookies()
@@ -178,11 +179,18 @@ export default async function DettaglioPosizioneVolontario({
     const { data: { user: u } } = await supabaseAction.auth.getUser()
     if (!u) redirect('/auth/login')
 
-    await supabaseAction.from('candidature').insert({
+    // Usiamo UPSERT con ignoreDuplicates per prevenire l'errore "duplicate key 23505"
+    const { error } = await supabaseAction.from('candidature').upsert({
       posizione_id: id,
       volontario_id: u.id,
       stato: 'in_attesa'
+    }, { 
+      onConflict: 'posizione_id, volontario_id',
+      ignoreDuplicates: true 
     })
+
+    if (error) console.error("Errore inserimento candidatura:", error)
+
     revalidatePath(`/posizione/${id}`)
   }
 
@@ -201,7 +209,7 @@ export default async function DettaglioPosizioneVolontario({
     return `Ogni ${dataString}`;
   }
 
-  const nomeAssociazione = pos.associazioni?.nome || pos.associazioni?.email_contatto || 'Associazione'
+  const nomeAssociazione = pos.associazioni?.denominazione || pos.associazioni?.email_associazione || 'Associazione'
   const inizialeAssociazione = nomeAssociazione.charAt(0).toUpperCase()
   const competenzeRichieste = pos.competenze?.map((c: any) => c.competenza).filter(Boolean) || []
   const competenzeMatch = competenzeRichieste.filter((c: any) => competenzeVolontario.includes(c.id))
@@ -211,11 +219,8 @@ export default async function DettaglioPosizioneVolontario({
   const statoCandidatura = candidatura?.stato === 'accettata' ? 'accettato' : candidatura?.stato === 'rifiutata' ? 'rifiutato' : candidatura?.stato
   const dataFormattata = formattaData(pos.quando, pos.tipo);
 
-  // 🚨 L'ARMA SEGRETA SEO: Dati strutturati dinamici
-  // Recuperiamo l'URL base per i link assoluti richiesti da Google
+  // 🚨 Dati strutturati dinamici
   const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://volontariando.work';
-
-  // 🚨 L'ARMA SEGRETA SEO POTENZIATA
   let jsonLd = {}
 
   if (pos.tipo === 'una_tantum') {
@@ -231,7 +236,6 @@ export default async function DettaglioPosizioneVolontario({
       endDate: endDate,
       eventAttendanceMode: 'https://schema.org/OfflineEventAttendanceMode',
       eventStatus: 'https://schema.org/EventScheduled',
-      // 📸 AGGIUNTA IMMAGINE
       image: imgUrl ? [imgUrl] : [],
       location: {
         '@type': 'Place',
@@ -242,7 +246,6 @@ export default async function DettaglioPosizioneVolontario({
           addressCountry: 'IT',
         },
       },
-      // 🎫 AGGIUNTA OFFERS (Ingresso gratuito)
       offers: {
         '@type': 'Offer',
         url: `${baseUrl}/posizione/${id}`,
@@ -254,7 +257,7 @@ export default async function DettaglioPosizioneVolontario({
       organizer: {
         '@type': 'NGO',
         name: nomeAssociazione,
-        url: `${baseUrl}/associazione/${pos.associazioni?.id}` // 🔗 AGGIUNTO URL
+        url: `${baseUrl}/associazione/${pos.associazioni?.id}`
       },
     }
   } else {
@@ -265,12 +268,11 @@ export default async function DettaglioPosizioneVolontario({
       description: pos.descrizione,
       datePosted: new Date().toISOString(),
       employmentType: 'VOLUNTEER',
-      // 📸 AGGIUNTA IMMAGINE
       image: imgUrl ? imgUrl : undefined,
       hiringOrganization: {
         '@type': 'NGO',
         name: nomeAssociazione,
-        sameAs: `${baseUrl}/associazione/${pos.associazioni?.id}` // 🔗 AGGIUNTO URL
+        sameAs: `${baseUrl}/associazione/${pos.associazioni?.id}`
       },
       jobLocation: {
         '@type': 'Place',
@@ -317,7 +319,6 @@ export default async function DettaglioPosizioneVolontario({
 
   return (
     <div className="min-h-screen bg-white text-slate-900 font-sans selection:bg-slate-200">
-      {/* 🚨 INIEZIONE JSON-LD */}
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
