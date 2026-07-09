@@ -12,6 +12,7 @@ interface PosizioneCardProps {
   onMouseEnter?: () => void;
   onMouseLeave?: () => void;
   layout?: 'vertical' | 'horizontal';
+  coloreBrand?: string | null; // ✨ NUOVO PARAMETRO OPZIONALE
 }
 
 export default function PosizioneCard({ 
@@ -22,14 +23,15 @@ export default function PosizioneCard({
   isFocused = false,
   onMouseEnter,
   onMouseLeave,
-  layout = 'vertical' 
+  layout = 'vertical',
+  coloreBrand // Lo riceviamo qui
 }: PosizioneCardProps) { 
   
   const pathname = usePathname()
   const isAssociazione = ruolo === 'associazione'
   const isHorizontal = layout === 'horizontal' 
   
-  // Tema dinamico in base al ruolo
+  // Tema dinamico di default (se non c'è coloreBrand)
   const themeTextHover = isAssociazione ? 'group-hover:text-emerald-600' : 'group-hover:text-blue-600'
   const themeTextActive = isAssociazione ? 'text-emerald-700' : 'text-blue-700'
 
@@ -46,7 +48,7 @@ export default function PosizioneCard({
     urlDestinazione += '?from=mappa'
   }
 
-  // 🚨 ICONE SVG PREMIUM (Basta emoji!)
+  // Icone SVG Premium
   const IconaAzione = isAssociazione ? (
     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-4 h-4">
       <path strokeLinecap="round" strokeLinejoin="round" d="M16.862 4.487l1.687-1.688a1.875 1.875 0 112.652 2.652L6.832 19.82a4.5 4.5 0 01-1.89 1.147l-3.141 1.047a.875.875 0 01-1.11-.11l-.11-1.11a4.5 4.5 0 011.147-1.89L16.862 4.487z" />
@@ -68,14 +70,29 @@ export default function PosizioneCard({
   const isAttiva = isHovered || isFocused;
 
   const imgUrl = posizione.media_associazioni?.url || posizione.immagine?.url || posizione.immagine_url || null;
-  const iniziale = posizione.titolo ? posizione.titolo.charAt(0).toUpperCase() : 'V';
+  const iniziale = posizione.titolo ? String(posizione.titolo).charAt(0).toUpperCase() : 'V';
+
+  // LOGICA COLORI: Se c'è coloreBrand usiamo var CSS, altrimenti classi standard
+  const titleClassesVertical = coloreBrand 
+    ? "text-lg font-bold mb-1.5 leading-tight transition-colors line-clamp-2 text-slate-900 group-hover:text-[var(--brand-color)]"
+    : `text-lg font-bold mb-1.5 leading-tight transition-colors line-clamp-2 ${isAttiva ? themeTextActive : `text-slate-900 ${themeTextHover}`}`;
+
+  const titleClassesHorizontal = coloreBrand
+    ? "text-sm sm:text-base font-bold leading-tight line-clamp-2 transition-colors text-slate-900 group-hover:text-[var(--brand-color)]"
+    : `text-sm sm:text-base font-bold leading-tight line-clamp-2 transition-colors ${isAttiva ? themeTextActive : `text-slate-900 ${themeTextHover}`}`;
+
+  const iconClasses = coloreBrand
+    ? "w-8 h-8 rounded-full flex items-center justify-center transition-all shrink-0 bg-slate-50 text-slate-400 group-hover:bg-[var(--brand-color)] group-hover:text-white"
+    : `w-8 h-8 rounded-full flex items-center justify-center transition-colors shrink-0 ${isAttiva ? 'bg-slate-900 text-white' : 'bg-slate-50 text-slate-400 group-hover:bg-slate-900 group-hover:text-white'}`;
 
   return (
     <Link 
       href={urlDestinazione} 
-      className="block group h-full"
+      className="block group h-full cursor-pointer"
       onMouseEnter={onMouseEnter}
       onMouseLeave={onMouseLeave}
+      // ✨ Passiamo la variabile CSS al tag Link per farla usare a Tailwind
+      style={coloreBrand ? { '--brand-color': coloreBrand } as React.CSSProperties : undefined}
     >
       <div className={`rounded-3xl shadow-sm border transition-all duration-300 overflow-hidden bg-white ${
         isAttiva 
@@ -108,15 +125,15 @@ export default function PosizioneCard({
         {/* 📝 SEZIONE CONTENUTO */}
         <div className={`flex flex-col flex-grow min-w-0 ${isHorizontal ? 'p-4' : 'p-5 md:p-6'}`}>
           
-          {/* LAYOUT ORIZZONTALE (COMPATTO PER DASHBOARD MOBILE E MAPPA) */}
           {isHorizontal ? (
             <div className="flex h-full items-center gap-3">
               <div className="flex flex-col min-w-0 flex-grow h-full justify-center">
                 <span className="text-[9px] font-black text-slate-400 uppercase tracking-widest truncate mb-1">
                   {posizione.tipo === 'una_tantum' ? 'Evento Singolo' : 'Ricorrente'}
                 </span>
-
-                <h3 className={`text-sm sm:text-base font-bold leading-tight line-clamp-2 transition-colors ${isAttiva ? themeTextActive : `text-slate-900 ${themeTextHover}`}`}>
+                
+                {/* TITOLO ORIZZONTALE */}
+                <h3 className={titleClassesHorizontal}>
                   {posizione.titolo || 'Senza Titolo'}
                 </h3>
                 
@@ -127,17 +144,13 @@ export default function PosizioneCard({
                   </p>
                 </div>
               </div>
-
-              {/* L'Icona a destra isolata */}
-              <div className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors shrink-0 ${
-                isAttiva ? 'bg-slate-900 text-white' : 'bg-slate-50 text-slate-400 group-hover:bg-slate-900 group-hover:text-white'
-              }`}>
+              
+              {/* ICONA ORIZZONTALE */}
+              <div className={iconClasses}>
                 {IconaAzione}
               </div>
             </div>
           ) : (
-            
-            /* LAYOUT VERTICALE (ORIGINALE PER LISTE ESPLORA) */
             <>
               <div className="flex flex-col mb-3">
                 <div className="flex justify-between items-start mb-3 gap-2">
@@ -150,15 +163,15 @@ export default function PosizioneCard({
                       <span className="w-1.5 h-1.5 rounded-full bg-slate-900"></span> Ricorrente
                     </span>
                   )}
-
-                  <div className={`w-8 h-8 rounded-full flex items-center justify-center transition-colors shrink-0 ${
-                    isAttiva ? 'bg-slate-900 text-white' : 'bg-slate-50 text-slate-400 group-hover:bg-slate-900 group-hover:text-white'
-                  }`}>
+                  
+                  {/* ICONA VERTICALE */}
+                  <div className={iconClasses}>
                     {IconaAzione}
                   </div>
                 </div>
-
-                <h3 className={`text-lg font-bold mb-1.5 leading-tight transition-colors line-clamp-2 ${isAttiva ? themeTextActive : `text-slate-900 ${themeTextHover}`}`}>
+                
+                {/* TITOLO VERTICALE */}
+                <h3 className={titleClassesVertical}>
                   {posizione.titolo || 'Senza Titolo'}
                 </h3>
                 
@@ -171,10 +184,7 @@ export default function PosizioneCard({
                 {competenzeRichieste.length > 0 && (
                   <div className="flex items-center gap-1.5 mb-4 w-full overflow-hidden">
                     {competenzeRichieste.slice(0, 2).map((comp: any, i: number) => (
-                      <span 
-                        key={i} 
-                        className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-[9px] font-bold uppercase tracking-widest border bg-slate-50 text-slate-500 border-slate-200"
-                      >
+                      <span key={i} className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-[9px] font-bold uppercase tracking-widest border bg-slate-50 text-slate-500 border-slate-200">
                         <span className="truncate">{comp.name || comp}</span>
                       </span>
                     ))}
