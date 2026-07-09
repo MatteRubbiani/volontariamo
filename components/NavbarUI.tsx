@@ -81,6 +81,12 @@ export default function NavbarUI({
                 {isAssociazione && (
                   <>
                     <Link 
+                      href="/app/associazione/personalizza" 
+                      className={`text-sm font-bold transition-colors ${textColor}`}
+                    >
+                      Personalizza
+                    </Link>
+                    <Link 
                       href="/app/associazione/messaggi" 
                       className={`text-sm font-bold transition-colors ${textColor}`}
                     >
@@ -90,7 +96,7 @@ export default function NavbarUI({
                       href="/app/associazione/rete" 
                       className={`text-sm font-bold transition-colors ${textColor}`}
                     >
-                      La mia Rete
+                      Volontari
                     </Link>
                   </>
                 )}
@@ -218,6 +224,13 @@ export default function NavbarUI({
                   {isAssociazione && (
                     <>
                       <Link 
+                        href="/app/associazione/personalizza" 
+                        onClick={chiudiMenu}
+                        className={`p-3 rounded-xl font-bold transition-all ${isAziendale ? 'text-white hover:bg-slate-800' : 'text-slate-900 hover:bg-slate-50'}`}
+                      >
+                        Personalizza
+                      </Link>
+                      <Link 
                         href="/app/associazione/messaggi" 
                         onClick={chiudiMenu}
                         className={`p-3 rounded-xl font-bold transition-all ${isAziendale ? 'text-white hover:bg-slate-800' : 'text-slate-900 hover:bg-slate-50'}`}
@@ -229,7 +242,7 @@ export default function NavbarUI({
                         onClick={chiudiMenu}
                         className={`p-3 rounded-xl font-bold transition-all ${isAziendale ? 'text-white hover:bg-slate-800' : 'text-slate-900 hover:bg-slate-50'}`}
                       >
-                        La mia Rete
+                        Volontari
                       </Link>
                     </>
                   )}
