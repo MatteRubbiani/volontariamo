@@ -7,24 +7,24 @@ import { createBrowserClient } from '@supabase/ssr'
 import { DndContext, PointerSensor, closestCenter, DragEndEvent, useSensor, useSensors } from '@dnd-kit/core'
 import { SortableContext, arrayMove, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import { FileText, GripVertical, Image as ImageIcon, LayoutGrid, Link2, Plus, Quote, Save, Settings2, Sparkles, Trash2, Users, Loader2, UploadCloud, Heart, Briefcase, MessageSquare, Video, Mail, Target, Eye } from 'lucide-react'
+import { FileText, GripVertical, Image as ImageIcon, LayoutGrid, Link2, Plus, Quote, Save, Settings2, Sparkles, Trash2, Users, Loader2, UploadCloud, Heart, Briefcase, MessageSquare, Video, Mail, Target, Eye, AlignCenter, AlignLeft, AlignRight, MoveUp, MoveDown } from 'lucide-react'
 import PosizioneCard from '@/components/PosizioneCard'
+import { AnyAaaaRecord } from 'dns'
 
 // ==========================================
 // 1. TIPI E COSTANTI
 // ==========================================
 type BlockType = 'hero' | 'stats' | 'about' | 'mission' | 'vision' | 'gallery' | 'links' | 'faq' | 'documents' | 'partners' | 'positions' | 'donations' | 'projects' | 'testimonials' | 'video' | 'contacts'
 type LayoutBlock = { id: string; type: BlockType; content: any }
-type HeroContent = { title: string; eyebrow: string; subtitle: string; coverUrl: string; logoUrl: string; brandColor: string }
+type HeroContent = { title: string; eyebrow: string; subtitle: string; coverUrl: string; logoUrl: string; brandColor: string; coverPosition?: string; logoPosition?: string }
 
 const supabase = createBrowserClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!)
 const DEFAULT_BRAND = '#111827'
 const BUCKET_NAME = 'media_associazioni'
 
-// Libreria con flag isUnique per definire quali elementi possono essere duplicati liberamente
 const blockLibrary = [
   { type: 'about', label: 'Testo Libero / Chi siamo', icon: Quote, desc: 'Aggiungi paragrafi descrittivi o la vostra storia', isUnique: false },
-  { type: 'stats', label: 'Numeri', icon: Users, desc: 'Aggiungi fino a 3 statistiche chiave', isUnique: true },
+  { type: 'stats', label: 'Numeri chiave', icon: Users, desc: 'Mostra statistiche d’impatto della tua associazione', isUnique: true },
   { type: 'mission', label: 'La nostra Mission', icon: Target, desc: 'Il motivo per cui esistete e l’impatto generato', isUnique: true },
   { type: 'vision', label: 'La nostra Vision', icon: Eye, desc: 'La direzione futura che volete costruire', isUnique: true },
   { type: 'gallery', label: 'Galleria Foto', icon: ImageIcon, desc: 'Mosaico visivo fluido auto-adattivo', isUnique: false },
@@ -36,7 +36,7 @@ const blockLibrary = [
   { type: 'documents', label: 'Documenti', icon: FileText, desc: 'Moduli e file scaricabili', isUnique: true },
   { type: 'links', label: 'Link Utili', icon: Link2, desc: 'Sito web e social network', isUnique: true },
   { type: 'contacts', label: 'Contatti & Sedi', icon: Mail, desc: 'Info di contatto e form rapido per domande', isUnique: true },
-  { type: 'partners', label: 'Partner', icon: LayoutGrid, desc: 'Con chi collaborate', isUnique: true },
+  { type: 'partners', label: 'Partner e Sponsor', icon: LayoutGrid, desc: 'Loghi o nomi delle realtà con cui collaborate', isUnique: true },
   { type: 'positions', label: 'Posizioni', icon: Users, desc: 'Le tue posizioni aperte (Automatico)', isUnique: true },
 ]
 
@@ -95,7 +95,7 @@ function EditableField({ value, placeholder, onChange, className = '', inputClas
   )
 }
 
-function EditableImage({ value, onChange, className = '', children }: any) {
+function EditableImage({ value, onChange, className = '', children, objectPosition = 'center' }: any) {
   const [isUploading, setIsUploading] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
 
@@ -112,17 +112,20 @@ function EditableImage({ value, onChange, className = '', children }: any) {
   return (
     <div className={`relative group cursor-pointer overflow-hidden bg-slate-100 transition-all ${className}`} onClick={() => !value && inputRef.current?.click()}>
       <input type="file" ref={inputRef} className="hidden" accept="image/*" onChange={handleFileChange} />
-      {isUploading && <div className="absolute inset-0 flex items-center justify-center bg-slate-100/80 backdrop-blur-md z-30"><Loader2 className="w-8 h-8 animate-spin text-slate-900" /></div>}
-      {value ? <img src={value} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" alt="Contenuto" /> : (
+      {isUploading && <div className="absolute inset-0 flex items-center justify-center bg-slate-100/80 backdrop-blur-md z-40"><Loader2 className="w-8 h-8 animate-spin text-slate-900" /></div>}
+      {value ? (
+        /* FIX CROP: Usiamo lo stile inline nativo anziché string interpolation Tailwind */
+        <img src={value} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" style={{ objectPosition: objectPosition }} alt="Contenuto" />
+      ) : (
         <div className="absolute inset-0 flex flex-col items-center justify-center text-slate-400 group-hover:bg-slate-200 group-hover:text-slate-600 transition-colors">
-          <ImageIcon className="w-6 h-6 mb-1 opacity-40" />
-          <span className="text-[9px] uppercase font-bold tracking-widest text-center">Carica</span>
+          <ImageIcon className="w-8 h-8 mb-2 opacity-40" />
+          <span className="text-[10px] uppercase font-bold tracking-widest">Carica</span>
         </div>
       )}
       {value && !isUploading && (
-        <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-all duration-300 flex items-center justify-center gap-3 z-20 backdrop-blur-[2px]">
-          <button onClick={(e) => { e.stopPropagation(); inputRef.current?.click() }} className="p-2 bg-white text-black rounded-full shadow-2xl hover:scale-110 transition-all" title="Sostituisci"><UploadCloud className="w-3.5 h-3.5" /></button>
-          <button onClick={(e) => { e.stopPropagation(); onChange('') }} className="p-2 bg-red-500 text-white rounded-full shadow-2xl hover:scale-110 transition-all" title="Rimuovi"><Trash2 className="w-3.5 h-3.5" /></button>
+        <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-all duration-300 flex items-center justify-center gap-4 z-10 backdrop-blur-[2px]">
+          <button onClick={(e) => { e.stopPropagation(); inputRef.current?.click() }} className="p-3 bg-white text-black rounded-full shadow-2xl hover:scale-110 transition-all" title="Sostituisci"><UploadCloud className="w-4 h-4" /></button>
+          <button onClick={(e) => { e.stopPropagation(); onChange('') }} className="p-3 bg-red-500 text-white rounded-full shadow-2xl hover:scale-110 transition-all" title="Rimuovi"><Trash2 className="w-4 h-4" /></button>
         </div>
       )}
       {children}
@@ -201,22 +204,44 @@ function SortableBlockShell({ block, onRemove, children, locked = false }: any) 
 // 4. COMPONENTI BLOCCO CORE + BLOCCHI MULTIPLI
 // ==========================================
 const Blocks = {
-  hero: ({ content, onChange }: any) => (
-    <div className="relative w-full group">
-      <div className="w-full h-32 md:h-48 rounded-[2rem] bg-slate-100 overflow-hidden relative shadow-sm border border-slate-100/50">
-        <EditableImage value={content.coverUrl} onChange={(url: string) => onChange({...content, coverUrl: url})} className="w-full h-full" aspect="auto" />
-      </div>
-      
-      <div className="px-4 md:px-8 relative -mt-10 md:-mt-12 flex flex-col items-start">
-        <EditableImage value={content.logoUrl} onChange={(url: string) => onChange({...content, logoUrl: url})} className="w-24 h-24 md:w-28 md:h-28 shrink-0 bg-white rounded-3xl shadow-lg border-[4px] border-white z-10" />
-        <div className="mt-4 w-full space-y-1">
-          <EditableField tag="span" value={content.eyebrow} placeholder="Es. Ente del Terzo Settore" onChange={(n: string) => onChange({...content, eyebrow: n})} className="text-[10px] md:text-xs font-bold tracking-[0.2em] uppercase text-slate-400" />
-          <EditableField tag="h1" value={content.title} placeholder="Titolo Associazione" onChange={(n: string) => onChange({...content, title: n})} className="text-3xl md:text-4xl font-extrabold tracking-tight text-slate-900" />
-          <EditableField tag="p" value={content.subtitle} placeholder="Il vostro motto o sottotitolo breve..." multiline onChange={(n: string) => onChange({...content, subtitle: n})} className="text-base md:text-lg text-slate-600 font-light max-w-2xl leading-relaxed whitespace-pre-wrap" />
+  hero: ({ content, onChange }: any) => {
+    const coverPos = content.coverPosition || 'center'
+    const logoPos = content.logoPosition || 'center'
+
+    return (
+      <div className="relative w-full group pt-4 pb-8">
+        <div className="w-full h-32 md:h-48 rounded-[2rem] bg-slate-100 overflow-hidden relative shadow-sm border border-slate-100/50 z-0">
+          <EditableImage value={content.coverUrl} objectPosition={coverPos} onChange={(url: string) => onChange({...content, coverUrl: url})} className="w-full h-full" />
+          {content.coverUrl && (
+            <div className="absolute bottom-3 right-3 flex items-center bg-white/90 backdrop-blur-md border border-slate-200/50 px-2 py-1 rounded-xl shadow-lg gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-30">
+              <button onClick={(e) => { e.stopPropagation(); onChange({...content, coverPosition: 'top'}) }} className={`p-1.5 rounded-lg transition-colors ${coverPos === 'top' ? 'bg-slate-900 text-white' : 'text-slate-500 hover:bg-slate-100'}`} title="Allinea in alto"><MoveUp className="w-3.5 h-3.5" /></button>
+              <button onClick={(e) => { e.stopPropagation(); onChange({...content, coverPosition: 'center'}) }} className={`p-1.5 rounded-lg transition-colors ${coverPos === 'center' ? 'bg-slate-900 text-white' : 'text-slate-500 hover:bg-slate-100'}`} title="Allinea al centro"><AlignCenter className="w-3.5 h-3.5" /></button>
+              <button onClick={(e) => { e.stopPropagation(); onChange({...content, coverPosition: 'bottom'}) }} className={`p-1.5 rounded-lg transition-colors ${coverPos === 'bottom' ? 'bg-slate-900 text-white' : 'text-slate-500 hover:bg-slate-100'}`} title="Allinea in basso"><MoveDown className="w-3.5 h-3.5" /></button>
+            </div>
+          )}
+        </div>
+        
+        <div className="px-4 md:px-8 relative -mt-10 md:-mt-12 flex flex-col items-start z-20">
+          <div className="relative group/logo">
+            <EditableImage value={content.logoUrl} objectPosition={logoPos} onChange={(url: string) => onChange({...content, logoUrl: url})} className="w-24 h-24 md:w-28 md:h-28 shrink-0 bg-white rounded-3xl shadow-lg border-[4px] border-white object-cover animate-none" />
+            {content.logoUrl && (
+              <div className="absolute -bottom-10 left-0 flex items-center bg-white/90 backdrop-blur-md border border-slate-200 p-1 rounded-xl shadow-md gap-0.5 opacity-0 group-hover/logo:opacity-100 transition-opacity z-40">
+                <button onClick={(e) => { e.stopPropagation(); onChange({...content, logoPosition: 'left'}) }} className={`p-1 rounded-md transition-colors ${logoPos === 'left' ? 'bg-slate-900 text-white' : 'text-slate-400 hover:bg-slate-100'}`}><AlignLeft className="w-3 h-3" /></button>
+                <button onClick={(e) => { e.stopPropagation(); onChange({...content, logoPosition: 'center'}) }} className={`p-1 rounded-md transition-colors ${logoPos === 'center' ? 'bg-slate-900 text-white' : 'text-slate-400 hover:bg-slate-100'}`}><AlignCenter className="w-3 h-3" /></button>
+                <button onClick={(e) => { e.stopPropagation(); onChange({...content, logoPosition: 'right'}) }} className={`p-1 rounded-md transition-colors ${logoPos === 'right' ? 'bg-slate-900 text-white' : 'text-slate-400 hover:bg-slate-100'}`}><AlignRight className="w-3 h-3" /></button>
+              </div>
+            )}
+          </div>
+
+          <div className="mt-4 w-full space-y-1">
+            <EditableField tag="span" value={content.eyebrow} placeholder="Es. Ente del Terzo Settore" onChange={(n: string) => onChange({...content, eyebrow: n})} className="text-[10px] md:text-xs font-bold tracking-[0.2em] uppercase text-slate-400" />
+            <EditableField tag="h1" value={content.title} placeholder="Titolo Associazione" onChange={(n: string) => onChange({...content, title: n})} className="text-3xl md:text-4xl font-extrabold tracking-tight text-slate-900" />
+            <EditableField tag="p" value={content.subtitle} placeholder="Il vostro motto o sottotitolo breve..." multiline onChange={(n: string) => onChange({...content, subtitle: n})} className="text-base md:text-lg text-slate-600 font-light max-w-2xl leading-relaxed whitespace-pre-wrap" />
+          </div>
         </div>
       </div>
-    </div>
-  ),
+    )
+  },
 
   about: ({ content, onChange }: any) => (
     <section>
@@ -226,16 +251,31 @@ const Blocks = {
   ),
 
   stats: ({ content, onChange }: any) => {
-    const items = content.items || [{ value: '', label: '' }, { value: '', label: '' }, { value: '', label: '' }]
+    const items = content.items || [{ value: '100+', label: 'Volontari Attivi' }]
     return (
-      <div className="flex flex-wrap gap-8 md:gap-16">
-        {items.map((stat: any, i: number) => (
-          <div key={i} className="min-w-[100px]">
-            <EditableField disableWFull tag="div" value={stat.value} placeholder="0" inputClassName="max-w-[150px] !text-5xl md:!text-7xl font-extrabold tracking-tighter" onChange={(n: string) => { const newItems = [...items]; newItems[i].value = n; onChange({...content, items: newItems}) }} className="text-5xl md:text-7xl font-extrabold tracking-tighter text-slate-900 mb-1" />
-            <EditableField disableWFull tag="div" value={stat.label} placeholder="Etichetta" inputClassName="max-w-[150px]" onChange={(n: string) => { const newItems = [...items]; newItems[i].label = n; onChange({...content, items: newItems}) }} className="text-xs font-bold text-slate-400 uppercase tracking-widest" />
-          </div>
-        ))}
-      </div>
+      <section className="space-y-4 w-full">
+        <div className="flex items-center justify-between px-1">
+          <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest">Numeri e Statistiche</h3>
+          {items.length < 3 && (
+            <button onClick={() => onChange({...content, items: [...items, { value: '0', label: 'Nuova statistica' }]})} className="flex items-center gap-1.5 text-xs font-bold text-slate-500 hover:text-slate-900 transition-colors bg-slate-50 hover:bg-slate-100 px-3 py-1.5 rounded-xl border border-slate-100">
+              <Plus className="w-3.5 h-3.5" /> Aggiungi numero
+            </button>
+          )}
+        </div>
+        
+        <div className="flex flex-wrap justify-center items-center gap-12 md:gap-20 py-4 border-y border-slate-50 w-full text-center">
+          {items.map((stat: any, i: number) => (
+            <div key={i} className="min-w-[120px] flex flex-col items-center group/stat relative">
+              <EditableField disableWFull tag="div" value={stat.value} placeholder="0" inputClassName="max-w-[130px] text-center !text-5xl md:!text-7xl font-extrabold tracking-tighter" onChange={(n: string) => { const newItems = [...items]; newItems[i].value = n; onChange({...content, items: newItems}) }} className="text-5xl md:text-7xl font-extrabold tracking-tighter text-slate-900 mb-1 leading-none" />
+              <EditableField disableWFull tag="div" value={stat.label} placeholder="Etichetta" inputClassName="max-w-[150px] text-center text-xs" onChange={(n: string) => { const newItems = [...items]; newItems[i].label = n; onChange({...content, items: newItems}) }} className="text-xs font-bold text-slate-400 uppercase tracking-widest mt-1 px-4" />
+              
+              {items.length > 1 && (
+                <button onClick={() => onChange({...content, items: items.filter((_:any, idx:number) => idx !== i)})} className="absolute -top-3 -right-2 p-1.5 bg-white text-slate-300 hover:text-red-500 border border-slate-100 rounded-full shadow-sm opacity-0 group-hover/stat:opacity-100 transition-opacity" title="Rimuovi"><Trash2 className="w-3 h-3" /></button>
+              )}
+            </div>
+          ))}
+        </div>
+      </section>
     )
   },
 
@@ -276,8 +316,7 @@ const Blocks = {
           <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest">Galleria Foto</h3>
           {images.length < 6 && (
             <label className="flex items-center gap-1.5 text-xs font-bold text-slate-500 hover:text-slate-900 cursor-pointer transition-colors bg-slate-50 hover:bg-slate-100 px-3 py-1.5 rounded-xl border border-slate-100">
-              <Plus className="w-3.5 h-3.5" />
-              Aggiungi foto
+              <Plus className="w-3.5 h-3.5" /> Aggiungi foto
               <input type="file" className="hidden" accept="image/*" onChange={handleAddPhoto} />
             </label>
           )}
@@ -374,7 +413,7 @@ const Blocks = {
                   <EditableField tag="p" value={proj.desc} placeholder="Descrizione progetto..." multiline onChange={(n: string) => { const newItems = [...items]; newItems[i].desc = n; onChange({...content, items: newItems}) }} className="text-sm text-slate-500 font-light leading-relaxed whitespace-pre-wrap" />
                 </div>
                 {items.length > 1 && (
-                  <button onClick={() => { onChange({...content, items: items.filter((_: any, idx: number) => idx !== i)}) }} className="text-xs text-red-400 hover:text-red-500 self-end mt-2 flex items-center gap-1"><Trash2 className="w-3 h-3" /> Rimuovi progetto</button>
+                  <button onClick={() => { onChange({...content, items: items.filter((_:any, idx:number) => idx !== i)}) }} className="text-xs text-red-400 hover:text-red-500 self-end mt-2 flex items-center gap-1"><Trash2 className="w-3 h-3" /> Rimuovi progetto</button>
                 )}
               </div>
             </div>
@@ -388,7 +427,6 @@ const Blocks = {
     )
   },
 
-  // REVISIONATO: Testimonianze con mini-avatar circolare fluttuante integrato
   testimonials: ({ content, onChange }: any) => {
     const items = content.items || [{ quote: 'Fare volontariato qui ha completamente cambiato la mia prospettiva di comunità.', author: 'Marco, 24 anni', role: 'Volontario dal 2024', avatarUrl: '' }]
     return (
@@ -403,7 +441,6 @@ const Blocks = {
               </div>
               <div className="mt-6 flex items-end justify-between">
                 <div className="flex items-center gap-3">
-                  {/* Mini avatar circolare premium */}
                   <EditableImage value={test.avatarUrl} onChange={(url: string) => { const newItems = [...items]; newItems[i].avatarUrl = url; onChange({...content, items: newItems}) }} className="w-11 h-11 rounded-full border border-white shadow-md shrink-0" />
                   <div>
                     <EditableField tag="p" value={test.author} placeholder="Nome Volontario" onChange={(n: string) => { const newItems = [...items]; newItems[i].author = n; onChange({...content, items: newItems}) }} className="font-bold text-slate-900 text-sm leading-none" />
@@ -411,7 +448,7 @@ const Blocks = {
                   </div>
                 </div>
                 {items.length > 1 && (
-                  <button onClick={() => { onChange({...content, items: items.filter((_: any, idx: number) => idx !== i)}) }} className="p-2 text-slate-300 hover:text-red-500 rounded-full transition-colors"><Trash2 className="w-4 h-4" /></button>
+                  <button onClick={() => { onChange({...content, items: items.filter((_:any, idx:number) => idx !== i)}) }} className="p-2 text-slate-300 hover:text-red-500 rounded-full transition-colors"><Trash2 className="w-4 h-4" /></button>
                 )}
               </div>
             </div>
@@ -549,13 +586,24 @@ const Blocks = {
   ),
 
   partners: ({ content, onChange }: any) => {
-    const items = content.items || ['', '', '', '']
+    const items = content.items || ['Partner Esempio']
     return (
-      <section className="text-center pt-2">
-        <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-6">Collaborano con noi</p>
-        <div className="flex flex-wrap justify-center gap-8 md:gap-12 opacity-60 grayscale items-center">
+      <section className="space-y-4 text-center py-2">
+        <div className="flex items-center justify-between px-1">
+          <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest">Partner e Sponsor</h3>
+          <button onClick={() => onChange({...content, items: [...items, '']})} className="flex items-center gap-1 text-[11px] font-bold text-slate-400 hover:text-slate-900 transition-colors bg-slate-50 px-2.5 py-1 rounded-lg border border-slate-100 shadow-sm">
+            <Plus className="w-3 h-3" /> Aggiungi Partner
+          </button>
+        </div>
+
+        <div className="flex flex-wrap justify-center gap-x-10 gap-y-6 opacity-75 grayscale items-center pt-2">
           {items.map((partner: string, i: number) => (
-             <EditableField key={i} tag="span" value={partner} placeholder="Nome Partner" onChange={(n: string) => { const newItems = [...items]; newItems[i] = n; onChange({...content, items: newItems}) }} className="font-bold text-lg" />
+             <div key={i} className="flex items-center gap-2 group/partner bg-slate-50/50 hover:bg-slate-50 px-4 py-2 rounded-2xl transition-all border border-transparent hover:border-slate-100 relative">
+               <EditableField disableWFull tag="span" value={partner} placeholder="Nome Partner..." onChange={(n: string) => { const newItems = [...items]; newItems[i] = n; onChange({...content, items: newItems}) }} className="font-bold text-base text-slate-800" />
+               {items.length > 1 && (
+                 <button onClick={() => onChange({...content, items: items.filter((_:AnyAaaaRecord, idx:number) => idx !== i)})} className="p-1 text-slate-300 hover:text-red-500 rounded-full transition-colors opacity-0 group-hover/partner:opacity-100" title="Elimina"><Trash2 className="w-3.5 h-3.5" /></button>
+               )}
+             </div>
           ))}
         </div>
       </section>
@@ -592,7 +640,7 @@ const Blocks = {
 }
 
 // ==========================================
-// 5. PAGINA PRINCIPALE
+// 5. PAGINA PRINCIPALE (AUTO-SAVE & CROP COMPLETAMENTE REVISIONATI)
 // ==========================================
 export default function PersonalizzaPagina() {
   const router = useRouter()
@@ -600,11 +648,13 @@ export default function PersonalizzaPagina() {
   const [positions, setPositions] = useState<any[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
+  const [autoSaveStatus, setAutoSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle')
   const [showAddMenu, setShowAddMenu] = useState(false)
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }))
   const brandColor = (layout.find(b => b.type === 'hero')?.content as HeroContent)?.brandColor || DEFAULT_BRAND
 
+  // Caricamento Iniziale: dà rigorosa priorità alla bozza draft
   useEffect(() => {
     const loadData = async () => {
       const { data: { user } } = await supabase.auth.getUser()
@@ -616,9 +666,17 @@ export default function PersonalizzaPagina() {
         supabase.from('posizioni').select('*, media_associazioni(url), tags:posizione_tags(tag:tags(id, name))').eq('associazione_id', user.id)
       ])
 
-      const parsedConfig = typeof graph?.layout_config === 'string' ? JSON.parse(graph.layout_config) : graph?.layout_config
+      const rawDraft = graph?.layout_draft
+      const rawConfig = graph?.layout_config
       
-      let initialLayout = parsedConfig && Array.isArray(parsedConfig) && parsedConfig.length > 0 ? parsedConfig : null
+      let parsedLayout = null
+      if (rawDraft) {
+        parsedLayout = typeof rawDraft === 'string' ? JSON.parse(rawDraft) : rawDraft
+      } else if (rawConfig) {
+        parsedLayout = typeof rawConfig === 'string' ? JSON.parse(rawConfig) : rawConfig
+      }
+      
+      let initialLayout = parsedLayout && Array.isArray(parsedLayout) && parsedLayout.length > 0 ? parsedLayout : null
       
       if (initialLayout) {
         initialLayout = initialLayout.flatMap((block: any) => {
@@ -644,7 +702,32 @@ export default function PersonalizzaPagina() {
     loadData()
   }, [router])
 
-  const handleSave = async () => {
+  // FIX AUTO-SAVE ENGINE: Adesso include esplicitamente l'ID chiave primaria nel payload dell'upsert
+  useEffect(() => {
+    if (isLoading || layout.length === 0) return
+
+    setAutoSaveStatus('saving')
+    const timer = setTimeout(async () => {
+      const { data: { user } } = await supabase.auth.getUser()
+      if (!user) return
+
+      const { error } = await supabase.from('associazioni_grafica').upsert({
+        associazione_id: user.id, // <-- FISSATO: Questa chiave risolve i conflitti e sblocca la scrittura
+        layout_draft: layout,
+        updated_at: new Date().toISOString()
+      }, { onConflict: 'associazione_id' })
+
+      if (error) {
+        console.error("Errore auto-save:", error)
+      } else {
+        setAutoSaveStatus('saved')
+      }
+    }, 2000)
+
+    return () => clearTimeout(timer)
+  }, [layout, isLoading])
+
+  const handlePublish = async () => {
     setIsSaving(true)
     const { data: { user } } = await supabase.auth.getUser()
     const hero = layout.find(b => b.type === 'hero')?.content
@@ -652,14 +735,15 @@ export default function PersonalizzaPagina() {
     await supabase.from('associazioni_grafica').upsert({
       associazione_id: user?.id,
       layout_config: layout,
+      layout_draft: layout,
       colore_brand: hero?.brandColor || DEFAULT_BRAND,
       cover_url: hero?.coverUrl,
       updated_at: new Date().toISOString()
     }, { onConflict: 'associazione_id' })
     
     setIsSaving(false)
-    const btn = document.getElementById('save-btn')
-    if(btn) { btn.innerText = 'Salvato!'; setTimeout(() => btn.innerText = 'Pubblica modifiche', 2000) }
+    const btn = document.getElementById('publish-btn')
+    if(btn) { btn.innerText = 'Vetrina Pubblicata!'; setTimeout(() => btn.innerText = 'Pubblica modifiche', 2500) }
   }
 
   const handleDragEnd = (event: DragEndEvent) => {
@@ -673,7 +757,6 @@ export default function PersonalizzaPagina() {
     })
   }
 
-  // REVISIONATO: Filtra solo i blocchi impostati come isUnique: true, lasciando quelli flessibili sempre disponibili per l'aggiunta multipla
   const usedBlockTypes = layout.map(b => b.type)
   const availableBlocks = blockLibrary.filter(b => {
     if (b.type === 'hero') return false
@@ -693,13 +776,20 @@ export default function PersonalizzaPagina() {
       {/* NAVBAR SUPERIORE */}
       <div className="sticky top-0 z-50 bg-white/90 backdrop-blur-xl border-b border-slate-100">
         <div className="max-w-[860px] mx-auto flex items-center justify-between p-4 px-4 md:px-0">
-          <Link href="/app/associazione" className="text-sm font-bold text-slate-400 hover:text-black transition-colors flex items-center gap-2">
-             <span className="text-lg leading-none mb-0.5">←</span> Torna indietro
-          </Link>
+          <div className="flex items-center gap-4">
+            <Link href="/app/associazione" className="text-sm font-bold text-slate-400 hover:text-black transition-colors flex items-center gap-2">
+               <span className="text-lg leading-none mb-0.5">←</span> Torna indietro
+            </Link>
+            <span className="text-xs font-medium text-slate-400 border-l border-slate-200 pl-4">
+              {autoSaveStatus === 'saving' && 'Salvataggio bozza...'}
+              {autoSaveStatus === 'saved' && 'Bozza salvata'}
+              {autoSaveStatus === 'idle' && 'Bozza sincronizzata'}
+            </span>
+          </div>
           <div className="flex items-center gap-6">
             <span className="hidden md:inline text-[10px] font-black uppercase tracking-[0.2em] text-slate-300">Editor Vetrina</span>
-            <button id="save-btn" onClick={handleSave} disabled={isSaving} className="bg-slate-900 text-white px-6 py-2.5 rounded-full text-sm font-bold shadow-lg hover:bg-black transition-all hover:scale-105 active:scale-95">
-              {isSaving ? 'Salvataggio...' : 'Pubblica modifiche'}
+            <button id="publish-btn" onClick={handlePublish} disabled={isSaving} className="bg-slate-900 text-white px-6 py-2.5 rounded-full text-sm font-bold shadow-lg hover:bg-black transition-all hover:scale-105 active:scale-95">
+              {isSaving ? 'Pubblicazione...' : 'Pubblica modifiche'}
             </button>
           </div>
         </div>

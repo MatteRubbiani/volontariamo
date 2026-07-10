@@ -1,112 +1,222 @@
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import Link from 'next/link'
-import { FileText, Link2, Quote, Settings2, Sparkles, Users } from 'lucide-react'
+import { FileText, Link2, Quote, Settings2, Sparkles, Users, Heart, Briefcase, Video, Mail, Target, Eye } from 'lucide-react'
 import PosizioneCard from '@/components/PosizioneCard'
 
 // ==========================================
-// 1. BLOCCHI READ-ONLY (Gemelli dell'Editor)
+// 1. BLOCCHI READ-ONLY PUBBLICI (Gemelli dell'Editor)
 // ==========================================
 
 const Blocks = {
-  hero: ({ content }: any) => (
-    <div className="relative w-full pt-4 pb-8">
-      <div className="w-full h-32 md:h-48 rounded-[2rem] bg-slate-100 overflow-hidden relative shadow-sm border border-slate-100/50">
-        {content.coverUrl && <img src={content.coverUrl} className="w-full h-full object-cover" alt="Copertina" />}
-      </div>
-      <div className="px-4 md:px-8 relative -mt-10 md:-mt-12 flex flex-col items-start">
-        {content.logoUrl ? (
-          <img src={content.logoUrl} className="w-24 h-24 md:w-28 md:h-28 shrink-0 bg-white rounded-3xl shadow-lg border-[4px] border-white z-10 object-cover" alt="Logo" />
-        ) : (
-          <div className="w-24 h-24 md:w-28 md:h-28 shrink-0 bg-white rounded-3xl shadow-lg border-[4px] border-white z-10 flex items-center justify-center text-4xl font-bold text-slate-200">
-            {content.title?.charAt(0) || 'A'}
+  // HERO: Supporto al posizionamento focale inline per il ritaglio perfetto
+  hero: ({ content }: any) => {
+    const coverPos = content.coverPosition || 'center'
+    const logoPos = content.logoPosition || 'center'
+
+    return (
+      <div className="relative w-full pt-4 pb-8">
+        <div className="w-full h-32 md:h-48 rounded-[2rem] bg-slate-100 overflow-hidden relative shadow-sm border border-slate-100/50 z-0">
+          {content.coverUrl && (
+            <img src={content.coverUrl} className="w-full h-full object-cover" style={{ objectPosition: coverPos }} alt="Copertina" />
+          )}
+        </div>
+        
+        <div className="px-4 md:px-8 relative -mt-10 md:-mt-12 flex flex-col items-start z-20">
+          {content.logoUrl ? (
+            <img src={content.logoUrl} className="w-24 h-24 md:w-28 md:h-28 shrink-0 bg-white rounded-3xl shadow-lg border-[4px] border-white object-cover" style={{ objectPosition: logoPos }} alt="Logo" />
+          ) : (
+            <div className="w-24 h-24 md:w-28 md:h-28 shrink-0 bg-white rounded-3xl shadow-lg border-[4px] border-white flex items-center justify-center text-4xl font-bold text-slate-200">
+              {content.title?.charAt(0) || 'A'}
+            </div>
+          )}
+          <div className="mt-4 w-full space-y-1">
+            {content.eyebrow && <span className="text-[10px] md:text-xs font-bold tracking-[0.2em] uppercase text-slate-400 block">{content.eyebrow}</span>}
+            <h1 className="text-3xl md:text-4xl font-extrabold tracking-tight text-slate-900">{content.title}</h1>
+            {content.subtitle && <p className="text-base md:text-lg text-slate-600 font-light max-w-2xl leading-relaxed whitespace-pre-wrap">{content.subtitle}</p>}
           </div>
-        )}
-        <div className="mt-4 w-full space-y-1">
-          {content.eyebrow && <span className="text-[10px] md:text-xs font-bold tracking-[0.2em] uppercase text-slate-400 block">{content.eyebrow}</span>}
-          <h1 className="text-3xl md:text-4xl font-extrabold tracking-tight text-slate-900">{content.title}</h1>
-          {content.subtitle && <p className="text-base md:text-lg text-slate-600 font-light max-w-2xl leading-relaxed whitespace-pre-wrap">{content.subtitle}</p>}
         </div>
       </div>
-    </div>
-  ),
+    )
+  },
 
   about: ({ content }: any) => (
     <section className="px-2">
-      <h3 className="text-3xl md:text-4xl font-extrabold tracking-tight text-slate-900 mb-6">{content.title || 'Chi Siamo'}</h3>
+      <h3 className="text-2xl md:text-3xl font-extrabold tracking-tight text-slate-900 mb-4">{content.title || 'Chi Siamo'}</h3>
       <p className="text-lg text-slate-600 font-light leading-relaxed whitespace-pre-wrap">{content.body}</p>
     </section>
   ),
 
+  // STATS: Allineamento geometrico centrale perfetto nativo
   stats: ({ content }: any) => {
     const items = content.items || []
     if (items.length === 0) return null
     return (
-      <div className="flex flex-wrap gap-12 md:gap-24 border-b border-slate-100 pb-12 pt-4 px-2">
+      <div className="flex flex-wrap justify-center items-center gap-12 md:gap-20 py-4 border-y border-slate-50 w-full text-center">
         {items.map((stat: any, i: number) => stat.value && stat.label && (
-          <div key={i} className="min-w-[120px]">
-            <div className="text-5xl md:text-7xl font-extrabold tracking-tighter text-slate-900 mb-2">{stat.value}</div>
-            <div className="text-xs font-bold text-slate-400 uppercase tracking-widest">{stat.label}</div>
+          <div key={i} className="min-w-[120px] flex flex-col items-center">
+            <div className="text-5xl md:text-7xl font-extrabold tracking-tighter text-slate-900 mb-1 leading-none">{stat.value}</div>
+            <div className="text-xs font-bold text-slate-400 uppercase tracking-widest mt-1 px-4">{stat.label}</div>
           </div>
         ))}
       </div>
     )
   },
 
+  // GALLERY: Architettura fluida auto-adattiva ad incastro elastico
   gallery: ({ content }: any) => {
-    const images = content.items || []
-    if (images.filter(Boolean).length === 0) return null
-    
-    // Classes for the Bento Grid layout
-    const cellClasses = [
-      "col-span-2 row-span-2 rounded-[2rem]",
-      "col-span-1 row-span-1 rounded-3xl",
-      "col-span-1 row-span-1 rounded-3xl",
-      "col-span-1 row-span-1 rounded-3xl",
-      "col-span-1 row-span-1 rounded-3xl",
-      "col-span-1 row-span-1 rounded-3xl"
-    ]
+    const rawImages = content.items || []
+    const images = rawImages.filter(Boolean)
+    if (images.length === 0) return null
+
+    const getGridLayout = () => {
+      const count = images.length
+      if (count === 1) return 'grid-cols-1'
+      if (count === 2) return 'grid-cols-2 gap-4'
+      if (count === 3) return 'grid-cols-3 gap-4'
+      if (count === 4) return 'grid-cols-2 gap-4'
+      return 'grid-cols-3 gap-3 md:gap-4 auto-rows-[120px] md:auto-rows-[160px]'
+    }
+
+    const getImageStyle = (index: number) => {
+      const count = images.length
+      if (count === 1) return 'w-full h-64 md:h-80 rounded-[2rem]'
+      if (count === 2 || count === 3) return 'w-full aspect-[4/3] rounded-2xl md:rounded-[1.75rem]'
+      if (count === 4) return 'w-full aspect-video rounded-2xl'
+      if (index === 0) return 'col-span-2 row-span-2 rounded-[2rem]'
+      return 'col-span-1 row-span-1 rounded-2xl md:rounded-3xl'
+    }
 
     return (
-      <section className="grid grid-cols-3 gap-3 md:gap-4 auto-rows-[120px] md:auto-rows-[180px] px-2">
-        {cellClasses.map((cls, i) => {
-          const img = images[i]
-          return img ? (
-            <img key={i} src={img} className={`${cls} w-full h-full object-cover shadow-sm`} alt="Galleria" />
-          ) : (
-            <div key={i} className={`${cls} bg-transparent`} /> // Empty space preserver
-          )
-        })}
+      <section className={`grid ${getGridLayout()} px-2`}>
+        {images.map((img: string, i: number) => (
+          <img key={i} src={img} className={`${getImageStyle(i)} w-full h-full object-cover shadow-sm`} alt="Galleria" />
+        ))}
       </section>
     )
   },
 
-  missionVision: ({ content }: any) => (
-    <div className="grid grid-cols-1 sm:grid-cols-2 gap-10 md:gap-16 pt-4 px-2">
-      {content.mission && (
-        <section>
-          <h3 className="text-2xl md:text-3xl font-bold tracking-tight text-slate-900 mb-4 md:mb-6">{content.missionTitle || 'Mission'}</h3>
-          <p className="text-base md:text-lg text-slate-600 leading-relaxed font-light whitespace-pre-wrap">{content.mission}</p>
-        </section>
-      )}
-      {content.vision && (
-        <section>
-          <h3 className="text-2xl md:text-3xl font-bold tracking-tight text-slate-900 mb-4 md:mb-6">{content.visionTitle || 'Vision'}</h3>
-          <p className="text-base md:text-lg text-slate-600 leading-relaxed font-light whitespace-pre-wrap">{content.vision}</p>
-        </section>
-      )}
-    </div>
+  mission: ({ content }: any) => (
+    <section className="px-2">
+      <h3 className="text-xl md:text-2xl font-bold tracking-tight text-slate-900 mb-3">{content.title || 'La nostra Mission'}</h3>
+      <p className="text-base md:text-lg text-slate-600 leading-relaxed font-light whitespace-pre-wrap">{content.body}</p>
+    </section>
   ),
 
+  vision: ({ content }: any) => (
+    <section className="px-2">
+      <h3 className="text-xl md:text-2xl font-bold tracking-tight text-slate-900 mb-3">{content.title || 'La nostra Vision'}</h3>
+      <p className="text-base md:text-lg text-slate-600 leading-relaxed font-light whitespace-pre-wrap">{content.body}</p>
+    </section>
+  ),
+
+  donations: ({ content }: any) => {
+    if (!content.iban && !content.cf) return null
+    return (
+      <section className="bg-gradient-to-br from-rose-50/50 to-white p-6 md:p-8 rounded-[2.5rem] border border-rose-100/60 mx-2">
+        <h3 className="text-2xl md:text-3xl font-extrabold tracking-tight text-slate-900 mb-2">{content.title || 'Sostieni la nostra causa'}</h3>
+        {content.description && <p className="text-slate-600 font-light mb-6 max-w-2xl text-base whitespace-pre-wrap">{content.description}</p>}
+        
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {content.iban && (
+            <div className="bg-white p-5 rounded-2xl border border-slate-100 flex flex-col justify-between">
+              <div>
+                <span className="text-[10px] font-black tracking-widest text-slate-400 uppercase">Donazione Bancaria</span>
+                <p className="font-bold text-slate-900 text-sm mt-1">{content.ibanLabel || 'IBAN Associazione'}</p>
+                <p className="text-xs font-mono text-slate-500 tracking-tight mt-1 select-all break-all">{content.iban}</p>
+              </div>
+            </div>
+          )}
+          {content.cf && (
+            <div className="bg-white p-5 rounded-2xl border border-slate-100 flex flex-col justify-between">
+              <div>
+                <span className="text-[10px] font-black tracking-widest text-slate-400 uppercase">Dona il 5x1000</span>
+                <p className="font-bold text-slate-900 text-sm mt-1">Codice Fiscale Associazione</p>
+                <p className="text-lg font-mono font-black text-slate-800 mt-1 select-all">{content.cf}</p>
+              </div>
+            </div>
+          )}
+        </div>
+      </section>
+    )
+  },
+
+  projects: ({ content }: any) => {
+    const items = content.items?.filter((p: any) => p.title || p.img) || []
+    if (items.length === 0) return null
+    return (
+      <section className="px-2">
+        <h3 className="text-2xl md:text-3xl font-extrabold tracking-tight text-slate-900 mb-6">{content.title || 'I nostri progetti d’impatto'}</h3>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          {items.map((proj: any, i: number) => (
+            <div key={i} className="bg-white border border-slate-100 rounded-3xl overflow-hidden shadow-sm flex flex-col h-full">
+              {proj.img && <img src={proj.img} className="w-full h-44 shrink-0 object-cover" alt={proj.title} />}
+              <div className="p-5 flex-1 flex flex-col gap-1">
+                <h4 className="font-bold text-slate-900 text-lg leading-snug">{proj.title || 'Progetto'}</h4>
+                <p className="text-sm text-slate-500 font-light leading-relaxed whitespace-pre-wrap">{proj.desc}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
+    )
+  },
+
+  testimonials: ({ content }: any) => {
+    const items = content.items?.filter((t: any) => t.quote) || []
+    if (items.length === 0) return null
+    return (
+      <section className="px-2">
+        <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-6">{content.title || 'La voce di chi vive l’associazione'}</h3>
+        <div className="flex gap-6 overflow-x-auto pb-4 snap-x snap-mandatory scrollbar-hide" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
+          {items.map((test: any, i: number) => (
+            <div key={i} className="snap-start shrink-0 w-[90%] md:w-[65%] bg-slate-50 p-6 md:p-8 rounded-[2.5rem] flex flex-col justify-between border border-slate-100/50 min-h-[200px]">
+              <div className="space-y-4">
+                <Quote className="w-8 h-8 text-slate-300 transform" style={{ transform: 'scaleY(-1)' }} />
+                <p className="text-base md:text-lg font-light text-slate-800 leading-relaxed italic whitespace-pre-wrap">{test.quote}</p>
+              </div>
+              <div className="mt-6 flex items-center gap-3">
+                {test.avatarUrl && <img src={test.avatarUrl} className="w-11 h-11 rounded-full border border-white shadow-md object-cover shrink-0" alt={test.author} />}
+                <div>
+                  <p className="font-bold text-slate-900 text-sm leading-none">{test.author || 'Volontario'}</p>
+                  {test.role && <p className="text-xs text-slate-400 font-medium mt-1">{test.role}</p>}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
+    )
+  },
+
+  video: ({ content }: any) => {
+    if (!content.url) return null
+    const getEmbedUrl = (url: string) => {
+      if (url.includes('youtube.com/embed/')) return url
+      const regExp = /^.*(youtu.be\/|v\/|u\/\w\/|embed\/|watch\?v=|\&v=)([^#\&\?]*).*/
+      const match = url.match(regExp)
+      return (match && match[2].length === 11) ? `https://www.youtube.com/embed/${match[2]}` : url
+    }
+    const embedUrl = getEmbedUrl(content.url)
+    return (
+      <section className="space-y-4 px-2">
+        {content.title && <h3 className="text-2xl md:text-3xl font-extrabold tracking-tight text-slate-900">{content.title}</h3>}
+        <div className="w-full aspect-video rounded-[2.5rem] bg-slate-900 overflow-hidden shadow-md">
+          <iframe src={embedUrl} className="w-full h-full border-0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" allowFullScreen />
+        </div>
+      </section>
+    )
+  },
+
   faq: ({ content }: any) => {
-    const items = content.items || []
+    const items = content.items?.filter((f: any) => f.q) || []
     if (items.length === 0) return null
     return (
       <section className="space-y-6 max-w-3xl px-2">
-        <h3 className="text-2xl md:text-3xl font-extrabold tracking-tight text-slate-900 mb-8">Domande frequenti</h3>
-        {items.map((item: any, i: number) => item.q && item.a && (
-          <div key={i} className="border-b border-slate-100 pb-6 last:border-0 last:pb-0">
-            <h4 className="text-lg font-bold text-slate-900 mb-2">{item.q}</h4>
+        <h3 className="text-2xl md:text-3xl font-extrabold tracking-tight text-slate-900 mb-6">Domande frequenti</h3>
+        {items.map((item: any, i: number) => (
+          <div key={i} className="border-b border-slate-100 pb-4 last:border-0 last:pb-0">
+            <h4 className="text-lg font-bold text-slate-900 mb-1">{item.q}</h4>
             <p className="text-base text-slate-600 font-light leading-relaxed whitespace-pre-wrap">{item.a}</p>
           </div>
         ))}
@@ -118,17 +228,17 @@ const Blocks = {
     const items = content.items?.filter((doc: any) => doc.url) || []
     if (items.length === 0) return null
     return (
-      <section className="bg-slate-50 p-6 md:p-8 rounded-[2.5rem] border border-slate-100 mx-2">
-        <h3 className="text-sm font-bold text-slate-900 uppercase tracking-widest mb-6">Documenti Utili</h3>
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      <section className="bg-slate-50 p-6 md:p-8 rounded-[2rem] border border-slate-100 mx-2">
+        <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4">Documenti Utili</h3>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {items.map((doc: any, i: number) => (
-            <a key={i} href={doc.url} target="_blank" rel="noopener noreferrer" className="group flex items-center gap-4 p-4 bg-white border border-slate-200 rounded-[1.5rem] shadow-sm hover:shadow-md hover:border-slate-300 transition-all">
-              <div className="w-12 h-12 shrink-0 bg-red-50 rounded-xl flex items-center justify-center text-red-500 group-hover:bg-red-100 transition-colors">
-                <FileText className="w-6 h-6" />
+            <a key={i} href={doc.url} target="_blank" rel="noopener noreferrer" className="group flex items-center gap-4 p-4 bg-white border border-slate-100 rounded-2xl shadow-sm hover:shadow-md transition-all">
+              <div className="w-10 h-10 shrink-0 bg-red-50 text-red-500 rounded-xl flex items-center justify-center">
+                <FileText className="w-5 h-5" />
               </div>
               <div className="flex-1 min-w-0">
-                <span className="font-bold text-slate-900 block truncate">{doc.nome || 'Documento'}</span>
-                <span className="text-xs font-semibold text-slate-400 uppercase tracking-widest">PDF Scaricabile</span>
+                <span className="font-bold text-slate-900 block whitespace-pre-wrap break-words text-sm leading-snug">{doc.nome || 'Documento'}</span>
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mt-0.5">PDF Scaricabile</span>
               </div>
             </a>
           ))}
@@ -137,26 +247,65 @@ const Blocks = {
     )
   },
 
-  links: ({ content }: any) => (
-    <div className="bg-slate-50 rounded-[2.5rem] p-6 md:p-8 border border-slate-100 mx-2">
-      <h3 className="text-sm font-bold text-slate-900 uppercase tracking-widest mb-6">Link Utili</h3>
-      <div className="flex flex-col sm:flex-row flex-wrap gap-4">
-        {content.website && <a href={content.website.startsWith('http') ? content.website : `https://${content.website}`} target="_blank" rel="noreferrer" className="flex items-center gap-3 bg-white px-5 py-3 rounded-xl border border-slate-100 shadow-sm hover:shadow hover:border-slate-300 transition-all text-sm font-bold text-slate-900"><Link2 className="w-4 h-4 text-slate-400" /> Sito Web</a>}
-        {content.instagram && <a href={`https://instagram.com/${content.instagram.replace('@', '')}`} target="_blank" rel="noreferrer" className="flex items-center gap-3 bg-white px-5 py-3 rounded-xl border border-slate-100 shadow-sm hover:shadow hover:border-slate-300 transition-all text-sm font-bold text-slate-900"><Link2 className="w-4 h-4 text-slate-400" /> Instagram</a>}
-        {content.facebook && <a href={content.facebook} target="_blank" rel="noreferrer" className="flex items-center gap-3 bg-white px-5 py-3 rounded-xl border border-slate-100 shadow-sm hover:shadow hover:border-slate-300 transition-all text-sm font-bold text-slate-900"><Link2 className="w-4 h-4 text-slate-400" /> Facebook</a>}
+  links: ({ content }: any) => {
+    if (!content.website && !content.instagram && !content.facebook) return null
+    return (
+      <div className="bg-white py-2 px-2">
+        <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3 px-1">Link Utili</h3>
+        <div className="flex flex-wrap gap-2">
+          {content.website && (
+            <a href={content.website.startsWith('http') ? content.website : `https://${content.website}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 bg-slate-50 border border-slate-100 hover:border-slate-200 px-4 py-2 rounded-xl transition-all text-xs font-bold text-slate-800">
+              <Link2 className="w-3.5 h-3.5 text-slate-400 shrink-0" /> Sito Web
+            </a>
+          )}
+          {content.instagram && (
+            <a href={`https://instagram.com/${content.instagram.replace('@', '')}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 bg-slate-50 border border-slate-100 hover:border-slate-200 px-4 py-2 rounded-xl transition-all text-xs font-bold text-slate-800">
+              <Link2 className="w-3.5 h-3.5 text-slate-400 shrink-0" /> Instagram
+            </a>
+          )}
+          {content.facebook && (
+            <a href={content.facebook.startsWith('http') ? content.facebook : `https://${content.facebook}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 bg-slate-50 border border-slate-100 hover:border-slate-200 px-4 py-2 rounded-xl transition-all text-xs font-bold text-slate-800">
+              <Link2 className="w-3.5 h-3.5 text-slate-400 shrink-0" /> Facebook
+            </a>
+          )}
+        </div>
       </div>
-    </div>
+    )
+  },
+
+  contacts: ({ content }: any) => (
+    <section className="grid grid-cols-1 md:grid-cols-2 gap-8 bg-slate-50 p-6 md:p-8 rounded-[2.5rem] border border-slate-100 mx-2">
+      <div className="space-y-4">
+        <div>
+          <span className="text-[10px] font-black tracking-widest text-slate-400 uppercase block mb-1">Mettiti in contatto</span>
+          <h3 className="text-xl md:text-2xl font-extrabold tracking-tight text-slate-900">{content.title || 'Vieni a trovarci o scrivici'}</h3>
+        </div>
+        <div className="space-y-2 text-sm text-slate-600 font-light leading-relaxed">
+          {content.address && <div className="flex gap-2"><strong>Sede:</strong><span className="font-normal text-slate-800">{content.address}</span></div>}
+          {content.email && <div className="flex gap-2"><strong>Email:</strong><span className="font-normal text-slate-800">{content.email}</span></div>}
+          {content.phone && <div className="flex gap-2"><strong>Tel:</strong><span className="font-normal text-slate-800">{content.phone}</span></div>}
+        </div>
+      </div>
+      
+      {/* Form interattivo reale lato pubblico */}
+      <form className="bg-white p-5 rounded-2xl border border-slate-100 space-y-3">
+        <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Invia un messaggio rapido</p>
+        <input type="email" placeholder="La tua email..." className="w-full bg-slate-50 rounded-xl border border-slate-100 outline-none text-xs px-3 py-2 text-slate-800" required />
+        <textarea placeholder="Come possiamo aiutarti?" className="w-full bg-slate-50 rounded-xl border border-slate-100 outline-none text-xs px-3 py-2 text-slate-800 resize-none h-16" required />
+        <button type="submit" className="w-full py-2 bg-slate-900 hover:bg-black text-white rounded-xl text-xs font-bold text-center transition-colors">Invia Messaggio</button>
+      </form>
+    </section>
   ),
 
   partners: ({ content }: any) => {
     const items = content.items?.filter(Boolean) || []
     if (items.length === 0) return null
     return (
-      <section className="border-t border-slate-100 pt-12 mt-12 text-center px-2">
-        <p className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-8">Collaborano con noi</p>
-        <div className="flex flex-wrap justify-center gap-8 md:gap-12 opacity-60 items-center">
+      <section className="space-y-4 text-center py-2 px-2">
+        <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">Partner e Sponsor</p>
+        <div className="flex flex-wrap justify-center gap-x-10 gap-y-4 opacity-75 grayscale items-center pt-1">
           {items.map((partner: string, i: number) => (
-            <span key={i} className="font-bold text-lg text-slate-900">{partner}</span>
+             <span key={i} className="font-bold text-base text-slate-700 bg-slate-50/60 px-4 py-2 rounded-2xl border border-slate-100/50">{partner}</span>
           ))}
         </div>
       </section>
@@ -164,10 +313,10 @@ const Blocks = {
   },
 
   positions: ({ positions, brandColor }: any) => (
-    <div className="mt-8 pt-12 px-2">
-      <div className="flex items-center justify-between mb-8">
+    <div className="pt-4 px-2">
+      <div className="flex items-center justify-between mb-6">
         <h3 className="text-2xl md:text-3xl font-extrabold text-slate-900 tracking-tight">Posizioni aperte</h3>
-        <span className="bg-slate-100 text-slate-900 px-4 py-1.5 rounded-full font-bold text-base">{positions?.length || 0}</span>
+        <span className="bg-slate-100 text-slate-700 px-4 py-1.5 rounded-full font-bold text-base">{positions?.length || 0}</span>
       </div>
       {positions?.length > 0 ? (
         <div className="flex gap-4 overflow-x-auto pb-4 snap-x snap-mandatory scrollbar-hide" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
@@ -183,62 +332,48 @@ const Blocks = {
 }
 
 // ==========================================
-// 2. LOGICA DI FALLBACK (Per vecchi profili)
+// 2. LOGICA DI FALLBACK (Per vecchi profili pre-builder)
 // ==========================================
 function createFallbackLayout(associazione: any, grafica: any) {
   const blocks = []
   
-  // Hero
-  blocks.push({ type: 'hero', content: { title: associazione.denominazione, eyebrow: associazione.forma_giuridica, subtitle: grafica.tagline, coverUrl: grafica.cover_url, logoUrl: associazione.logo_url, brandColor: grafica.colore_brand || '#111827' } })
+  blocks.push({ id: 'f-hero', type: 'hero', content: { title: associazione.denominazione, eyebrow: associazione.forma_giuridica, subtitle: grafica.tagline, coverUrl: grafica.cover_url, logoUrl: associazione.logo_url, brandColor: grafica.colore_brand || '#111827' } })
   
-  // Numeri (Se esistono)
-  if (grafica.statistiche && Array.isArray(grafica.statistiche) && grafica.statistiche.length > 0) {
-    blocks.push({ type: 'stats', content: { items: grafica.statistiche } })
+  if (grafica.statistiche?.length > 0) {
+    blocks.push({ id: 'f-stats', type: 'stats', content: { items: grafica.statistiche } })
   }
-  
-  // Chi Siamo
   if (grafica.chi_siamo) {
-    blocks.push({ type: 'about', content: { title: 'Chi Siamo', body: grafica.chi_siamo } })
+    blocks.push({ id: 'f-about', type: 'about', content: { title: 'Chi Siamo', body: grafica.chi_siamo } })
   }
-
-  // Mission / Vision
-  if (grafica.mission || grafica.vision) {
-    blocks.push({ type: 'missionVision', content: { missionTitle: 'Mission', mission: grafica.mission, visionTitle: 'Vision', vision: grafica.vision } })
+  if (grafica.mission) {
+    blocks.push({ id: 'f-mission', type: 'mission', content: { title: 'La nostra Mission', body: grafica.mission } })
   }
-
-  // Galleria
-  if (grafica.immagini_gallery && Array.isArray(grafica.immagini_gallery) && grafica.immagini_gallery.length > 0) {
-    blocks.push({ type: 'gallery', content: { items: grafica.immagini_gallery } })
+  if (grafica.vision) {
+    blocks.push({ id: 'f-vision', type: 'vision', content: { title: 'La nostra Vision', body: grafica.vision } })
   }
-
-  // FAQ
-  if (grafica.faq && Array.isArray(grafica.faq) && grafica.faq.length > 0) {
-    blocks.push({ type: 'faq', content: { items: grafica.faq } })
+  if (grafica.immagini_gallery?.length > 0) {
+    blocks.push({ id: 'f-gallery', type: 'gallery', content: { items: grafica.immagini_gallery } })
   }
-
-  // Documenti
-  if (grafica.documenti && Array.isArray(grafica.documenti) && grafica.documenti.length > 0) {
-    blocks.push({ type: 'documents', content: { items: grafica.documenti } })
+  if (grafica.faq?.length > 0) {
+    blocks.push({ id: 'f-faq', type: 'faq', content: { items: grafica.faq } })
   }
-
-  // Link & Partner
+  if (grafica.documenti?.length > 0) {
+    blocks.push({ id: 'f-docs', type: 'documents', content: { items: grafica.documenti } })
+  }
   if (grafica.sito_web || grafica.instagram || grafica.facebook) {
-    blocks.push({ type: 'links', content: { website: grafica.sito_web, instagram: grafica.instagram, facebook: grafica.facebook } })
+    blocks.push({ id: 'f-links', type: 'links', content: { website: grafica.sito_web, instagram: grafica.instagram, facebook: grafica.facebook } })
   }
-  if (grafica.partner && Array.isArray(grafica.partner) && grafica.partner.length > 0) {
-    blocks.push({ type: 'partners', content: { items: grafica.partner } })
+  if (grafica.partner?.length > 0) {
+    blocks.push({ id: 'f-partners', type: 'partners', content: { items: grafica.partner } })
   }
 
-  // Posizioni sempre alla fine
-  blocks.push({ type: 'positions', content: {} })
-
+  blocks.push({ id: 'f-positions', type: 'positions', content: {} })
   return blocks
 }
 
 // ==========================================
-// 3. PAGINA PRINCIPALE PUBBLICA
+// 3. PAGINA PRINCIPALE PUBBLICA DINAMICA
 // ==========================================
-
 export default async function ProfiloAssociazione({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
   const cookieStore = await cookies()
@@ -254,43 +389,40 @@ export default async function ProfiloAssociazione({ params }: { params: Promise<
   const grafica = associazione.grafica || {}
   const coloreBrand = grafica.colore_brand || '#111827'
   
-  // Posizioni
   const { data: posizioniRaw } = await supabase.from('posizioni').select('*, media_associazioni(url), tags:posizione_tags(tag:tags(id, name))').eq('associazione_id', id).order('created_at', { ascending: false })
   const posizioni = posizioniRaw?.map(p => ({ ...p, tags: p.tags?.map((t: any) => t.tag).filter(Boolean) })) || []
 
-  // Auth Control per il bottone Edit
   const { data: { user } } = await supabase.auth.getUser()
-  const isOwner = user?.id === id;
+  const isOwner = user?.id === id
 
-  // Elaborazione Layout config
-  const parsedConfig = typeof grafica.layout_config === 'string' ? JSON.parse(grafica.layout_config) : grafica.layout_config;
+  // La pagina pubblica renderizza SOLO la configurazione ufficiale rilasciata col tasto "Pubblica"
+  const parsedConfig = typeof grafica.layout_config === 'string' ? JSON.parse(grafica.layout_config) : grafica.layout_config
   const layout = parsedConfig && Array.isArray(parsedConfig) && parsedConfig.length > 0 
     ? parsedConfig 
-    : createFallbackLayout(associazione, grafica);
+    : createFallbackLayout(associazione, grafica)
 
   return (
-    <div className="min-h-screen bg-white font-sans pb-32">
-      {/* Scrollbar CSS */}
+    <div className="min-h-screen bg-white font-sans pb-32 text-slate-900">
       <style dangerouslySetInnerHTML={{__html: `
         .scrollbar-hide::-webkit-scrollbar { display: none; }
         .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
       `}} />
 
-      {/* TOP BAR (Solo per l'owner) */}
+      {/* TOP BAR DI PREVIEW PER L'OWNER */}
       {isOwner && (
         <div className="sticky top-0 z-50 bg-slate-900 text-white backdrop-blur-xl border-b border-slate-800">
           <div className="max-w-[860px] mx-auto flex items-center justify-between p-3 px-4 md:px-0">
             <span className="text-xs font-bold tracking-widest uppercase text-slate-300 flex items-center gap-2">
-              <Sparkles className="w-4 h-4 text-yellow-400" /> Vista Pubblica
+              <Sparkles className="w-4 h-4 text-yellow-400" /> Vista Pubblica Attiva
             </span>
             <Link href="/app/associazione/personalizza" className="bg-white text-black px-4 py-1.5 rounded-full text-xs font-bold shadow-sm hover:bg-slate-100 transition-colors">
-              Modifica Vetrina
+              Torna all'Editor
             </Link>
           </div>
         </div>
       )}
 
-      {/* RENDERIZZAZIONE DINAMICA CANVAS */}
+      {/* CANVAS DINAMICO STRUTTURATO A BLOCCHI RIGIDI */}
       <main className="max-w-[860px] mx-auto pt-6 px-4 md:px-0 flex flex-col gap-6 md:gap-10">
         {layout.map((block: any) => {
           const BlockComponent = Blocks[block.type as keyof typeof Blocks]
