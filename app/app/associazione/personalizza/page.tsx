@@ -7,16 +7,19 @@ import { createBrowserClient } from '@supabase/ssr'
 import { DndContext, PointerSensor, closestCenter, DragEndEvent, useSensor, useSensors } from '@dnd-kit/core'
 import { SortableContext, arrayMove, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import { FileText, GripVertical, Image as ImageIcon, LayoutGrid, Link2, Plus, Quote, Save, Settings2, Sparkles, Trash2, Users, Loader2, UploadCloud, Heart, Briefcase, MessageSquare, Video, Mail, Target, Eye, AlignCenter, AlignLeft, AlignRight, MoveUp, MoveDown } from 'lucide-react'
+import { FileText, GripVertical, Image as ImageIcon, LayoutGrid, Link2, Plus, Quote, Save, Settings2, Sparkles, Trash2, Users, Loader2, UploadCloud, Heart, Briefcase, MessageSquare, Video, Mail, Target, Eye, Move } from 'lucide-react'
 import PosizioneCard from '@/components/PosizioneCard'
-import { AnyAaaaRecord } from 'dns'
 
 // ==========================================
 // 1. TIPI E COSTANTI
 // ==========================================
 type BlockType = 'hero' | 'stats' | 'about' | 'mission' | 'vision' | 'gallery' | 'links' | 'faq' | 'documents' | 'partners' | 'positions' | 'donations' | 'projects' | 'testimonials' | 'video' | 'contacts'
 type LayoutBlock = { id: string; type: BlockType; content: any }
-type HeroContent = { title: string; eyebrow: string; subtitle: string; coverUrl: string; logoUrl: string; brandColor: string; coverPosition?: string; logoPosition?: string }
+type HeroContent = { 
+  title: string; eyebrow: string; subtitle: string; coverUrl: string; logoUrl: string; brandColor: string;
+  coverY?: number; coverZoom?: number;
+  logoX?: number; logoY?: number; logoZoom?: number;
+}
 
 const supabase = createBrowserClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!)
 const DEFAULT_BRAND = '#111827'
@@ -36,7 +39,7 @@ const blockLibrary = [
   { type: 'documents', label: 'Documenti', icon: FileText, desc: 'Moduli e file scaricabili', isUnique: true },
   { type: 'links', label: 'Link Utili', icon: Link2, desc: 'Sito web e social network', isUnique: true },
   { type: 'contacts', label: 'Contatti & Sedi', icon: Mail, desc: 'Info di contatto e form rapido per domande', isUnique: true },
-  { type: 'partners', label: 'Partner e Sponsor', icon: LayoutGrid, desc: 'Loghi o nomi delle realtà con cui collaborate', isUnique: true },
+  { type: 'partners', label: 'Partner e Sponsor', icon: LayoutGrid, desc: 'Con chi collaborate', isUnique: true },
   { type: 'positions', label: 'Posizioni', icon: Users, desc: 'Le tue posizioni aperte (Automatico)', isUnique: true },
 ]
 
@@ -95,7 +98,7 @@ function EditableField({ value, placeholder, onChange, className = '', inputClas
   )
 }
 
-function EditableImage({ value, onChange, className = '', children, objectPosition = 'center' }: any) {
+function EditableImage({ value, onChange, className = '', children }: any) {
   const [isUploading, setIsUploading] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
 
@@ -113,19 +116,16 @@ function EditableImage({ value, onChange, className = '', children, objectPositi
     <div className={`relative group cursor-pointer overflow-hidden bg-slate-100 transition-all ${className}`} onClick={() => !value && inputRef.current?.click()}>
       <input type="file" ref={inputRef} className="hidden" accept="image/*" onChange={handleFileChange} />
       {isUploading && <div className="absolute inset-0 flex items-center justify-center bg-slate-100/80 backdrop-blur-md z-40"><Loader2 className="w-8 h-8 animate-spin text-slate-900" /></div>}
-      {value ? (
-        /* FIX CROP: Usiamo lo stile inline nativo anziché string interpolation Tailwind */
-        <img src={value} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" style={{ objectPosition: objectPosition }} alt="Contenuto" />
-      ) : (
+      {value ? <img src={value} className="w-full h-full object-cover transition-transform duration-700 group-hover:scale-105" alt="Contenuto" /> : (
         <div className="absolute inset-0 flex flex-col items-center justify-center text-slate-400 group-hover:bg-slate-200 group-hover:text-slate-600 transition-colors">
-          <ImageIcon className="w-8 h-8 mb-2 opacity-40" />
-          <span className="text-[10px] uppercase font-bold tracking-widest">Carica</span>
+          <ImageIcon className="w-6 h-6 mb-1 opacity-40" />
+          <span className="text-[9px] uppercase font-bold tracking-widest text-center">Carica</span>
         </div>
       )}
       {value && !isUploading && (
-        <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-all duration-300 flex items-center justify-center gap-4 z-10 backdrop-blur-[2px]">
-          <button onClick={(e) => { e.stopPropagation(); inputRef.current?.click() }} className="p-3 bg-white text-black rounded-full shadow-2xl hover:scale-110 transition-all" title="Sostituisci"><UploadCloud className="w-4 h-4" /></button>
-          <button onClick={(e) => { e.stopPropagation(); onChange('') }} className="p-3 bg-red-500 text-white rounded-full shadow-2xl hover:scale-110 transition-all" title="Rimuovi"><Trash2 className="w-4 h-4" /></button>
+        <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-all duration-300 flex items-center justify-center gap-3 z-10 backdrop-blur-[2px]">
+          <button onClick={(e) => { e.stopPropagation(); inputRef.current?.click() }} className="p-2 bg-white text-black rounded-full shadow-2xl hover:scale-110 transition-all" title="Sostituisci"><UploadCloud className="w-3.5 h-3.5" /></button>
+          <button onClick={(e) => { e.stopPropagation(); onChange('') }} className="p-2 bg-red-500 text-white rounded-full shadow-2xl hover:scale-110 transition-all" title="Rimuovi"><Trash2 className="w-3.5 h-3.5" /></button>
         </div>
       )}
       {children}
@@ -183,17 +183,102 @@ function EditableDocumentItem({ doc, onFileUploaded, onRemove, onNameChange }: {
   )
 }
 
-function SortableBlockShell({ block, onRemove, children, locked = false }: any) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: block.id, disabled: locked })
-  const style = { transform: CSS.Transform.toString(transform), transition }
+// COMPONENTE DRAG-TO-PAN PER COPERTINA E LOGO
+function InteractiveCropImage({ url, x = 50, y = 50, zoom = 1, isAxisYOnly = false, onChange }: { url: string, x?: number, y?: number, zoom?: number, isAxisYOnly?: boolean, onChange: (data: { x: number, y: number, zoom: number }) => void }) {
+  const containerRef = useRef<HTMLDivElement>(null)
+  const [isDragging, setIsDragging] = useState(false)
+  const dragStart = useRef({ x: 0, y: 0, posX: 50, posY: 50 })
+
+  const handleMouseDown = (e: React.MouseEvent) => {
+    if (!url || e.button !== 0) return
+    e.preventDefault()
+    setIsDragging(true)
+    dragStart.current = { x: e.clientX, y: e.clientY, posX: x, posY: y }
+  }
+
+  const handleWheel = (e: React.WheelEvent) => {
+    if (!url) return
+    e.preventDefault()
+    const zoomFactor = e.deltaY < 0 ? 0.05 : -0.05
+    let newZoom = zoom + zoomFactor
+    newZoom = Math.max(1, Math.min(3, newZoom))
+    onChange({ x, y, zoom: parseFloat(newZoom.toFixed(2)) })
+  }
+
+  useEffect(() => {
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!isDragging || !containerRef.current) return
+      const rect = containerRef.current.getBoundingClientRect()
+      
+      const deltaX = ((e.clientX - dragStart.current.x) / rect.width) * 100 / zoom
+      const deltaY = ((e.clientY - dragStart.current.y) / rect.height) * 100 / zoom
+
+      let newX = dragStart.current.posX - (isAxisYOnly ? 0 : deltaX)
+      let newY = dragStart.current.posY - deltaY
+
+      newX = Math.max(0, Math.min(100, newX))
+      newY = Math.max(0, Math.min(100, newY))
+
+      onChange({ x: Math.round(newX), y: Math.round(newY), zoom })
+    }
+
+    const handleMouseUp = () => { if (isDragging) setIsDragging(false) }
+
+    if (isDragging) {
+      window.addEventListener('mousemove', handleMouseMove)
+      window.addEventListener('mouseup', handleMouseUp)
+    }
+    return () => {
+      window.addEventListener('mousemove', handleMouseMove)
+      window.removeEventListener('mouseup', handleMouseUp)
+    }
+  }, [isDragging, x, y, zoom, isAxisYOnly])
 
   return (
-    <div ref={setNodeRef} style={style} className={`group flex relative transition-all w-full ${isDragging ? 'z-50 opacity-50 scale-[0.98]' : 'z-10'}`}>
+    <div ref={containerRef} onMouseDown={handleMouseDown} onWheel={handleWheel} className={`w-full h-full relative overflow-hidden select-none ${url ? 'cursor-grab active:cursor-grabbing' : ''}`}>
+      {url ? (
+        <img src={url} className="w-full h-full object-cover pointer-events-none origin-center" 
+          style={{ 
+            objectPosition: `${isAxisYOnly ? 50 : x}% ${y}%`, 
+            transform: `scale(${zoom})` 
+          }} 
+          alt="Inquadratura" 
+        />
+      ) : (
+        <div className="absolute inset-0 flex flex-col items-center justify-center text-slate-400">
+          <ImageIcon className="w-8 h-8 mb-2 opacity-40" />
+          <span className="text-[10px] uppercase font-bold tracking-widest">Carica Immagine</span>
+        </div>
+      )}
+      
+      {url && (
+        <div className="absolute top-3 left-3 bg-black/60 backdrop-blur-md text-white text-[9px] font-bold px-2 py-1 rounded-lg flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none tracking-wide">
+          <Move className="w-3 h-3" /> Drag per muovere • Usa la rotella per Zoomare
+        </div>
+      )}
+    </div>
+  )
+}
+
+// FIX DRAG & DROP DEFORMAZIONE: Usiamo CSS.Translate e non Transform
+function SortableBlockShell({ block, onRemove, children, locked = false }: any) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: block.id, disabled: locked })
+  
+  // Translate previene lo schiacciamento nativo causato da Transform
+  const style = { 
+    transform: CSS.Translate.toString(transform), 
+    transition,
+    zIndex: isDragging ? 50 : 1,
+  }
+
+  return (
+    <div ref={setNodeRef} style={style} className={`group flex relative w-full rounded-[2.5rem] transition-all duration-200 ${isDragging ? 'opacity-95 shadow-2xl bg-white ring-1 ring-slate-200' : ''}`}>
       <div className={`absolute -left-12 top-6 flex flex-col items-center gap-1 opacity-0 transition-opacity duration-200 ${!locked && 'group-hover:opacity-100'}`}>
         <button {...attributes} {...listeners} className="p-2 text-slate-400 hover:text-black hover:bg-slate-100 rounded-lg cursor-grab active:cursor-grabbing shadow-sm bg-white border border-slate-100"><GripVertical className="h-5 w-5" /></button>
         <button onClick={() => onRemove(block.id)} className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg shadow-sm bg-white border border-slate-100"><Trash2 className="h-4 w-4" /></button>
       </div>
-      <div className="flex-1 w-full rounded-[2rem] px-2 py-2 hover:bg-slate-50/50 transition-colors">
+      {/* Ridotto il padding interno verticale per compattare gli spazi stile Notion */}
+      <div className={`flex-1 w-full rounded-[2.5rem] px-2 py-1 transition-colors ${!isDragging && 'hover:bg-slate-50/50'}`}>
         {children}
       </div>
     </div>
@@ -201,46 +286,188 @@ function SortableBlockShell({ block, onRemove, children, locked = false }: any) 
 }
 
 // ==========================================
-// 4. COMPONENTI BLOCCO CORE + BLOCCHI MULTIPLI
+// 4. COMPONENTI BLOCCO CORE + NOTION/LINKEDIN CROP
 // ==========================================
 const Blocks = {
   hero: ({ content, onChange }: any) => {
-    const coverPos = content.coverPosition || 'center'
-    const logoPos = content.logoPosition || 'center'
+    const [editMode, setEditMode] = useState<'none' | 'cover' | 'logo'>('none');
+    const [tempPos, setTempPos] = useState({ x: 50, y: 50, zoom: 1 });
+    
+    const coverInputRef = useRef<HTMLInputElement>(null);
+    const logoInputRef = useRef<HTMLInputElement>(null);
+    const [isUploading, setIsUploading] = useState<'cover'|'logo'|null>(null);
 
-    return (
-      <div className="relative w-full group pt-4 pb-8">
-        <div className="w-full h-32 md:h-48 rounded-[2rem] bg-slate-100 overflow-hidden relative shadow-sm border border-slate-100/50 z-0">
-          <EditableImage value={content.coverUrl} objectPosition={coverPos} onChange={(url: string) => onChange({...content, coverUrl: url})} className="w-full h-full" />
-          {content.coverUrl && (
-            <div className="absolute bottom-3 right-3 flex items-center bg-white/90 backdrop-blur-md border border-slate-200/50 px-2 py-1 rounded-xl shadow-lg gap-1 opacity-0 group-hover:opacity-100 transition-opacity z-30">
-              <button onClick={(e) => { e.stopPropagation(); onChange({...content, coverPosition: 'top'}) }} className={`p-1.5 rounded-lg transition-colors ${coverPos === 'top' ? 'bg-slate-900 text-white' : 'text-slate-500 hover:bg-slate-100'}`} title="Allinea in alto"><MoveUp className="w-3.5 h-3.5" /></button>
-              <button onClick={(e) => { e.stopPropagation(); onChange({...content, coverPosition: 'center'}) }} className={`p-1.5 rounded-lg transition-colors ${coverPos === 'center' ? 'bg-slate-900 text-white' : 'text-slate-500 hover:bg-slate-100'}`} title="Allinea al centro"><AlignCenter className="w-3.5 h-3.5" /></button>
-              <button onClick={(e) => { e.stopPropagation(); onChange({...content, coverPosition: 'bottom'}) }} className={`p-1.5 rounded-lg transition-colors ${coverPos === 'bottom' ? 'bg-slate-900 text-white' : 'text-slate-500 hover:bg-slate-100'}`} title="Allinea in basso"><MoveDown className="w-3.5 h-3.5" /></button>
+    const startReposition = (type: 'cover' | 'logo') => {
+      setEditMode(type);
+      setTempPos({
+        x: type === 'cover' ? 50 : (content.logoX ?? 50),
+        y: type === 'cover' ? (content.coverY ?? 50) : (content.logoY ?? 50),
+        zoom: type === 'cover' ? (content.coverZoom ?? 1) : (content.logoZoom ?? 1)
+      });
+    };
+
+    const handleSave = () => {
+      if (editMode === 'cover') {
+        onChange({ ...content, coverY: tempPos.y, coverZoom: tempPos.zoom });
+      } else if (editMode === 'logo') {
+        onChange({ ...content, logoX: tempPos.x, logoY: tempPos.y, logoZoom: tempPos.zoom });
+      }
+      setEditMode('none');
+    };
+
+    const handleFile = async (e: React.ChangeEvent<HTMLInputElement>, type: 'cover' | 'logo') => {
+      const file = e.target.files?.[0];
+      if (!file) return;
+      setIsUploading(type);
+      const result = await uploadFileToSupabase(file, 'images');
+      setIsUploading(null);
+      if (result) {
+        onChange({
+          ...content,
+          [type === 'cover' ? 'coverUrl' : 'logoUrl']: result.url,
+          [type === 'cover' ? 'coverY' : 'logoY']: 50,
+          [type === 'cover' ? 'coverZoom' : 'logoZoom']: 1,
+          ...(type === 'logo' ? { logoX: 50 } : {})
+        });
+      }
+    };
+
+    const adjustZoom = (delta: number) => {
+      setTempPos(p => ({ ...p, zoom: Math.max(1, Math.min(3, parseFloat((p.zoom + delta).toFixed(2)))) }));
+    };
+
+    const handlePointerMove = (e: React.PointerEvent<HTMLDivElement>, isAxisYOnly: boolean) => {
+      if (e.buttons !== 1) return;
+      const target = e.currentTarget;
+      const deltaX = (e.movementX / target.clientWidth) * 100;
+      const deltaY = (e.movementY / target.clientHeight) * 100;
+
+      setTempPos(p => ({
+        ...p,
+        x: isAxisYOnly ? 50 : Math.max(0, Math.min(100, p.x - deltaX / p.zoom)),
+        y: Math.max(0, Math.min(100, p.y - deltaY / p.zoom))
+      }));
+    };
+
+    const renderCover = () => {
+      const isEditing = editMode === 'cover';
+      const pos = isEditing ? tempPos : { x: 50, y: content.coverY ?? 50, zoom: content.coverZoom ?? 1 };
+
+      return (
+        <div className="w-full h-32 md:h-48 rounded-[2rem] bg-slate-100 overflow-hidden relative shadow-sm border border-slate-100/50 z-0 group/cover">
+          <input type="file" ref={coverInputRef} className="hidden" accept="image/*" onChange={(e) => handleFile(e, 'cover')} />
+          {isUploading === 'cover' && <div className="absolute inset-0 bg-slate-100/80 backdrop-blur-sm z-50 flex items-center justify-center"><Loader2 className="w-8 h-8 animate-spin text-slate-900" /></div>}
+
+          {content.coverUrl ? (
+             <div
+               className={`w-full h-full relative ${isEditing ? 'cursor-grab active:cursor-grabbing' : ''}`}
+               onPointerDown={isEditing ? e => e.currentTarget.setPointerCapture(e.pointerId) : undefined}
+               onPointerMove={isEditing ? e => handlePointerMove(e, true) : undefined}
+             >
+               <img src={content.coverUrl} className="w-full h-full object-cover pointer-events-none" style={{ objectPosition: `50% ${pos.y}%`, transform: `scale(${pos.zoom})` }} alt="Copertina" />
+               {isEditing && <div className="absolute inset-0 bg-black/20 pointer-events-none" />}
+             </div>
+          ) : (
+             <div className="absolute inset-0 flex flex-col items-center justify-center text-slate-400">
+               <ImageIcon className="w-6 h-6 mb-1 opacity-40" />
+               <span className="text-[10px] uppercase font-bold tracking-widest">Carica Copertina</span>
+             </div>
+          )}
+
+          {!isEditing && (
+            <div className="absolute top-3 right-3 flex items-center bg-white/95 backdrop-blur-md border border-slate-200 p-1.5 rounded-xl shadow-sm gap-1 opacity-0 group-hover/cover:opacity-100 transition-opacity z-30">
+               <button onClick={() => coverInputRef.current?.click()} className="text-[11px] font-bold text-slate-700 hover:text-black hover:bg-slate-100 px-2 py-1 rounded-lg transition-colors">Cambia</button>
+               {content.coverUrl && <button onClick={() => startReposition('cover')} className="text-[11px] font-bold text-slate-700 hover:text-black hover:bg-slate-100 px-2 py-1 rounded-lg transition-colors">Riposiziona</button>}
+               {content.coverUrl && <button onClick={() => onChange({...content, coverUrl: ''})} className="text-slate-400 hover:text-red-500 p-1 rounded-lg hover:bg-red-50 ml-1"><Trash2 className="w-3.5 h-3.5" /></button>}
             </div>
           )}
-        </div>
-        
-        <div className="px-4 md:px-8 relative -mt-10 md:-mt-12 flex flex-col items-start z-20">
-          <div className="relative group/logo">
-            <EditableImage value={content.logoUrl} objectPosition={logoPos} onChange={(url: string) => onChange({...content, logoUrl: url})} className="w-24 h-24 md:w-28 md:h-28 shrink-0 bg-white rounded-3xl shadow-lg border-[4px] border-white object-cover animate-none" />
-            {content.logoUrl && (
-              <div className="absolute -bottom-10 left-0 flex items-center bg-white/90 backdrop-blur-md border border-slate-200 p-1 rounded-xl shadow-md gap-0.5 opacity-0 group-hover/logo:opacity-100 transition-opacity z-40">
-                <button onClick={(e) => { e.stopPropagation(); onChange({...content, logoPosition: 'left'}) }} className={`p-1 rounded-md transition-colors ${logoPos === 'left' ? 'bg-slate-900 text-white' : 'text-slate-400 hover:bg-slate-100'}`}><AlignLeft className="w-3 h-3" /></button>
-                <button onClick={(e) => { e.stopPropagation(); onChange({...content, logoPosition: 'center'}) }} className={`p-1 rounded-md transition-colors ${logoPos === 'center' ? 'bg-slate-900 text-white' : 'text-slate-400 hover:bg-slate-100'}`}><AlignCenter className="w-3 h-3" /></button>
-                <button onClick={(e) => { e.stopPropagation(); onChange({...content, logoPosition: 'right'}) }} className={`p-1 rounded-md transition-colors ${logoPos === 'right' ? 'bg-slate-900 text-white' : 'text-slate-400 hover:bg-slate-100'}`}><AlignRight className="w-3 h-3" /></button>
+
+          {isEditing && (
+            <>
+              <div className="absolute top-4 left-0 w-full text-center pointer-events-none z-30">
+                <span className="bg-black/60 backdrop-blur-md text-white text-[11px] font-bold px-4 py-2 rounded-full shadow-lg tracking-wide">Trascina su e giù per riposizionare</span>
               </div>
+              <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center bg-white/95 backdrop-blur-md border border-slate-200 p-1.5 rounded-2xl shadow-xl gap-2 z-40">
+                 <div className="flex items-center bg-slate-100 rounded-xl p-1 gap-2">
+                   <button onClick={() => adjustZoom(-0.1)} className="w-6 h-6 flex items-center justify-center bg-white rounded-lg shadow-sm text-slate-600 hover:text-black font-bold hover:scale-105 transition-transform">-</button>
+                   <span className="text-[10px] font-black uppercase text-slate-400 w-8 text-center">Zoom</span>
+                   <button onClick={() => adjustZoom(0.1)} className="w-6 h-6 flex items-center justify-center bg-white rounded-lg shadow-sm text-slate-600 hover:text-black font-bold hover:scale-105 transition-transform">+</button>
+                 </div>
+                 <div className="h-6 w-px bg-slate-200" />
+                 <button onClick={() => setEditMode('none')} className="text-[11px] font-bold text-slate-500 hover:text-slate-800 px-3 py-1.5 rounded-xl hover:bg-slate-100 transition-colors">Annulla</button>
+                 <button onClick={handleSave} className="text-[11px] font-bold text-white bg-slate-900 hover:bg-black px-4 py-1.5 rounded-xl shadow-md transition-colors">Salva</button>
+              </div>
+            </>
+          )}
+        </div>
+      );
+    };
+
+    const renderLogo = () => {
+      const isEditing = editMode === 'logo';
+      const pos = isEditing ? tempPos : { x: content.logoX ?? 50, y: content.logoY ?? 50, zoom: content.logoZoom ?? 1 };
+
+      return (
+        <div className={`relative group/logo ${isEditing ? 'z-50' : 'z-20'}`}>
+          <input type="file" ref={logoInputRef} className="hidden" accept="image/*" onChange={(e) => handleFile(e, 'logo')} />
+          {isUploading === 'logo' && <div className="absolute inset-0 bg-slate-100/80 backdrop-blur-sm z-50 rounded-3xl flex items-center justify-center border-[4px] border-white"><Loader2 className="w-6 h-6 animate-spin text-slate-900" /></div>}
+
+          <div className="w-24 h-24 md:w-28 md:h-28 shrink-0 bg-white rounded-3xl shadow-lg border-[4px] border-white overflow-hidden relative">
+            {content.logoUrl ? (
+               <div
+                 className={`w-full h-full relative ${isEditing ? 'cursor-grab active:cursor-grabbing' : ''}`}
+                 onPointerDown={isEditing ? e => e.currentTarget.setPointerCapture(e.pointerId) : undefined}
+                 onPointerMove={isEditing ? e => handlePointerMove(e, false) : undefined}
+               >
+                 <img src={content.logoUrl} className="w-full h-full object-cover pointer-events-none" style={{ objectPosition: `${pos.x}% ${pos.y}%`, transform: `scale(${pos.zoom})` }} alt="Logo" />
+                 {isEditing && <div className="absolute inset-0 bg-black/20 pointer-events-none" />}
+               </div>
+            ) : (
+               <div className="absolute inset-0 flex flex-col items-center justify-center text-slate-400 bg-slate-50 cursor-pointer hover:bg-slate-100 transition-colors" onClick={() => !isEditing && logoInputRef.current?.click()}>
+                 <ImageIcon className="w-5 h-5 mb-1 opacity-40" />
+                 <span className="text-[9px] uppercase font-bold tracking-widest">Carica</span>
+               </div>
             )}
           </div>
 
-          <div className="mt-4 w-full space-y-1">
+          {!isEditing && (
+            <div className="absolute top-0 -right-2 translate-x-full flex flex-col bg-white/95 backdrop-blur-md border border-slate-200 p-1.5 rounded-xl shadow-sm gap-1 opacity-0 group-hover/logo:opacity-100 transition-opacity z-30">
+               <button onClick={() => logoInputRef.current?.click()} className="text-[10px] font-bold text-slate-700 hover:text-black hover:bg-slate-100 px-2 py-1 rounded-lg transition-colors text-left">Cambia Logo</button>
+               {content.logoUrl && <button onClick={() => startReposition('logo')} className="text-[10px] font-bold text-slate-700 hover:text-black hover:bg-slate-100 px-2 py-1 rounded-lg transition-colors text-left">Riposiziona</button>}
+               {content.logoUrl && <button onClick={() => onChange({...content, logoUrl: ''})} className="text-[10px] font-bold text-red-500 hover:bg-red-50 px-2 py-1 rounded-lg transition-colors text-left mt-1 border-t border-slate-100 pt-1">Rimuovi</button>}
+            </div>
+          )}
+
+          {isEditing && (
+            <div className="absolute top-1/2 -right-4 translate-x-full -translate-y-1/2 flex flex-col bg-white/95 backdrop-blur-md border border-slate-200 p-1.5 rounded-2xl shadow-2xl gap-2 z-40 min-w-[120px]">
+               <div className="text-[10px] text-center font-bold text-slate-400 uppercase tracking-wider pt-1">Zoom</div>
+               <div className="flex bg-slate-100 rounded-xl p-1 gap-1 w-full justify-between">
+                 <button onClick={() => adjustZoom(-0.1)} className="w-8 h-8 flex items-center justify-center bg-white rounded-lg shadow-sm text-slate-600 hover:text-black font-bold">-</button>
+                 <button onClick={() => adjustZoom(0.1)} className="w-8 h-8 flex items-center justify-center bg-white rounded-lg shadow-sm text-slate-600 hover:text-black font-bold">+</button>
+               </div>
+               <div className="h-px w-full bg-slate-100 my-0.5" />
+               <button onClick={handleSave} className="text-[11px] font-bold text-white bg-slate-900 hover:bg-black px-3 py-2 rounded-xl shadow-md transition-colors w-full">Salva</button>
+               <button onClick={() => setEditMode('none')} className="text-[11px] font-bold text-slate-500 hover:text-slate-800 px-3 py-2 rounded-xl hover:bg-slate-100 transition-colors w-full">Annulla</button>
+            </div>
+          )}
+        </div>
+      );
+    };
+
+    return (
+      // FIX PADDING: Ridotto il margin bottom della hero (pb-8 -> pb-0) per rimuovere spazio eccessivo col primo blocco
+      <div className="relative w-full group/heroblock pt-4 pb-0">
+        {renderCover()}
+        <div className={`px-4 md:px-8 relative -mt-10 md:-mt-12 flex flex-col items-start ${editMode === 'cover' ? 'opacity-30 pointer-events-none' : 'opacity-100'} transition-opacity duration-300`}>
+          {renderLogo()}
+          <div className="mt-4 w-full space-y-1 pointer-events-auto">
             <EditableField tag="span" value={content.eyebrow} placeholder="Es. Ente del Terzo Settore" onChange={(n: string) => onChange({...content, eyebrow: n})} className="text-[10px] md:text-xs font-bold tracking-[0.2em] uppercase text-slate-400" />
             <EditableField tag="h1" value={content.title} placeholder="Titolo Associazione" onChange={(n: string) => onChange({...content, title: n})} className="text-3xl md:text-4xl font-extrabold tracking-tight text-slate-900" />
             <EditableField tag="p" value={content.subtitle} placeholder="Il vostro motto o sottotitolo breve..." multiline onChange={(n: string) => onChange({...content, subtitle: n})} className="text-base md:text-lg text-slate-600 font-light max-w-2xl leading-relaxed whitespace-pre-wrap" />
           </div>
         </div>
       </div>
-    )
+    );
   },
 
   about: ({ content, onChange }: any) => (
@@ -270,7 +497,7 @@ const Blocks = {
               <EditableField disableWFull tag="div" value={stat.label} placeholder="Etichetta" inputClassName="max-w-[150px] text-center text-xs" onChange={(n: string) => { const newItems = [...items]; newItems[i].label = n; onChange({...content, items: newItems}) }} className="text-xs font-bold text-slate-400 uppercase tracking-widest mt-1 px-4" />
               
               {items.length > 1 && (
-                <button onClick={() => onChange({...content, items: items.filter((_:any, idx:number) => idx !== i)})} className="absolute -top-3 -right-2 p-1.5 bg-white text-slate-300 hover:text-red-500 border border-slate-100 rounded-full shadow-sm opacity-0 group-hover/stat:opacity-100 transition-opacity" title="Rimuovi"><Trash2 className="w-3 h-3" /></button>
+                <button onClick={() => onChange({...content, items: items.filter((_: any, idx: number) => idx !== i)})} className="absolute -top-3 -right-2 p-1.5 bg-white text-slate-300 hover:text-red-500 border border-slate-100 rounded-full shadow-sm opacity-0 group-hover/stat:opacity-100 transition-opacity" title="Rimuovi"><Trash2 className="w-3 h-3" /></button>
               )}
             </div>
           ))}
@@ -413,7 +640,7 @@ const Blocks = {
                   <EditableField tag="p" value={proj.desc} placeholder="Descrizione progetto..." multiline onChange={(n: string) => { const newItems = [...items]; newItems[i].desc = n; onChange({...content, items: newItems}) }} className="text-sm text-slate-500 font-light leading-relaxed whitespace-pre-wrap" />
                 </div>
                 {items.length > 1 && (
-                  <button onClick={() => { onChange({...content, items: items.filter((_:any, idx:number) => idx !== i)}) }} className="text-xs text-red-400 hover:text-red-500 self-end mt-2 flex items-center gap-1"><Trash2 className="w-3 h-3" /> Rimuovi progetto</button>
+                  <button onClick={() => { onChange({...content, items: items.filter((_: any, idx: number) => idx !== i)}) }} className="text-xs text-red-400 hover:text-red-500 self-end mt-2 flex items-center gap-1"><Trash2 className="w-3 h-3" /> Rimuovi progetto</button>
                 )}
               </div>
             </div>
@@ -437,7 +664,7 @@ const Blocks = {
             <div key={i} className="snap-start shrink-0 w-[90%] md:w-[65%] bg-slate-50 p-6 md:p-8 rounded-[2.5rem] flex flex-col justify-between border border-slate-100/50 min-h-[220px]">
               <div className="space-y-4">
                 <Quote className="w-8 h-8 text-slate-300 transform rotate-180" />
-                <EditableField tag="p" value={test.quote} placeholder="Inserisci la citazione..." multiline onChange={(n: string) => { const newItems = [...items]; newItems[i].quote = n; onChange({...content, items: newItems}) }} className="text-base md:text-lg font-light text-slate-800 leading-relaxed italic whitespace-pre-wrap" />
+                <EditableField tag="p" value={test.quote} placeholder="Inserisci la citazione..." multiline onChange={(n: string) => { const newItems = [...items]; newItems[i].quote = n; onChange({...content, items: newItems}) }} className="text-lg md:text-xl font-light text-slate-800 leading-relaxed italic whitespace-pre-wrap" />
               </div>
               <div className="mt-6 flex items-end justify-between">
                 <div className="flex items-center gap-3">
@@ -448,7 +675,7 @@ const Blocks = {
                   </div>
                 </div>
                 {items.length > 1 && (
-                  <button onClick={() => { onChange({...content, items: items.filter((_:any, idx:number) => idx !== i)}) }} className="p-2 text-slate-300 hover:text-red-500 rounded-full transition-colors"><Trash2 className="w-4 h-4" /></button>
+                  <button onClick={() => { onChange({...content, items: items.filter((_: any, idx: number) => idx !== i)}) }} className="p-2 text-slate-300 hover:text-red-500 rounded-full transition-colors"><Trash2 className="w-4 h-4" /></button>
                 )}
               </div>
             </div>
@@ -601,7 +828,7 @@ const Blocks = {
              <div key={i} className="flex items-center gap-2 group/partner bg-slate-50/50 hover:bg-slate-50 px-4 py-2 rounded-2xl transition-all border border-transparent hover:border-slate-100 relative">
                <EditableField disableWFull tag="span" value={partner} placeholder="Nome Partner..." onChange={(n: string) => { const newItems = [...items]; newItems[i] = n; onChange({...content, items: newItems}) }} className="font-bold text-base text-slate-800" />
                {items.length > 1 && (
-                 <button onClick={() => onChange({...content, items: items.filter((_:AnyAaaaRecord, idx:number) => idx !== i)})} className="p-1 text-slate-300 hover:text-red-500 rounded-full transition-colors opacity-0 group-hover/partner:opacity-100" title="Elimina"><Trash2 className="w-3.5 h-3.5" /></button>
+                 <button onClick={() => onChange({...content, items: items.filter((_: any, idx: number) => idx !== i)})} className="p-1 text-slate-300 hover:text-red-500 rounded-full transition-colors opacity-0 group-hover/partner:opacity-100" title="Elimina"><Trash2 className="w-3.5 h-3.5" /></button>
                )}
              </div>
           ))}
@@ -640,7 +867,7 @@ const Blocks = {
 }
 
 // ==========================================
-// 5. PAGINA PRINCIPALE (AUTO-SAVE & CROP COMPLETAMENTE REVISIONATI)
+// 5. PAGINA PRINCIPALE CON AUTO-SAVE FISSO
 // ==========================================
 export default function PersonalizzaPagina() {
   const router = useRouter()
@@ -654,7 +881,7 @@ export default function PersonalizzaPagina() {
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }))
   const brandColor = (layout.find(b => b.type === 'hero')?.content as HeroContent)?.brandColor || DEFAULT_BRAND
 
-  // Caricamento Iniziale: dà rigorosa priorità alla bozza draft
+  // Caricamento Iniziale: priorità assoluta alla bozza draft
   useEffect(() => {
     const loadData = async () => {
       const { data: { user } } = await supabase.auth.getUser()
@@ -702,7 +929,7 @@ export default function PersonalizzaPagina() {
     loadData()
   }, [router])
 
-  // FIX AUTO-SAVE ENGINE: Adesso include esplicitamente l'ID chiave primaria nel payload dell'upsert
+  // AUTO-SAVE EMENDATO: Scrittura blindata con chiave primaria esplicita su layout_draft
   useEffect(() => {
     if (isLoading || layout.length === 0) return
 
@@ -712,16 +939,12 @@ export default function PersonalizzaPagina() {
       if (!user) return
 
       const { error } = await supabase.from('associazioni_grafica').upsert({
-        associazione_id: user.id, // <-- FISSATO: Questa chiave risolve i conflitti e sblocca la scrittura
+        associazione_id: user.id,
         layout_draft: layout,
         updated_at: new Date().toISOString()
       }, { onConflict: 'associazione_id' })
 
-      if (error) {
-        console.error("Errore auto-save:", error)
-      } else {
-        setAutoSaveStatus('saved')
-      }
+      if (!error) setAutoSaveStatus('saved')
     }, 2000)
 
     return () => clearTimeout(timer)
@@ -795,11 +1018,11 @@ export default function PersonalizzaPagina() {
         </div>
       </div>
 
-      {/* CANVAS */}
+      {/* CANVAS (Gap ridotto per effetto coeso Notion Style) */}
       <main className="max-w-[860px] mx-auto pt-8 px-4 md:px-0">
         <DndContext collisionDetection={closestCenter} onDragEnd={handleDragEnd} sensors={sensors}>
           <SortableContext items={layout.map(b => b.id)} strategy={verticalListSortingStrategy}>
-            <div className="flex flex-col gap-6 md:gap-10">
+            <div className="flex flex-col gap-4 md:gap-8">
               {layout.map((block) => {
                 const BlockComponent = Blocks[block.type as keyof typeof Blocks] || Blocks.generic
                 return (

@@ -9,22 +9,39 @@ import PosizioneCard from '@/components/PosizioneCard'
 // ==========================================
 
 const Blocks = {
-  // HERO: Supporto al posizionamento focale inline per il ritaglio perfetto
+  // HERO: Allineato visivamente all'editor ripristinando il pb-4 per l'effetto arioso premium
   hero: ({ content }: any) => {
-    const coverPos = content.coverPosition || 'center'
-    const logoPos = content.logoPosition || 'center'
+    const coverY = content.coverY ?? 50
+    const coverZoom = content.coverZoom ?? 1
+    const logoX = content.logoX ?? 50
+    const logoY = content.logoY ?? 50
+    const logoZoom = content.logoZoom ?? 1
 
     return (
-      <div className="relative w-full pt-4 pb-8">
+      <div className="relative w-full pt-4 pb-4">
+        {/* Sfondo Copertina isolato */}
         <div className="w-full h-32 md:h-48 rounded-[2rem] bg-slate-100 overflow-hidden relative shadow-sm border border-slate-100/50 z-0">
           {content.coverUrl && (
-            <img src={content.coverUrl} className="w-full h-full object-cover" style={{ objectPosition: coverPos }} alt="Copertina" />
+            <img 
+              src={content.coverUrl} 
+              className="w-full h-full object-cover" 
+              style={{ objectPosition: `50% ${coverY}%`, transform: `scale(${coverZoom})` }} 
+              alt="Copertina" 
+            />
           )}
         </div>
         
+        {/* Contenuti in overlap protetti */}
         <div className="px-4 md:px-8 relative -mt-10 md:-mt-12 flex flex-col items-start z-20">
           {content.logoUrl ? (
-            <img src={content.logoUrl} className="w-24 h-24 md:w-28 md:h-28 shrink-0 bg-white rounded-3xl shadow-lg border-[4px] border-white object-cover" style={{ objectPosition: logoPos }} alt="Logo" />
+            <div className="w-24 h-24 md:w-28 md:h-28 shrink-0 bg-white rounded-3xl shadow-lg border-[4px] border-white overflow-hidden relative">
+              <img 
+                src={content.logoUrl} 
+                className="w-full h-full object-cover" 
+                style={{ objectPosition: `${logoX}% ${logoY}%`, transform: `scale(${logoZoom})` }} 
+                alt="Logo" 
+              />
+            </div>
           ) : (
             <div className="w-24 h-24 md:w-28 md:h-28 shrink-0 bg-white rounded-3xl shadow-lg border-[4px] border-white flex items-center justify-center text-4xl font-bold text-slate-200">
               {content.title?.charAt(0) || 'A'}
@@ -47,7 +64,6 @@ const Blocks = {
     </section>
   ),
 
-  // STATS: Allineamento geometrico centrale perfetto nativo
   stats: ({ content }: any) => {
     const items = content.items || []
     if (items.length === 0) return null
@@ -63,7 +79,6 @@ const Blocks = {
     )
   },
 
-  // GALLERY: Architettura fluida auto-adattiva ad incastro elastico
   gallery: ({ content }: any) => {
     const rawImages = content.items || []
     const images = rawImages.filter(Boolean)
@@ -213,7 +228,7 @@ const Blocks = {
     if (items.length === 0) return null
     return (
       <section className="space-y-6 max-w-3xl px-2">
-        <h3 className="text-2xl md:text-3xl font-extrabold tracking-tight text-slate-900 mb-6">Domande frequenti</h3>
+        <h3 className="text-2xl md:text-3xl font-extrabold tracking-tight text-slate-900 mb-4">Domande frequenti</h3>
         {items.map((item: any, i: number) => (
           <div key={i} className="border-b border-slate-100 pb-4 last:border-0 last:pb-0">
             <h4 className="text-lg font-bold text-slate-900 mb-1">{item.q}</h4>
@@ -287,7 +302,6 @@ const Blocks = {
         </div>
       </div>
       
-      {/* Form interattivo reale lato pubblico */}
       <form className="bg-white p-5 rounded-2xl border border-slate-100 space-y-3">
         <p className="text-xs font-bold text-slate-400 uppercase tracking-wider">Invia un messaggio rapido</p>
         <input type="email" placeholder="La tua email..." className="w-full bg-slate-50 rounded-xl border border-slate-100 outline-none text-xs px-3 py-2 text-slate-800" required />
@@ -384,7 +398,7 @@ export default async function ProfiloAssociazione({ params }: { params: Promise<
   )
 
   const { data: associazione } = await supabase.from('associazioni').select('*, grafica:associazioni_grafica(*)').eq('id', id).single()
-  if (!associazione) return <div className="min-h-screen flex items-center justify-center font-sans text-slate-500">Associazione non trovata</div>
+  if (!associazione) return <div className="min-h-screen flex items-center justify-center font-sans text-slate-500">Associazione non trouvata</div>
 
   const grafica = associazione.grafica || {}
   const coloreBrand = grafica.colore_brand || '#111827'
@@ -395,7 +409,6 @@ export default async function ProfiloAssociazione({ params }: { params: Promise<
   const { data: { user } } = await supabase.auth.getUser()
   const isOwner = user?.id === id
 
-  // La pagina pubblica renderizza SOLO la configurazione ufficiale rilasciata col tasto "Pubblica"
   const parsedConfig = typeof grafica.layout_config === 'string' ? JSON.parse(grafica.layout_config) : grafica.layout_config
   const layout = parsedConfig && Array.isArray(parsedConfig) && parsedConfig.length > 0 
     ? parsedConfig 
@@ -422,14 +435,14 @@ export default async function ProfiloAssociazione({ params }: { params: Promise<
         </div>
       )}
 
-      {/* CANVAS DINAMICO STRUTTURATO A BLOCCHI RIGIDI */}
-      <main className="max-w-[860px] mx-auto pt-6 px-4 md:px-0 flex flex-col gap-6 md:gap-10">
+      {/* CANVAS DINAMICO (Fissata geometria spaziale py-1 e pt-8 identica all'editor) */}
+      <main className="max-w-[860px] mx-auto pt-8 px-4 md:px-0 flex flex-col gap-4 md:gap-8">
         {layout.map((block: any) => {
           const BlockComponent = Blocks[block.type as keyof typeof Blocks]
           if (!BlockComponent) return null
           
           return (
-            <div key={block.id} className="w-full">
+            <div key={block.id} className="w-full py-1">
               <BlockComponent 
                 content={block.content} 
                 positions={posizioni} 
