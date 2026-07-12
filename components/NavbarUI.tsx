@@ -36,7 +36,6 @@ export default function NavbarUI({
   const logoText = isAziendale ? 'text-white' : 'text-slate-900'
   
   return (
-    // 🚨 FIX Z-INDEX: Alzato a 9999 per stare sicuramente sopra la mappa Leaflet
     <nav className={`border-b backdrop-blur-md sticky top-0 z-[9999] transition-colors duration-500 ${navBg}`}>
       <div className="py-3 px-6 md:px-8 flex justify-between items-center max-w-7xl mx-auto">
         
@@ -59,9 +58,14 @@ export default function NavbarUI({
           {isLoggedIn ? (
             !needsOnboarding && (
               <>
-                <Link href={dashboardLink} className={`text-sm font-bold transition-colors ${textColor}`}>
-                  Dashboard
+                {/* Se è associazione il link punta all'Hub Unificato, altrimenti alla dashboard standard */}
+                <Link 
+                  href={isAssociazione ? '/app/associazione/posizioni' : dashboardLink} 
+                  className={`text-sm font-bold transition-colors ${textColor}`}
+                >
+                  {isAssociazione ? 'Bacheca' : 'Dashboard'}
                 </Link>
+                
                 {isVolontario && (
                   <>
                     <Link 
@@ -78,14 +82,10 @@ export default function NavbarUI({
                     </Link>
                   </>
                 )}
+
+                {/* ✨ STRUTTURA ASSOCIAZIONE RICALIBRATA IN STILE PREMIUM */}
                 {isAssociazione && (
                   <>
-                    <Link 
-                      href="/app/associazione/personalizza" 
-                      className={`text-sm font-bold transition-colors ${textColor}`}
-                    >
-                      Personalizza
-                    </Link>
                     <Link 
                       href="/app/associazione/messaggi" 
                       className={`text-sm font-bold transition-colors ${textColor}`}
@@ -96,14 +96,19 @@ export default function NavbarUI({
                       href="/app/associazione/rete" 
                       className={`text-sm font-bold transition-colors ${textColor}`}
                     >
-                      Volontari
+                      Cerca Volontari
+                    </Link>
+                    <Link 
+                      href="/app/associazione/personalizza" 
+                      className={`text-sm font-bold transition-colors ${textColor}`}
+                    >
+                      Vetrina
                     </Link>
                   </>
                 )}
               </>
             )
           ) : (
-            /* LINK MAPPA PER UTENTI NON LOGGATI (DESKTOP) */
             <Link 
               href="/mappa" 
               className={`text-sm font-bold transition-colors ${textColor}`}
@@ -112,7 +117,6 @@ export default function NavbarUI({
             </Link>
           )}
 
-          {/* 🛡️ PRIVACY POLICY DESKTOP */}
           <Link 
             href="/privacy" 
             className={`text-sm font-bold opacity-60 hover:opacity-100 transition-opacity ml-2 ${textColor}`}
@@ -180,7 +184,7 @@ export default function NavbarUI({
         </div>
       </div>
 
-      {/* MENU MOBILE */}
+      {/* MENU MOBILE INTERAMENTE ALLINEATO */}
       {isOpen && (
         <div className={`md:hidden border-t px-6 py-6 flex flex-col gap-2 absolute w-full shadow-2xl backdrop-blur-xl transition-all ${isAziendale ? 'bg-slate-900/95 border-slate-800' : 'bg-white/95 border-slate-100'}`}>
           
@@ -195,11 +199,11 @@ export default function NavbarUI({
               {!needsOnboarding && (
                 <>
                   <Link 
-                    href={dashboardLink} 
+                    href={isAssociazione ? '/app/associazione/posizioni' : dashboardLink} 
                     onClick={chiudiMenu}
                     className={`p-3 rounded-xl font-bold transition-all ${isAziendale ? 'text-white hover:bg-slate-800' : 'text-slate-900 hover:bg-slate-50'}`}
                   >
-                    Dashboard
+                    {isAssociazione ? 'Bacheca' : 'Dashboard'}
                   </Link>
 
                   {isVolontario && (
@@ -221,15 +225,9 @@ export default function NavbarUI({
                     </>
                   )}
 
+                  {/* ✨ STRUTTURA MOBILE ASSOCIAZIONE */}
                   {isAssociazione && (
                     <>
-                      <Link 
-                        href="/app/associazione/personalizza" 
-                        onClick={chiudiMenu}
-                        className={`p-3 rounded-xl font-bold transition-all ${isAziendale ? 'text-white hover:bg-slate-800' : 'text-slate-900 hover:bg-slate-50'}`}
-                      >
-                        Personalizza
-                      </Link>
                       <Link 
                         href="/app/associazione/messaggi" 
                         onClick={chiudiMenu}
@@ -242,7 +240,14 @@ export default function NavbarUI({
                         onClick={chiudiMenu}
                         className={`p-3 rounded-xl font-bold transition-all ${isAziendale ? 'text-white hover:bg-slate-800' : 'text-slate-900 hover:bg-slate-50'}`}
                       >
-                        Volontari
+                        Cerca Volontari
+                      </Link>
+                      <Link 
+                        href="/app/associazione/personalizza" 
+                        onClick={chiudiMenu}
+                        className={`p-3 rounded-xl font-bold transition-all ${isAziendale ? 'text-white hover:bg-slate-800' : 'text-slate-900 hover:bg-slate-50'}`}
+                      >
+                        Vetrina
                       </Link>
                     </>
                   )}
@@ -303,13 +308,11 @@ export default function NavbarUI({
             </div>
           )}
 
-          {/* 🛡️ PRIVACY POLICY MOBILE */}
           <div className={`mt-4 pt-4 border-t text-center ${isAziendale ? 'border-slate-800' : 'border-slate-100'}`}>
             <Link 
               href="/privacy" 
               onClick={chiudiMenu}
               className={`text-xs font-bold opacity-60 hover:opacity-100 transition-opacity inline-block ${isAziendale ? 'text-slate-400' : 'text-slate-500'}`}
-              title="Privacy Policy"
             >
               Privacy Policy
             </Link>

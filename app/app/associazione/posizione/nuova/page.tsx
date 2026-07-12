@@ -1,9 +1,10 @@
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import Link from 'next/link'
-import FormPosizione from '@/components/FormPosizione'
+import FormPosizioneConPreview from '@/components/FormPosizioneConPreview'
 import { createPosizione } from '../../actions'
 import { redirect } from 'next/navigation'
+import { ArrowLeft } from 'lucide-react'
 
 export default async function NuovaPosizionePage() {
   const cookieStore = await cookies()
@@ -16,7 +17,7 @@ export default async function NuovaPosizionePage() {
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect('/auth/login')
 
-  // Selezioniamo categoria e description per raggruppare le macro-aree nel client
+  // Recupero dati parallelo dal database
   const [ { data: allTags }, { data: allCompetenze }, { data: mediaGallery } ] = await Promise.all([
     supabase.from('tags').select('id, name, categoria, description').order('categoria').order('name'),
     supabase.from('competenze').select('id, name, is_official').eq('is_official', true).order('name'),
@@ -24,31 +25,37 @@ export default async function NuovaPosizionePage() {
   ])
 
   return (
-    <div className="max-w-4xl mx-auto py-8 sm:py-12 px-4 sm:px-6 pb-24">
+    // Allarghiamo la pagina a max-w-6xl per permettere il layout a due colonne affiancate
+    <div className="max-w-6xl mx-auto py-12 px-4 sm:px-6 pb-32 font-sans bg-white text-slate-900 antialiased">
       
-      {/* HEADER OTTIMIZZATO MOBILE */}
-      <div className="mb-8 sm:mb-12 flex flex-col sm:flex-row sm:items-center justify-between gap-6 border-b border-slate-100 pb-8">
-        <div>
-          <h1 className="text-3xl sm:text-4xl md:text-5xl font-black text-slate-900 tracking-tight">Pubblica Posizione</h1>
-          <p className="text-slate-500 font-medium mt-2">Crea un annuncio e trova i volontari perfetti.</p>
+      {/* HEADER PROFESSIONALE DESATURATO */}
+      <div className="mb-12 flex items-center justify-between pb-6 border-b border-slate-100">
+        <div className="space-y-1">
+          <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-slate-900">
+            Nuovo annuncio di volontariato
+          </h1>
+          <p className="text-xs sm:text-sm text-slate-400 font-normal">
+            Compila i dettagli operativi per pubblicare l'opportunità sulla tua bacheca.
+          </p>
         </div>
+
         <Link 
-          href="/app/associazione" 
-          className="inline-flex items-center justify-center gap-2 px-6 py-3 bg-slate-100 text-slate-700 rounded-2xl text-sm font-bold hover:bg-slate-200 transition-colors active:scale-95 w-full sm:w-auto shrink-0"
+          href="/app/associazione/posizioni" 
+          className="inline-flex items-center justify-center gap-1.5 px-3 py-2 text-slate-400 hover:text-slate-900 border border-slate-100 hover:border-slate-200 rounded-xl text-xs font-semibold transition-all shrink-0"
         >
-          <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-4 h-4">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M10.5 19.5 3 12m0 0 7.5-7.5M3 12h18" />
-          </svg>
-          Indietro
+          <ArrowLeft className="w-3.5 h-3.5" />
+          Annulla
         </Link>
       </div>
 
-      <FormPosizione 
+      {/* NUOVO ARCHITETTURA: Form + Live Preview nello stesso componente client */}
+      <FormPosizioneConPreview 
         tagsDisponibili={allTags || []} 
         competenzeDisponibili={allCompetenze || []}
         mediaDisponibili={mediaGallery || []} 
         salvaAction={createPosizione} 
       />
+
     </div>
   )
 }
