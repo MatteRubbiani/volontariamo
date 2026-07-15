@@ -78,9 +78,7 @@ children: React.ReactNode;
 }>) {
 return (
 <html lang="it" suppressHydrationWarning>
-<head>
-{/* Il tag <head> ora è pulito per evitare conflitti di idratazione */}
-</head>
+
 <body className={`${geistSans.className} antialiased`}>
 {/* 🛡️ SCRIPT IUBENDA SPOSTATO QUI: afterInteractive permette a React di idratarsi senza errori */}
 <Script

@@ -2,14 +2,13 @@ import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import VistaEsplora from '@/components/VistaEsplora'
 
+// ✨ FIX: Lasciamo solo il nome della pagina. Il layout aggiungerà "| Volontariando" in automatico!
 export const metadata = {
-  title: 'Esplora la Mappa | Volontariando',
+  title: 'Esplora la Mappa', 
   description: 'Scopri le opportunità di volontariato vicino a te sulla mappa interattiva.',
 }
 
 export default async function EsploraPage() {
-  // Verifichiamo solo se l'utente è loggato per passargli il contesto corretto,
-  // ma la pagina rimane visibile a tutti!
   const cookieStore = await cookies()
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -21,7 +20,6 @@ export default async function EsploraPage() {
 
   return (
     <main className="h-[calc(100vh-76px)] w-full overflow-hidden">
-      {/* Montiamo la super mappa che abbiamo costruito! */}
       <VistaEsplora />
     </main>
   )

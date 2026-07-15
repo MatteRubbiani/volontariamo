@@ -4,41 +4,39 @@ import type { Metadata, ResolvingMetadata } from 'next'
 import Link from 'next/link'
 import TagBadge from '@/components/TagBadge'
 import CompetenzaBadge from '@/components/CompetenzaBadge'
-import PannelloCandidatura from '@/components/PannelloCandidatura' // ✨ Guarda come si legge bene ora!
+import PannelloCandidatura from '@/components/PannelloCandidatura'
 
-// ==========================================
-// 🚀 CONFIGURAZIONE ENTERPRISE PER L'ISR
-// ==========================================
 export const revalidate = 3600 
 export const dynamicParams = true 
 
-// ==========================================
-// 📦 GENERAZIONE PARAMETRI STATICI AL BUILD TIME
-// ==========================================
 export async function generateStaticParams() {
   const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
   )
-
   const { data: posizioni } = await supabase
     .from('posizioni')
     .select('slug')
-    .eq('stato', 'pubblicato')
     .not('slug', 'is', null)
 
-  return posizioni?.map((pos) => ({
-    slug: pos.slug,
-  })) || []
+  return posizioni?.map((pos) => ({ slug: pos.slug })) || []
 }
 
-// 🚨 GENERAZIONE METADATI SEO & SOCIAL OTTIMIZZATI PER LO SLUG
+// 🎯 GENERAZIONE METADATI BLINDATA (Estrattore Universale ID)
 export async function generateMetadata(
   { params }: { params: Promise<{ slug: string }> },
   parent: ResolvingMetadata
 ): Promise<Metadata> {
   await parent
   const resolvedParams = await params
+
+  // 1. Estraiamo l'ID usando un mix di Split e Regex per massima tolleranza
+  const rawSlug = resolvedParams.slug || ''
+  const cleanUrl = rawSlug.split('?')[0] // Togliamo params espliciti
+  
+  // Estraiamo gli ultimi 6 caratteri alfanumerici prima del parametro
+  const match = cleanUrl.match(/([a-zA-Z0-9]{6})$/) 
+  const shortId = match ? match[1] : cleanUrl
 
   const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -47,55 +45,72 @@ export async function generateMetadata(
 
   const { data: posizione } = await supabase
     .from('posizioni')
-    .select('titolo, descrizione, associazioni(denominazione)')
-    .eq('slug', resolvedParams.slug)
+    .select(`
+      titolo, 
+      descrizione, 
+      associazioni(denominazione),
+      media_associazioni(url)
+    `)
+    .ilike('slug', `%${shortId}%`)
     .maybeSingle()
 
   if (!posizione) {
-    return {
-      title: 'Posizione non trovata | Volontariando',
-      description: 'Questa posizione non è disponibile oppure non esiste.',
-    }
+    return { title: 'Opportunità di Volontariato' }
   }
 
   const nomeAssociazione = (posizione as any).associazioni?.denominazione || 'Associazione'
-  const title = `${posizione.titolo} | ${nomeAssociazione}`
-  const description = (posizione.descrizione || '').replace(/\s+/g, ' ').trim().slice(0, 160)
+  const titoloPulito = posizione.titolo || 'Bando di Volontariato'
+  const title = `${titoloPulito} con ${nomeAssociazione}`
+  
+  const description = (posizione.descrizione || '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 155) + '...'
 
-  return { 
-    title, 
+  const imageUrl = (posizione as any).media_associazioni?.url || 'https://volontariando.work/opengraph-image.png'
+
+  return {
+    title: {
+      absolute: `${title} | Volontariando`, // ✨ "ABSOLUTE" FORZA NEXT A NON AGGIUNGERE IL SUFFISSO
+    },
     description,
     openGraph: {
-      title,
+      title: `${title} | Volontariando`,
       description,
       type: 'article',
+      url: `https://volontariando.work/posizione/${shortId}`,
       siteName: 'Volontariando',
+      images: [{ url: imageUrl, width: 1200, height: 630, alt: title }]
     },
     twitter: {
       card: 'summary_large_image',
-      title,
+      title: `${title} | Volontariando`,
       description,
+      images: [imageUrl]
     }
   }
 }
-
 export default async function DettaglioPosizioneVolontario({
   params
 }: {
   params: Promise<{ slug: string }>
 }) {
   const { slug } = await params
+  
+  // Stessa pulizia garantita per il corpo della pagina
+  const cleanSlug = decodeURIComponent(slug.split('?')[0]).trim()
+  const lastDashIndex = cleanSlug.lastIndexOf('-')
+  const shortId = lastDashIndex !== -1 ? cleanSlug.substring(lastDashIndex + 1) : cleanSlug
 
   const publicSupabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
   )
 
-  // ✨ INTERCETTIAMO IL DATO TRAMITE SLUG STATICO
   const { data: posBase, error: posError } = await publicSupabase
     .from('posizioni')
     .select('*')
-    .eq('slug', slug)
+    .ilike('slug', `%${shortId}%`)
     .maybeSingle()
 
   if (posError || !posBase) redirect('/esplora')
@@ -181,7 +196,6 @@ export default async function DettaglioPosizioneVolontario({
   const inizialePosizione = pos.titolo ? pos.titolo.charAt(0).toUpperCase() : 'V';
   const dataFormattata = formattaData(pos.quando, pos.tipo);
 
-  // Generazione dei dati strutturati per i motori di ricerca (JSON-LD)
   const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://volontariando.work';
   let jsonLd = {}
 
@@ -210,7 +224,7 @@ export default async function DettaglioPosizioneVolontario({
       },
       offers: {
         '@type': 'Offer',
-        url: `${baseUrl}/posizione/${slug}`,
+        url: `${baseUrl}/posizione/${cleanSlug}`,
         price: '0',
         priceCurrency: 'EUR',
         availability: 'https://schema.org/InStock',
@@ -249,11 +263,7 @@ export default async function DettaglioPosizioneVolontario({
 
   return (
     <div className="min-h-screen bg-white text-slate-900 font-sans selection:bg-slate-200">
-      <script
-        type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
-      />
-      
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
       <div className="w-full h-[35vh] md:h-[50vh] relative bg-slate-100">
         {imgUrl ? (
           <img src={imgUrl} alt={pos.titolo} className="w-full h-full object-cover" />
@@ -262,7 +272,6 @@ export default async function DettaglioPosizioneVolontario({
             <span className="text-slate-200 text-8xl font-black">{inizialePosizione}</span>
           </div>
         )}
-        
         <div className="absolute top-6 left-4 md:left-10 z-10">
           <Link href="/esplora" className="inline-flex items-center justify-center w-10 h-10 bg-white text-slate-900 rounded-full shadow-md hover:scale-105 transition-transform">
             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-5 h-5">
@@ -359,7 +368,6 @@ export default async function DettaglioPosizioneVolontario({
             )}
           </div>
 
-          {/* COLONNA DESKTOP INTERATTIVA (PannelloCandidatura) */}
           <div className="hidden md:block w-[340px] flex-shrink-0 relative">
             <div className="sticky top-28 bg-white p-6 rounded-2xl border border-slate-200 shadow-[0_12px_28px_rgba(0,0,0,0.12)]">
               <div className="mb-6">
@@ -368,7 +376,7 @@ export default async function DettaglioPosizioneVolontario({
               </div>
               <PannelloCandidatura 
                 posizioneId={id} 
-                slug={slug} 
+                slug={cleanSlug} 
                 associazioneId={pos.associazione_id} 
                 associazioneNome={nomeAssociazione} 
                 competenzeRichieste={competenzeRichieste}
@@ -379,7 +387,6 @@ export default async function DettaglioPosizioneVolontario({
         </div>
       </div>
 
-      {/* FOOTER MOBILE INTERATTIVO */}
       <div className="md:hidden fixed bottom-0 left-0 w-full bg-white border-t border-slate-200 px-5 py-4 z-50 flex flex-col gap-3 pb-[calc(1rem+env(safe-area-inset-bottom))] shadow-[0_-8px_24px_rgba(0,0,0,0.06)]">
         <div className="flex flex-col min-w-0">
           <span className="font-semibold text-slate-900 truncate capitalize">{dataFormattata}</span>
@@ -387,7 +394,7 @@ export default async function DettaglioPosizioneVolontario({
         </div>
         <PannelloCandidatura 
           posizioneId={id} 
-          slug={slug} 
+          slug={cleanSlug} 
           associazioneId={pos.associazione_id} 
           associazioneNome={nomeAssociazione} 
           competenzeRichieste={competenzeRichieste}

@@ -1,5 +1,6 @@
 import { createServerClient } from '@supabase/ssr'
 import { createClient } from '@supabase/supabase-js'
+import type { Metadata, ResolvingMetadata } from 'next'
 // Rimossa l'importazione di 'cookies' che rischia di rompere la cache
 import Link from 'next/link'
 import { FileText, Link2, Quote, Settings2, Sparkles, Users, Heart, Briefcase, Video, Mail, Target, Eye } from 'lucide-react'
@@ -33,10 +34,67 @@ export async function generateStaticParams() {
 }
 
 // ==========================================
+// 🎯 GENERAZIONE METADATI SEO & SOCIAL DINAMICI
+// ==========================================
+export async function generateMetadata(
+  { params }: { params: Promise<{ slug: string }> },
+  parent: ResolvingMetadata
+): Promise<Metadata> {
+  await parent
+  const resolvedParams = await params
+
+  const supabase = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  )
+
+  const { data: associazione } = await supabase
+    .from('associazioni')
+    .select('denominazione, forma_giuridica, logo_url, grafica:associazioni_grafica(tagline, cover_url)')
+    .eq('slug', resolvedParams.slug)
+    .maybeSingle()
+
+  if (!associazione) {
+    return {
+      title: 'Profilo Associazione', // ✨ Rimosso "| Volontariando"
+    }
+  }
+
+  const denominazione = associazione.denominazione || 'Associazione'
+  const formaGiuridica = associazione.forma_giuridica ? ` (${associazione.forma_giuridica})` : ''
+  
+  // ✨ Solo il nome dell'associazione. Il layout farà il resto!
+  const title = `${denominazione}${formaGiuridica}`
+  
+  const tagline = (associazione.grafica as any)?.tagline || `Scopri i progetti di utilità sociale e i bandi di volontariato aperti di ${denominazione}.`
+  const description = tagline.replace(/\s+/g, ' ').trim().slice(0, 155) + '...'
+
+  const logoUrl = associazione.logo_url || 'https://volontariando.work/opengraph-image.png'
+  const coverUrl = (associazione.grafica as any)?.cover_url || logoUrl
+
+  return {
+    title,
+    description,
+    openGraph: {
+      title: `${title} | Volontariando`, // Per i social lo teniamo completo
+      description,
+      type: 'profile',
+      url: `https://volontariando.work/associazione/${resolvedParams.slug}`,
+      siteName: 'Volontariando',
+      images: [{ url: coverUrl, width: 1200, height: 630, alt: `Copertina di ${denominazione}` }]
+    },
+    twitter: {
+      card: 'summary_large_image',
+      title: `${title} | Volontariando`,
+      description,
+      images: [coverUrl]
+    }
+  }
+}
+// ==========================================
 // BLOCCHI READ-ONLY PUBBLICI
 // ==========================================
 const Blocks = {
-  // ... (Tutto il codice dei blocchi rimane ESATTAMENTE identico al tuo)
   hero: ({ content }: any) => {
     const coverY = content.coverY ?? 50
     const coverZoom = content.coverZoom ?? 1
@@ -454,8 +512,74 @@ export default async function ProfiloAssociazione({ params }: { params: Promise<
     ? parsedConfig 
     : createFallbackLayout(associazione, grafica)
 
+  // ========================================================
+  // ✨ GENERAZIONE DATI STRUTTURATI SCHEMA.ORG (JSON-LD)
+  // ========================================================
+  const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://volontariando.work'
+  
+  // 1. Schema Base per la NGO (Organizzazione Non Profit)
+  const schemaNGO: any = {
+    '@context': 'https://schema.org',
+    '@type': 'NGO',
+    name: associazione.denominazione,
+    url: `${baseUrl}/associazione/${slug}`,
+    logo: associazione.logo_url || `${baseUrl}/opengraph-image.png`,
+    sameAs: [
+      grafica.sito_web,
+      grafica.instagram ? `https://instagram.com/${grafica.instagram.replace('@', '')}` : null,
+      grafica.facebook
+    ].filter(Boolean)
+  }
+
+  // Aggiungiamo i contatti se l'associazione li ha inseriti nel database
+  if (grafica.email || grafica.phone || grafica.address) {
+    schemaNGO.contactPoint = {
+      '@type': 'ContactPoint',
+      contactType: 'customer support',
+      email: grafica.email || undefined,
+      telephone: grafica.phone || undefined,
+      address: grafica.address ? {
+        '@type': 'PostalAddress',
+        streetAddress: grafica.address,
+        addressCountry: 'IT'
+      } : undefined
+    }
+  }
+
+  // 2. Schema Opzionale FAQPage (se l'associazione ha configurato delle domande frequenti)
+  let schemaFAQ: any = null
+  const faqBlock = layout.find((block: any) => block.type === 'faq')
+  const faqItems = faqBlock?.content?.items?.filter((f: any) => f.q && f.a) || []
+
+  if (faqItems.length > 0) {
+    schemaFAQ = {
+      '@context': 'https://schema.org',
+      '@type': 'FAQPage',
+      mainEntity: faqItems.map((item: any) => ({
+        '@type': 'Question',
+        name: item.q,
+        acceptedAnswer: {
+          '@type': 'Answer',
+          text: item.a
+        }
+      }))
+    }
+  }
+
   return (
     <div className="min-h-screen bg-white font-sans pb-32 text-slate-900">
+      {/* ✨ Dati Strutturati iniettati per i motori di ricerca */}
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(schemaNGO) }}
+      />
+      {schemaFAQ && (
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(schemaFAQ) }}
+        />
+      )}
+
       <style dangerouslySetInnerHTML={{__html: `
         .scrollbar-hide::-webkit-scrollbar { display: none; }
         .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
