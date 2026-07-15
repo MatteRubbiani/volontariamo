@@ -1,61 +1,104 @@
-import { cache } from 'react'
+'use client' // 🚨 Trasformiamo il contenitore in Client-Side per sbloccare l'ISR su tutto il sito
+
+import { useEffect, useState } from 'react'
+import { createBrowserClient } from '@supabase/ssr'
 import NavbarUI from '@/components/NavbarUI'
-import { createClient } from '@/lib/supabase/server'
 
-/**
- * MEMOIZED NAVBAR FUNCTION
- * Uses React cache() to prevent redundant database queries
- * This ensures consistent data across multiple renders
- */
-const getUserProfile = cache(async (supabase: any) => {
-  try {
-    const { data: { user } } = await supabase.auth.getUser()
-    
-    if (!user) {
-      return { user: null, ruolo: null }
+export default function Navbar() {
+  const [authData, setAuthData] = useState({
+    email: undefined as string | undefined,
+    isVolontario: false,
+    isAssociazione: false,
+    isImpresa: false,
+    dashboardLink: '/'
+  })
+  const [loading, setLoading] = useState(true)
+
+  // Inizializziamo il client Supabase specifico per il Browser (Zero chiamate a cookies() server-side)
+  const supabase = createBrowserClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  )
+
+  useEffect(() => {
+    async function fetchUserAndRole() {
+      try {
+        const { data: { session } } = await supabase.auth.getSession()
+        const user = session?.user || null
+
+        if (!user) {
+          setAuthData({
+            email: undefined,
+            isVolontario: false,
+            isAssociazione: false,
+            isImpresa: false,
+            dashboardLink: '/auth/login' // Fallback sicuro per utenti non loggati
+          })
+          setLoading(false)
+          return
+        }
+
+        // Recuperiamo il ruolo dal client del browser
+        const { data: profilo, error } = await supabase
+          .from('profili')
+          .select('ruolo')
+          .eq('id', user.id)
+          .maybeSingle()
+
+        if (error) throw error
+
+        const ruolo = profilo?.ruolo || null
+        const dashboardLink = ruolo ? `/app/${ruolo}` : "/app/onboarding"
+
+        setAuthData({
+          email: user.email,
+          isVolontario: ruolo === 'volontario',
+          isAssociazione: ruolo === 'associazione',
+          isImpresa: ruolo === 'impresa',
+          dashboardLink: dashboardLink
+        })
+      } catch (error) {
+        console.error('[Navbar Client] Error fetching profile:', error)
+      } finally {
+        setLoading(false)
+      }
     }
 
-    const { data: profilo, error } = await supabase
-      .from('profili')
-      .select('ruolo')
-      .eq('id', user.id)
-      .maybeSingle()
+    fetchUserAndRole()
 
-    if (error) {
-      console.error('[Navbar] Database query error:', error)
-      // Return safe defaults instead of failing
-      return { user, ruolo: null }
-    }
+    // ✨ Ascoltiamo i cambi di stato (Login/Logout) in tempo reale per aggiornare la Navbar all'istante
+    const { data: authListener } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === 'SIGNED_OUT') {
+        setAuthData({ email: undefined, isVolontario: false, isAssociazione: false, isImpresa: false, dashboardLink: '/auth/login' })
+      } else if (event === 'SIGNED_IN' && session) {
+        fetchUserAndRole()
+      }
+    })
 
-    return { user, ruolo: profilo?.ruolo || null }
-  } catch (error) {
-    console.error('[Navbar] Unexpected error:', error)
-    // Always render something instead of crashing
-    return { user: null, ruolo: null }
-  }
-})
+    return () => authListener.subscription.unsubscribe()
+  }, [supabase])
 
-export default async function Navbar() {
-  try {
-    const supabase = await createClient()
-
-    const { user, ruolo } = await getUserProfile(supabase)
-    
-    const dashboardLink = ruolo ? `/app/${ruolo}` : "/app/onboarding"
-
-    // Converti il ruolo in flag boolean per compatibilità con NavbarUI
+  // Durante il primissimo rendering server o finché carica, mostriamo la Navbar con i dati vuoti (Skeleton state)
+  // Questo permette a Next.js di pre-compilare la pagina come statica all'istante!
+  if (loading) {
     return (
       <NavbarUI 
-        email={user?.email}
-        isVolontario={ruolo === 'volontario'}
-        isAssociazione={ruolo === 'associazione'}
-        isImpresa={ruolo === 'impresa'}
-        dashboardLink={dashboardLink}
+        email={undefined} 
+        isVolontario={false} 
+        isAssociazione={false} 
+        isImpresa={false} 
+        dashboardLink="/" 
       />
     )
-  } catch (error) {
-    console.error('[Navbar] Fatal error during render:', error)
-    // Render empty navbar rather than crashing the entire page
-    return <NavbarUI email={undefined} isVolontario={false} isAssociazione={false} isImpresa={false} dashboardLink="/" />
   }
+
+  return (
+    <NavbarUI 
+      email={authData.email}
+      isVolontario={authData.isVolontario}
+      isAssociazione={authData.isAssociazione}
+      isImpresa={authData.isImpresa}
+      dashboardLink={authData.dashboardLink}
+    />
+  )
 }

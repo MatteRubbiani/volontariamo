@@ -388,14 +388,14 @@ const Blocks = {
                 <span className="bg-black/60 backdrop-blur-md text-white text-[11px] font-bold px-4 py-2 rounded-full shadow-lg tracking-wide">Trascina su e giù per riposizionare</span>
               </div>
               <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center bg-white/95 backdrop-blur-md border border-slate-200 p-1.5 rounded-2xl shadow-xl gap-2 z-40">
-                 <div className="flex items-center bg-slate-100 rounded-xl p-1 gap-2">
-                   <button onClick={() => adjustZoom(-0.1)} className="w-6 h-6 flex items-center justify-center bg-white rounded-lg shadow-sm text-slate-600 hover:text-black font-bold hover:scale-105 transition-transform">-</button>
-                   <span className="text-[10px] font-black uppercase text-slate-400 w-8 text-center">Zoom</span>
-                   <button onClick={() => adjustZoom(0.1)} className="w-6 h-6 flex items-center justify-center bg-white rounded-lg shadow-sm text-slate-600 hover:text-black font-bold hover:scale-105 transition-transform">+</button>
-                 </div>
-                 <div className="h-6 w-px bg-slate-200" />
-                 <button onClick={() => setEditMode('none')} className="text-[11px] font-bold text-slate-500 hover:text-slate-800 px-3 py-1.5 rounded-xl hover:bg-slate-100 transition-colors">Annulla</button>
-                 <button onClick={handleSave} className="text-[11px] font-bold text-white bg-slate-900 hover:bg-black px-4 py-1.5 rounded-xl shadow-md transition-colors">Salva</button>
+                  <div className="flex items-center bg-slate-100 rounded-xl p-1 gap-2">
+                    <button onClick={() => adjustZoom(-0.1)} className="w-6 h-6 flex items-center justify-center bg-white rounded-lg shadow-sm text-slate-600 hover:text-black font-bold hover:scale-105 transition-transform">-</button>
+                    <span className="text-[10px] font-black uppercase text-slate-400 w-8 text-center">Zoom</span>
+                    <button onClick={() => adjustZoom(0.1)} className="w-6 h-6 flex items-center justify-center bg-white rounded-lg shadow-sm text-slate-600 hover:text-black font-bold hover:scale-105 transition-transform">+</button>
+                  </div>
+                  <div className="h-6 w-px bg-slate-200" />
+                  <button onClick={() => setEditMode('none')} className="text-[11px] font-bold text-slate-500 hover:text-slate-800 px-3 py-1.5 rounded-xl hover:bg-slate-100 transition-colors">Annulla</button>
+                  <button onClick={handleSave} className="text-[11px] font-bold text-white bg-slate-900 hover:bg-black px-4 py-1.5 rounded-xl shadow-md transition-colors">Salva</button>
               </div>
             </>
           )}
@@ -877,6 +877,7 @@ export default function PersonalizzaPagina() {
   const [isSaving, setIsSaving] = useState(false)
   const [autoSaveStatus, setAutoSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle')
   const [showAddMenu, setShowAddMenu] = useState(false)
+  const [associazioneSlug, setAssociazioneSlug] = useState<string | null>(null) // ✨ Tracciamento dello slug
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }))
   const brandColor = (layout.find(b => b.type === 'hero')?.content as HeroContent)?.brandColor || DEFAULT_BRAND
@@ -892,6 +893,11 @@ export default function PersonalizzaPagina() {
         supabase.from('associazioni_grafica').select('*').eq('associazione_id', user.id).single(),
         supabase.from('posizioni').select('*, media_associazioni(url), tags:posizione_tags(tag:tags(id, name))').eq('associazione_id', user.id)
       ])
+
+      // ✨ Salviamo lo slug dell'associazione per la futura invalidazione on-demand
+      if (assoc?.slug) {
+        setAssociazioneSlug(assoc.slug)
+      }
 
       const rawDraft = graph?.layout_draft
       const rawConfig = graph?.layout_config
@@ -950,12 +956,13 @@ export default function PersonalizzaPagina() {
     return () => clearTimeout(timer)
   }, [layout, isLoading])
 
+  // ✨ FUNZIONE DI PUBBLICAZIONE MODIFICATA CON REVALIDATION ON-DEMAND
   const handlePublish = async () => {
     setIsSaving(true)
     const { data: { user } } = await supabase.auth.getUser()
     const hero = layout.find(b => b.type === 'hero')?.content
     
-    await supabase.from('associazioni_grafica').upsert({
+    const { error } = await supabase.from('associazioni_grafica').upsert({
       associazione_id: user?.id,
       layout_config: layout,
       layout_draft: layout,
@@ -963,6 +970,19 @@ export default function PersonalizzaPagina() {
       cover_url: hero?.coverUrl,
       updated_at: new Date().toISOString()
     }, { onConflict: 'associazione_id' })
+    
+    // Se la pubblicazione su database va a buon fine, lanciamo la revalidation
+    if (!error && associazioneSlug) {
+      try {
+        await fetch('/api/revalidate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ path: `/associazione/${associazioneSlug}` })
+        })
+      } catch (err) {
+        console.error("Errore durante la revalidation on-demand:", err)
+      }
+    }
     
     setIsSaving(false)
     const btn = document.getElementById('publish-btn')

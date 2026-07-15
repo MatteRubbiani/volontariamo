@@ -1,15 +1,38 @@
-import { createServerClient } from '@supabase/ssr'
 import { createClient } from '@supabase/supabase-js'
-import { cookies } from 'next/headers'
 import { redirect } from 'next/navigation'
-import { revalidatePath } from 'next/cache'
 import type { Metadata, ResolvingMetadata } from 'next'
 import Link from 'next/link'
 import TagBadge from '@/components/TagBadge'
 import CompetenzaBadge from '@/components/CompetenzaBadge'
-import PosizioneQuestionPanel from '@/components/PosizioneQuestionPanel'
+import PannelloCandidatura from '@/components/PannelloCandidatura' // ✨ Guarda come si legge bene ora!
 
-// 🚨 1. GENERAZIONE METADATI SEO & SOCIAL OTTIMIZZATI PER LO SLUG
+// ==========================================
+// 🚀 CONFIGURAZIONE ENTERPRISE PER L'ISR
+// ==========================================
+export const revalidate = 3600 
+export const dynamicParams = true 
+
+// ==========================================
+// 📦 GENERAZIONE PARAMETRI STATICI AL BUILD TIME
+// ==========================================
+export async function generateStaticParams() {
+  const supabase = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  )
+
+  const { data: posizioni } = await supabase
+    .from('posizioni')
+    .select('slug')
+    .eq('stato', 'pubblicato')
+    .not('slug', 'is', null)
+
+  return posizioni?.map((pos) => ({
+    slug: pos.slug,
+  })) || []
+}
+
+// 🚨 GENERAZIONE METADATI SEO & SOCIAL OTTIMIZZATI PER LO SLUG
 export async function generateMetadata(
   { params }: { params: Promise<{ slug: string }> },
   parent: ResolvingMetadata
@@ -22,10 +45,9 @@ export async function generateMetadata(
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
   )
 
-  // ✨ Cerchiamo la posizione usando la nuova colonna SLUG
   const { data: posizione } = await supabase
     .from('posizioni')
-    .select('titolo, descrizione, assecuzione:associazioni(denominazione)')
+    .select('titolo, descrizione, associazioni(denominazione)')
     .eq('slug', resolvedParams.slug)
     .maybeSingle()
 
@@ -36,10 +58,7 @@ export async function generateMetadata(
     }
   }
 
-  const nomeAssociazione =
-    (Array.isArray((posizione as any).associazione) ? (posizione as any).associazione[0]?.denominazione : (posizione as any).associazione?.denominazione) ||
-    'Associazione'
-    
+  const nomeAssociazione = (posizione as any).associazioni?.denominazione || 'Associazione'
   const title = `${posizione.titolo} | ${nomeAssociazione}`
   const description = (posizione.descrizione || '').replace(/\s+/g, ' ').trim().slice(0, 160)
 
@@ -61,51 +80,26 @@ export async function generateMetadata(
 }
 
 export default async function DettaglioPosizioneVolontario({
-  params,
-  searchParams
+  params
 }: {
   params: Promise<{ slug: string }>
-  searchParams: Promise<{ [key: string]: string | string[] | undefined }>
 }) {
   const { slug } = await params
-  const sp = await searchParams
-  const from = sp?.from
-
-  const backUrl = from === 'mappa' ? '/esplora?from=mappa' : '/esplora'
-  const loginHref = `/auth/login?redirectTo=${encodeURIComponent(`/posizione/${slug}`)}`
 
   const publicSupabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
   )
-  const cookieStore = await cookies()
-  const authSupabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    { cookies: { getAll() { return cookieStore.getAll() } } }
-  )
 
-  const { data: { user } } = await authSupabase.auth.getUser()
-
-  const { data: userCompData } = user
-    ? await authSupabase
-        .from('volontario_competenze')
-        .select('competenza_id')
-        .eq('volontario_id', user.id)
-    : { data: [] as { competenza_id: string }[] }
-  const competenzeVolontario = userCompData?.map(c => c.competenza_id) || []
-
-  // ✨ INTERCETTIAMO IL DATO TRAMITE SLUG
+  // ✨ INTERCETTIAMO IL DATO TRAMITE SLUG STATICO
   const { data: posBase, error: posError } = await publicSupabase
     .from('posizioni')
     .select('*')
     .eq('slug', slug)
     .maybeSingle()
 
-  // Se lo slug non corrisponde a nulla, rimandiamo alla pagina esplora
-  if (posError || !posBase) redirect(backUrl)
+  if (posError || !posBase) redirect('/esplora')
 
-  // 💡 ESTRAIAMO IL VERO ID UUID per mantenere intatte tutte le join successive!
   const id = posBase.id 
 
   const [associazioneResult, immagineResult, tagsResult, competenzeResult] = await Promise.all([
@@ -164,49 +158,6 @@ export default async function DettaglioPosizioneVolontario({
     })),
   }
 
-  const { data: candidatura } = user
-    ? await authSupabase
-        .from('candidature')
-        .select('*')
-        .eq('posizione_id', id)
-        .eq('volontario_id', user.id)
-        .single()
-    : { data: null }
-
-  async function inviaCandidatura() {
-    'use server'
-    const cookieStore = await cookies()
-    const supabaseAction = createServerClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-      { cookies: { getAll() { return cookieStore.getAll() } } }
-    )
-    const { data: { user: u } } = await supabaseAction.auth.getUser()
-    if (!u) redirect('/auth/login')
-
-    const { error } = await supabaseAction.from('candidature').upsert({
-      posizione_id: id,
-      volontario_id: u.id,
-      stato: 'in_attesa'
-    }, { 
-      onConflict: 'posizione_id, volontario_id',
-      ignoreDuplicates: true 
-    })
-
-    if (error) console.error("Errore inserimento candidatura:", error)
-
-    await supabaseAction.from('messaggi').insert({
-      associazione_id: pos.associazione_id,
-      volontario_id: u.id,
-      mittente_id: u.id,
-      testo: `✨ Mi sono candidato ufficialmente a questa posizione!`,
-      posizione_id: id,
-      is_system: true
-    })
-
-    revalidatePath(`/posizione/${slug}`)
-  }
-
   const formattaOra = (ora: string | null) => ora ? ora.substring(0, 5) : '--:--'
   
   const formattaData = (dataString: string | null, tipo: string) => {
@@ -226,14 +177,11 @@ export default async function DettaglioPosizioneVolontario({
   const associazioneSlug = pos.associazioni?.slug || pos.associazioni?.id
   const inizialeAssociazione = nomeAssociazione.charAt(0).toUpperCase()
   const competenzeRichieste = pos.competenze?.map((c: any) => c.competenza).filter(Boolean) || []
-  const competenzeMatch = competenzeRichieste.filter((c: any) => competenzeVolontario.includes(c.id))
-  const competenzeMancanti = competenzeRichieste.filter((c: any) => !competenzeVolontario.includes(c.id))
   const imgUrl = pos.media_associazioni?.url || null;
   const inizialePosizione = pos.titolo ? pos.titolo.charAt(0).toUpperCase() : 'V';
-  const statoCandidatura = candidatura?.stato === 'accettata' ? 'accettato' : candidatura?.stato === 'rifiutata' ? 'rifiutato' : candidatura?.stato
   const dataFormattata = formattaData(pos.quando, pos.tipo);
 
-  // Generazione dei dati strutturati per i motori di ricerca
+  // Generazione dei dati strutturati per i motori di ricerca (JSON-LD)
   const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://volontariando.work';
   let jsonLd = {}
 
@@ -299,38 +247,6 @@ export default async function DettaglioPosizioneVolontario({
     }
   }
 
-  const CallToActionButton = ({ className = "" }: { className?: string }) => {
-    if (!user) {
-      return (
-        <Link href={loginHref} className={`flex items-center justify-center bg-slate-900 hover:bg-black text-white font-semibold py-3.5 rounded-xl text-base transition-colors ${className}`}>
-          Accedi
-        </Link>
-      )
-    }
-    if (!candidatura) {
-      return (
-        <form action={inviaCandidatura} className={className}>
-          <button type="submit" className="flex w-full items-center justify-center bg-slate-900 hover:bg-black text-white font-semibold py-3.5 rounded-xl text-base transition-colors">
-            Candidati
-          </button>
-        </form>
-      )
-    }
-    return (
-      <div className={`flex items-center justify-center font-semibold py-3.5 rounded-xl text-sm border ${
-        statoCandidatura === 'in_attesa' ? 'bg-amber-50 text-amber-700 border-amber-200' :
-        statoCandidatura === 'in_contatto' ? 'bg-blue-50 text-blue-700 border-blue-200' :
-        statoCandidatura === 'accettato' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
-        'bg-slate-100 text-slate-500 border-slate-200'
-      } ${className}`}>
-        {statoCandidatura === 'in_attesa' && 'In Attesa'}
-        {statoCandidatura === 'in_contatto' && 'In Contatto'}
-        {statoCandidatura === 'accettato' && 'Assegnata'}
-        {statoCandidatura === 'rifiutato' && 'Rifiutata'}
-      </div>
-    )
-  }
-
   return (
     <div className="min-h-screen bg-white text-slate-900 font-sans selection:bg-slate-200">
       <script
@@ -348,7 +264,7 @@ export default async function DettaglioPosizioneVolontario({
         )}
         
         <div className="absolute top-6 left-4 md:left-10 z-10">
-          <Link href={backUrl} className="inline-flex items-center justify-center w-10 h-10 bg-white text-slate-900 rounded-full shadow-md hover:scale-105 transition-transform">
+          <Link href="/esplora" className="inline-flex items-center justify-center w-10 h-10 bg-white text-slate-900 rounded-full shadow-md hover:scale-105 transition-transform">
             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-5 h-5">
               <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5 8.25 12l7.5-7.5" />
             </svg>
@@ -434,13 +350,8 @@ export default async function DettaglioPosizioneVolontario({
                 <div>
                   <h2 className="text-xl font-semibold text-slate-900 mb-4">Competenze richieste</h2>
                   <div className="flex flex-wrap gap-2.5">
-                    {competenzeMatch.map((comp: any) => (
+                    {competenzeRichieste.map((comp: any) => (
                       <CompetenzaBadge key={comp.id} nome={comp.name} />
-                    ))}
-                    {competenzeMancanti.map((comp: any) => (
-                      <div key={comp.id} className="opacity-40">
-                        <CompetenzaBadge nome={comp.name} />
-                      </div>
                     ))}
                   </div>
                 </div>
@@ -448,47 +359,39 @@ export default async function DettaglioPosizioneVolontario({
             )}
           </div>
 
-          {/* COLONNA DESKTOP */}
+          {/* COLONNA DESKTOP INTERATTIVA (PannelloCandidatura) */}
           <div className="hidden md:block w-[340px] flex-shrink-0 relative">
             <div className="sticky top-28 bg-white p-6 rounded-2xl border border-slate-200 shadow-[0_12px_28px_rgba(0,0,0,0.12)]">
               <div className="mb-6">
                 <span className="text-xl font-semibold text-slate-900 capitalize block leading-tight">{dataFormattata}</span>
                 <p className="text-sm text-slate-500 mt-1">{formattaOra(pos.ora_inizio)} - {formattaOra(pos.ora_fine)}</p>
               </div>
-              <div className="grid grid-cols-2 gap-3">
-                <CallToActionButton className="w-full col-span-1" />
-                <PosizioneQuestionPanel
-                  posizioneId={id} // Rimane l'id UUID per non rompere la chat unificata
-                  associazioneNome={nomeAssociazione}
-                  userId={user?.id ?? null}
-                  loginHref={loginHref}
-                  initialCandidaturaId={candidatura?.id ?? null}
-                  buttonClassName="w-full col-span-1"
-                />
-              </div>
+              <PannelloCandidatura 
+                posizioneId={id} 
+                slug={slug} 
+                associazioneId={pos.associazione_id} 
+                associazioneNome={nomeAssociazione} 
+                competenzeRichieste={competenzeRichieste}
+              />
               <p className="text-center text-xs text-slate-500 mt-4">L'associazione valuterà il tuo profilo.</p>
             </div>
           </div>
         </div>
       </div>
 
-      {/* FOOTER MOBILE */}
+      {/* FOOTER MOBILE INTERATTIVO */}
       <div className="md:hidden fixed bottom-0 left-0 w-full bg-white border-t border-slate-200 px-5 py-4 z-50 flex flex-col gap-3 pb-[calc(1rem+env(safe-area-inset-bottom))] shadow-[0_-8px_24px_rgba(0,0,0,0.06)]">
         <div className="flex flex-col min-w-0">
           <span className="font-semibold text-slate-900 truncate capitalize">{dataFormattata}</span>
           <span className="text-sm text-slate-500">{formattaOra(pos.ora_inizio)} - {formattaOra(pos.ora_fine)}</span>
         </div>
-        <div className="grid grid-cols-2 gap-2">
-          <CallToActionButton className="w-full text-sm col-span-1" />
-          <PosizioneQuestionPanel
-            posizioneId={id} // Rimane l'id UUID per non rompere la chat unificata
-            associazioneNome={nomeAssociazione}
-            userId={user?.id ?? null}
-            loginHref={loginHref}
-            initialCandidaturaId={candidatura?.id ?? null}
-            buttonClassName="w-full col-span-1"
-          />
-        </div>
+        <PannelloCandidatura 
+          posizioneId={id} 
+          slug={slug} 
+          associazioneId={pos.associazione_id} 
+          associazioneNome={nomeAssociazione} 
+          competenzeRichieste={competenzeRichieste}
+        />
       </div>
     </div>
   )

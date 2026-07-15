@@ -1,15 +1,42 @@
 import { createServerClient } from '@supabase/ssr'
-import { cookies } from 'next/headers'
+import { createClient } from '@supabase/supabase-js'
+// Rimossa l'importazione di 'cookies' che rischia di rompere la cache
 import Link from 'next/link'
 import { FileText, Link2, Quote, Settings2, Sparkles, Users, Heart, Briefcase, Video, Mail, Target, Eye } from 'lucide-react'
 import PosizioneCard from '@/components/PosizioneCard'
 
 // ==========================================
-// 1. BLOCCHI READ-ONLY PUBBLICI (Gemelli dell'Editor)
+// 1. CONFIGURAZIONE ISR (Incremental Static Regeneration)
 // ==========================================
+export const revalidate = 3600 // La cache scade dopo un'ora (o istantaneamente via API)
+export const dynamicParams = true // Permette di generare e mettere in cache nuovi slug non presenti al build time
 
+// ==========================================
+// 2. GENERAZIONE STATICA AL BUILD TIME (La vera magia SEO)
+// ==========================================
+export async function generateStaticParams() {
+  const supabase = createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  )
+
+  // Chiediamo a Supabase SOLO gli slug di tutte le associazioni
+  const { data: associazioni } = await supabase
+    .from('associazioni')
+    .select('slug')
+    .not('slug', 'is', null) // Ignoriamo chi non ha ancora lo slug
+
+  // Diciamo a Next.js quali HTML statici costruire al momento del "npm run build"
+  return associazioni?.map((associazione) => ({
+    slug: associazione.slug,
+  })) || []
+}
+
+// ==========================================
+// BLOCCHI READ-ONLY PUBBLICI
+// ==========================================
 const Blocks = {
-  // HERO: Allineato visivamente all'editor ripristinando il pb-4 per l'effetto arioso premium
+  // ... (Tutto il codice dei blocchi rimane ESATTAMENTE identico al tuo)
   hero: ({ content }: any) => {
     const coverY = content.coverY ?? 50
     const coverZoom = content.coverZoom ?? 1
@@ -19,7 +46,6 @@ const Blocks = {
 
     return (
       <div className="relative w-full pt-4 pb-4">
-        {/* Sfondo Copertina isolato */}
         <div className="w-full h-32 md:h-48 rounded-[2rem] bg-slate-100 overflow-hidden relative shadow-sm border border-slate-100/50 z-0">
           {content.coverUrl && (
             <img 
@@ -31,7 +57,6 @@ const Blocks = {
           )}
         </div>
         
-        {/* Contenuti in overlap protetti */}
         <div className="px-4 md:px-8 relative -mt-10 md:-mt-12 flex flex-col items-start z-20">
           {content.logoUrl ? (
             <div className="w-24 h-24 md:w-28 md:h-28 shrink-0 bg-white rounded-3xl shadow-lg border-[4px] border-white overflow-hidden relative">
@@ -346,7 +371,7 @@ const Blocks = {
 }
 
 // ==========================================
-// 2. LOGICA DI FALLBACK (Per vecchi profili pre-builder)
+// LOGICA DI FALLBACK
 // ==========================================
 function createFallbackLayout(associazione: any, grafica: any) {
   const blocks = []
@@ -386,18 +411,16 @@ function createFallbackLayout(associazione: any, grafica: any) {
 }
 
 // ==========================================
-// 3. PAGINA PRINCIPALE PUBBLICA DINAMICA
+// COMPONENTE PAGINA
 // ==========================================
 export default async function ProfiloAssociazione({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params
-  const cookieStore = await cookies()
-  const supabase = createServerClient(
+
+  const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    { cookies: { getAll() { return cookieStore.getAll() } } }
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
   )
 
-  // ✨ INTERCETTIAMO L'ASSOCIAZIONE TRAMITE SLUG
   const { data: associazione } = await supabase
     .from('associazioni')
     .select('*, grafica:associazioni_grafica(*)')
@@ -406,20 +429,16 @@ export default async function ProfiloAssociazione({ params }: { params: Promise<
 
   if (!associazione) return <div className="min-h-screen flex items-center justify-center font-sans text-slate-500">Associazione non trovata</div>
 
-  // 💡 ESTRAIAMO IL VERO ID UUID per mantenere intatte tutte le join e controlli successivi
   const associazioneId = associazione.id
-
   const grafica = associazione.grafica || {}
   const coloreBrand = grafica.colore_brand || '#111827'
   
-  // Recuperiamo le posizioni collegate includendo la nuova colonna slug e le informazioni sull'associazione nidificate
   const { data: posizioniRaw } = await supabase
     .from('posizioni')
     .select('*, media_associazioni(url), tags:posizione_tags(tag:tags(id, name))')
     .eq('associazione_id', associazioneId)
     .order('created_at', { ascending: false })
 
-  // Costruiamo la lista posizioni arricchendola dello slug dell'associazione corrente per i link delle card
   const posizioni = posizioniRaw?.map(p => ({ 
     ...p, 
     slug: p.slug || null,
@@ -429,9 +448,6 @@ export default async function ProfiloAssociazione({ params }: { params: Promise<
     },
     tags: p.tags?.map((t: any) => t.tag).filter(Boolean) 
   })) || []
-
-  const { data: { user } } = await supabase.auth.getUser()
-  const isOwner = user?.id === associazioneId
 
   const parsedConfig = typeof grafica.layout_config === 'string' ? JSON.parse(grafica.layout_config) : grafica.layout_config
   const layout = parsedConfig && Array.isArray(parsedConfig) && parsedConfig.length > 0 
@@ -445,21 +461,6 @@ export default async function ProfiloAssociazione({ params }: { params: Promise<
         .scrollbar-hide { -ms-overflow-style: none; scrollbar-width: none; }
       `}} />
 
-      {/* TOP BAR DI PREVIEW PER L'OWNER */}
-      {isOwner && (
-        <div className="sticky top-0 z-50 bg-slate-900 text-white backdrop-blur-xl border-b border-slate-800">
-          <div className="max-w-[860px] mx-auto flex items-center justify-between p-3 px-4 md:px-0">
-            <span className="text-xs font-bold tracking-widest uppercase text-slate-300 flex items-center gap-2">
-              <Sparkles className="w-4 h-4 text-yellow-400" /> Vista Pubblica Attiva
-            </span>
-            <Link href="/app/associazione/personalizza" className="bg-white text-black px-4 py-1.5 rounded-full text-xs font-bold shadow-sm hover:bg-slate-100 transition-colors">
-              Torna all'Editor
-            </Link>
-          </div>
-        </div>
-      )}
-
-      {/* CANVAS DINAMICO (Fissata geometria spaziale py-1 e pt-8 identica all'editor) */}
       <main className="max-w-[860px] mx-auto pt-8 px-4 md:px-0 flex flex-col gap-4 md:gap-8">
         {layout.map((block: any) => {
           const BlockComponent = Blocks[block.type as keyof typeof Blocks]

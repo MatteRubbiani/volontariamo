@@ -114,8 +114,21 @@ export async function createPosizione(formData: FormData) {
     }
   }
 
+  // ✨ REVALIDATE PER LA CREAZIONE
   revalidatePath('/app/associazione');
   revalidatePath('/app/volontario');
+  
+  // Rigenera il profilo pubblico dell'associazione per mostrare il nuovo annuncio
+  const { data: assoc } = await supabase.from('associazioni').select('slug').eq('id', user.id).maybeSingle();
+  if (assoc?.slug) {
+    revalidatePath(`/associazione/${assoc.slug}`);
+  }
+  
+  // Pre-rigenera la pagina statica del bando appena creato
+  if (posizione?.slug) {
+    revalidatePath(`/posizione/${posizione.slug}`);
+  }
+
   redirect('/app/associazione');
 }
 
@@ -182,8 +195,23 @@ export async function updatePosizione(id: string, formData: FormData) {
     await supabase.from('posizione_competenze').insert(compToInsert);
   }
 
+  // ✨ REVALIDATE PER L'AGGIORNAMENTO
   revalidatePath('/app/associazione');
   revalidatePath('/app/volontario');
+
+  // Recupera lo slug di associazione e posizione per aggiornare l'HTML pubblico
+  const [assocRes, posRes] = await Promise.all([
+    supabase.from('associazioni').select('slug').eq('id', user.id).maybeSingle(),
+    supabase.from('posizioni').select('slug').eq('id', id).maybeSingle()
+  ]);
+
+  if (assocRes.data?.slug) {
+    revalidatePath(`/associazione/${assocRes.data.slug}`);
+  }
+  if (posRes.data?.slug) {
+    revalidatePath(`/posizione/${posRes.data.slug}`);
+  }
+
   redirect('/app/associazione');
 }
 
@@ -193,10 +221,14 @@ export async function deletePosizione(id: string) {
   
   if (!user) redirect('/auth/login');
 
+  // Recuperiamo lo slug dell'annuncio prima di cancellarlo per invalidarne l'HTML
+  const { data: posBeforeDelete } = await supabase
+    .from('posizioni')
+    .select('slug')
+    .eq('id', id)
+    .maybeSingle();
+
   // 1. ELIMINAZIONE RECORD PRINCIPALE
-  // Nota di sicurezza: Rimuovendo la posizione, Supabase eliminerà in automatico 
-  // anche i record in 'posizione_tags' e 'posizione_competenze' 
-  // SE hai impostato "ON DELETE CASCADE" nelle Foreign Keys del database.
   const { error } = await supabase
     .from('posizioni')
     .delete()
@@ -207,8 +239,20 @@ export async function deletePosizione(id: string) {
     throw new Error("Impossibile eliminare l'annuncio: " + error.message);
   }
 
-  // 2. RIGENERATE LE CACHE E REDIRECT
+  // ✨ REVALIDATE PER L'ELIMINAZIONE
   revalidatePath('/app/associazione');
   revalidatePath('/app/volontario');
+
+  // Svuota la cache del profilo associazione per nascondere l'annuncio rimosso
+  const { data: assoc } = await supabase.from('associazioni').select('slug').eq('id', user.id).maybeSingle();
+  if (assoc?.slug) {
+    revalidatePath(`/associazione/${assoc.slug}`);
+  }
+
+  // Svuota l'HTML statico del bando eliminato
+  if (posBeforeDelete?.slug) {
+    revalidatePath(`/posizione/${posBeforeDelete.slug}`);
+  }
+
   redirect('/app/associazione');
 }
