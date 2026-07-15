@@ -10,7 +10,7 @@ interface PosizioneQuestionPanelProps {
   associazioneNome: string
   userId: string | null
   loginHref: string
-  initialCandidaturaId: string | null // Lo manteniamo nelle props per non rompere il componente padre, ma non ci serve più per la chat!
+  initialCandidaturaId: string | null // Lo manteniamo nelle props per non rompere il componente padre
   buttonClassName?: string
 }
 
@@ -127,13 +127,14 @@ export default function PosizioneQuestionPanel({
               {/* CONTENITORE CHAT CONDIVISA */}
               <div className="flex-1 overflow-hidden p-4 sm:p-6 bg-slate-50 flex flex-col relative">
                 {/* 
-                  Oramai SharedChatWidget è universale! 
-                  Gli passiamo solo l'ID del volontario (userId) e quello dell'associazione appena recuperato.
+                  ✨ FIX STRATEGICO: Passiamo la prop "posizioneId" a SharedChatWidget 
+                  in modo che ogni messaggio inviato venga salvato agganciato a questo annuncio!
                 */}
                 <SharedChatWidget 
                   volontarioId={userId} 
                   associazioneId={targetAssociazioneId} 
                   currentUserId={userId} 
+                  posizioneId={posizioneId} 
                 />
               </div>
             </div>

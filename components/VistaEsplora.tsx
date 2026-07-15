@@ -117,6 +117,7 @@ export default function VistaEsplora() {
   const fetchPosizioni = async (targetBounds: MapBounds) => {
     setLoading(true)
     try {
+      // Chiamata alla RPC avanzata di Supabase
       const { data, error } = await supabase.rpc('ricerca_avanzata_posizioni', {
         min_lat: targetBounds.sw.lat,
         min_lng: targetBounds.sw.lng,
@@ -130,8 +131,17 @@ export default function VistaEsplora() {
         filter_giorni: filterGiorni
       })
       if (error) throw error
+      
+      // ✨ NORMALIZZAZIONE DATI PER IL COINVOLGIMENTO DEGLI SLUG
       const formattedData = (data || []).map((pos: any) => ({
         ...pos,
+        // Iniettiamo la colonna "slug" derivante dalla funzione o calcolata al volo come fallback
+        slug: pos.slug || null, 
+        // Modelliamo la relazione dell'associazione per passarla pulita alla Card
+        associazioni: pos.associazione_denominazione ? {
+          denominazione: pos.associazione_denominazione,
+          slug: pos.associazione_slug || null
+        } : null,
         tags: pos.tags ? pos.tags.map((t: string) => ({ id: t, name: t })) : [],
         competenze: pos.competenze ? pos.competenze.map((c: string) => ({ id: c, name: c })) : []
       }))

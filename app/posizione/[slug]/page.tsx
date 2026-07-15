@@ -9,9 +9,9 @@ import TagBadge from '@/components/TagBadge'
 import CompetenzaBadge from '@/components/CompetenzaBadge'
 import PosizioneQuestionPanel from '@/components/PosizioneQuestionPanel'
 
-// 🚨 1. GENERAZIONE METADATI SEO & SOCIAL (OPEN GRAPH)
+// 🚨 1. GENERAZIONE METADATI SEO & SOCIAL OTTIMIZZATI PER LO SLUG
 export async function generateMetadata(
-  { params }: { params: Promise<{ id: string }> },
+  { params }: { params: Promise<{ slug: string }> },
   parent: ResolvingMetadata
 ): Promise<Metadata> {
   await parent
@@ -22,10 +22,11 @@ export async function generateMetadata(
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
   )
 
+  // ✨ Cerchiamo la posizione usando la nuova colonna SLUG
   const { data: posizione } = await supabase
     .from('posizioni')
-    .select('titolo, descrizione, associazione:associazioni(denominazione)')
-    .eq('id', resolvedParams.id)
+    .select('titolo, descrizione, assecuzione:associazioni(denominazione)')
+    .eq('slug', resolvedParams.slug)
     .maybeSingle()
 
   if (!posizione) {
@@ -63,15 +64,15 @@ export default async function DettaglioPosizioneVolontario({
   params,
   searchParams
 }: {
-  params: Promise<{ id: string }>
+  params: Promise<{ slug: string }>
   searchParams: Promise<{ [key: string]: string | string[] | undefined }>
 }) {
-  const { id } = await params
+  const { slug } = await params
   const sp = await searchParams
   const from = sp?.from
 
   const backUrl = from === 'mappa' ? '/esplora?from=mappa' : '/esplora'
-  const loginHref = `/auth/login?redirectTo=${encodeURIComponent(`/posizione/${id}`)}`
+  const loginHref = `/auth/login?redirectTo=${encodeURIComponent(`/posizione/${slug}`)}`
 
   const publicSupabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -94,18 +95,23 @@ export default async function DettaglioPosizioneVolontario({
     : { data: [] as { competenza_id: string }[] }
   const competenzeVolontario = userCompData?.map(c => c.competenza_id) || []
 
+  // ✨ INTERCETTIAMO IL DATO TRAMITE SLUG
   const { data: posBase, error: posError } = await publicSupabase
     .from('posizioni')
     .select('*')
-    .eq('id', id)
-    .single()
+    .eq('slug', slug)
+    .maybeSingle()
 
+  // Se lo slug non corrisponde a nulla, rimandiamo alla pagina esplora
   if (posError || !posBase) redirect(backUrl)
+
+  // 💡 ESTRAIAMO IL VERO ID UUID per mantenere intatte tutte le join successive!
+  const id = posBase.id 
 
   const [associazioneResult, immagineResult, tagsResult, competenzeResult] = await Promise.all([
     publicSupabase
       .from('associazioni')
-      .select('id, denominazione, email_associazione')
+      .select('id, denominazione, email_associazione, slug')
       .eq('id', posBase.associazione_id)
       .maybeSingle(),
     posBase.immagine_id
@@ -167,7 +173,6 @@ export default async function DettaglioPosizioneVolontario({
         .single()
     : { data: null }
 
-  // ⚡ LA MAGIA AVVIENE NEL DATABASE ORA
   async function inviaCandidatura() {
     'use server'
     const cookieStore = await cookies()
@@ -179,7 +184,6 @@ export default async function DettaglioPosizioneVolontario({
     const { data: { user: u } } = await supabaseAction.auth.getUser()
     if (!u) redirect('/auth/login')
 
-    // Usiamo UPSERT con ignoreDuplicates per prevenire l'errore "duplicate key 23505"
     const { error } = await supabaseAction.from('candidature').upsert({
       posizione_id: id,
       volontario_id: u.id,
@@ -191,7 +195,16 @@ export default async function DettaglioPosizioneVolontario({
 
     if (error) console.error("Errore inserimento candidatura:", error)
 
-    revalidatePath(`/posizione/${id}`)
+    await supabaseAction.from('messaggi').insert({
+      associazione_id: pos.associazione_id,
+      volontario_id: u.id,
+      mittente_id: u.id,
+      testo: `✨ Mi sono candidato ufficialmente a questa posizione!`,
+      posizione_id: id,
+      is_system: true
+    })
+
+    revalidatePath(`/posizione/${slug}`)
   }
 
   const formattaOra = (ora: string | null) => ora ? ora.substring(0, 5) : '--:--'
@@ -210,6 +223,7 @@ export default async function DettaglioPosizioneVolontario({
   }
 
   const nomeAssociazione = pos.associazioni?.denominazione || pos.associazioni?.email_associazione || 'Associazione'
+  const associazioneSlug = pos.associazioni?.slug || pos.associazioni?.id
   const inizialeAssociazione = nomeAssociazione.charAt(0).toUpperCase()
   const competenzeRichieste = pos.competenze?.map((c: any) => c.competenza).filter(Boolean) || []
   const competenzeMatch = competenzeRichieste.filter((c: any) => competenzeVolontario.includes(c.id))
@@ -219,7 +233,7 @@ export default async function DettaglioPosizioneVolontario({
   const statoCandidatura = candidatura?.stato === 'accettata' ? 'accettato' : candidatura?.stato === 'rifiutata' ? 'rifiutato' : candidatura?.stato
   const dataFormattata = formattaData(pos.quando, pos.tipo);
 
-  // 🚨 Dati strutturati dinamici
+  // Generazione dei dati strutturati per i motori di ricerca
   const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://volontariando.work';
   let jsonLd = {}
 
@@ -248,7 +262,7 @@ export default async function DettaglioPosizioneVolontario({
       },
       offers: {
         '@type': 'Offer',
-        url: `${baseUrl}/posizione/${id}`,
+        url: `${baseUrl}/posizione/${slug}`,
         price: '0',
         priceCurrency: 'EUR',
         availability: 'https://schema.org/InStock',
@@ -257,7 +271,7 @@ export default async function DettaglioPosizioneVolontario({
       organizer: {
         '@type': 'NGO',
         name: nomeAssociazione,
-        url: `${baseUrl}/associazione/${pos.associazioni?.id}`
+        url: `${baseUrl}/associazione/${associazioneSlug}`
       },
     }
   } else {
@@ -272,7 +286,7 @@ export default async function DettaglioPosizioneVolontario({
       hiringOrganization: {
         '@type': 'NGO',
         name: nomeAssociazione,
-        sameAs: `${baseUrl}/associazione/${pos.associazioni?.id}`
+        sameAs: `${baseUrl}/associazione/${associazioneSlug}`
       },
       jobLocation: {
         '@type': 'Place',
@@ -362,7 +376,7 @@ export default async function DettaglioPosizioneVolontario({
             </div>
 
             <div className="flex items-center gap-4">
-              <Link href={`/associazione/${pos.associazioni?.id}`} className="w-12 h-12 rounded-full bg-slate-900 flex items-center justify-center text-white font-bold text-lg hover:bg-slate-800 transition-colors">
+              <Link href={`/associazione/${associazioneSlug}`} className="w-12 h-12 rounded-full bg-slate-900 flex items-center justify-center text-white font-bold text-lg hover:bg-slate-800 transition-colors">
                 {inizialeAssociazione}
               </Link>
               <div>
@@ -434,6 +448,7 @@ export default async function DettaglioPosizioneVolontario({
             )}
           </div>
 
+          {/* COLONNA DESKTOP */}
           <div className="hidden md:block w-[340px] flex-shrink-0 relative">
             <div className="sticky top-28 bg-white p-6 rounded-2xl border border-slate-200 shadow-[0_12px_28px_rgba(0,0,0,0.12)]">
               <div className="mb-6">
@@ -443,7 +458,7 @@ export default async function DettaglioPosizioneVolontario({
               <div className="grid grid-cols-2 gap-3">
                 <CallToActionButton className="w-full col-span-1" />
                 <PosizioneQuestionPanel
-                  posizioneId={id}
+                  posizioneId={id} // Rimane l'id UUID per non rompere la chat unificata
                   associazioneNome={nomeAssociazione}
                   userId={user?.id ?? null}
                   loginHref={loginHref}
@@ -457,6 +472,7 @@ export default async function DettaglioPosizioneVolontario({
         </div>
       </div>
 
+      {/* FOOTER MOBILE */}
       <div className="md:hidden fixed bottom-0 left-0 w-full bg-white border-t border-slate-200 px-5 py-4 z-50 flex flex-col gap-3 pb-[calc(1rem+env(safe-area-inset-bottom))] shadow-[0_-8px_24px_rgba(0,0,0,0.06)]">
         <div className="flex flex-col min-w-0">
           <span className="font-semibold text-slate-900 truncate capitalize">{dataFormattata}</span>
@@ -465,7 +481,7 @@ export default async function DettaglioPosizioneVolontario({
         <div className="grid grid-cols-2 gap-2">
           <CallToActionButton className="w-full text-sm col-span-1" />
           <PosizioneQuestionPanel
-            posizioneId={id}
+            posizioneId={id} // Rimane l'id UUID per non rompere la chat unificata
             associazioneNome={nomeAssociazione}
             userId={user?.id ?? null}
             loginHref={loginHref}

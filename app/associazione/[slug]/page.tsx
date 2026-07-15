@@ -388,8 +388,8 @@ function createFallbackLayout(associazione: any, grafica: any) {
 // ==========================================
 // 3. PAGINA PRINCIPALE PUBBLICA DINAMICA
 // ==========================================
-export default async function ProfiloAssociazione({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params
+export default async function ProfiloAssociazione({ params }: { params: Promise<{ slug: string }> }) {
+  const { slug } = await params
   const cookieStore = await cookies()
   const supabase = createServerClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -397,17 +397,41 @@ export default async function ProfiloAssociazione({ params }: { params: Promise<
     { cookies: { getAll() { return cookieStore.getAll() } } }
   )
 
-  const { data: associazione } = await supabase.from('associazioni').select('*, grafica:associazioni_grafica(*)').eq('id', id).single()
-  if (!associazione) return <div className="min-h-screen flex items-center justify-center font-sans text-slate-500">Associazione non trouvata</div>
+  // ✨ INTERCETTIAMO L'ASSOCIAZIONE TRAMITE SLUG
+  const { data: associazione } = await supabase
+    .from('associazioni')
+    .select('*, grafica:associazioni_grafica(*)')
+    .eq('slug', slug)
+    .maybeSingle()
+
+  if (!associazione) return <div className="min-h-screen flex items-center justify-center font-sans text-slate-500">Associazione non trovata</div>
+
+  // 💡 ESTRAIAMO IL VERO ID UUID per mantenere intatte tutte le join e controlli successivi
+  const associazioneId = associazione.id
 
   const grafica = associazione.grafica || {}
   const coloreBrand = grafica.colore_brand || '#111827'
   
-  const { data: posizioniRaw } = await supabase.from('posizioni').select('*, media_associazioni(url), tags:posizione_tags(tag:tags(id, name))').eq('associazione_id', id).order('created_at', { ascending: false })
-  const posizioni = posizioniRaw?.map(p => ({ ...p, tags: p.tags?.map((t: any) => t.tag).filter(Boolean) })) || []
+  // Recuperiamo le posizioni collegate includendo la nuova colonna slug e le informazioni sull'associazione nidificate
+  const { data: posizioniRaw } = await supabase
+    .from('posizioni')
+    .select('*, media_associazioni(url), tags:posizione_tags(tag:tags(id, name))')
+    .eq('associazione_id', associazioneId)
+    .order('created_at', { ascending: false })
+
+  // Costruiamo la lista posizioni arricchendola dello slug dell'associazione corrente per i link delle card
+  const posizioni = posizioniRaw?.map(p => ({ 
+    ...p, 
+    slug: p.slug || null,
+    associazioni: {
+      denominazione: associazione.denominazione,
+      slug: associazione.slug
+    },
+    tags: p.tags?.map((t: any) => t.tag).filter(Boolean) 
+  })) || []
 
   const { data: { user } } = await supabase.auth.getUser()
-  const isOwner = user?.id === id
+  const isOwner = user?.id === associazioneId
 
   const parsedConfig = typeof grafica.layout_config === 'string' ? JSON.parse(grafica.layout_config) : grafica.layout_config
   const layout = parsedConfig && Array.isArray(parsedConfig) && parsedConfig.length > 0 

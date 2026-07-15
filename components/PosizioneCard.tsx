@@ -52,7 +52,7 @@ export default function PosizioneCard({
     </svg>
   )
   
-  const competenzeRichieste = posizione.competenze_nomi 
+  const competenciesRichieste = posizione.competenze_nomi 
     ? posizione.competenze_nomi.map((n: string) => ({ name: n })) 
     : (posizione.competenze || [])
     
@@ -158,9 +158,9 @@ export default function PosizioneCard({
             </div>
 
             <div className="mt-auto">
-              {competenzeRichieste.length > 0 && (
+              {competenciesRichieste.length > 0 && (
                 <div className="flex items-center gap-1.5 mb-4 w-full overflow-hidden">
-                  {competenzeRichieste.slice(0, 2).map((comp: any, i: number) => (
+                  {competenciesRichieste.slice(0, 2).map((comp: any, i: number) => (
                     <span key={i} className="inline-flex items-center gap-1 px-2 py-1 rounded-md text-[9px] font-bold uppercase tracking-widest border bg-slate-50 text-slate-500 border-slate-200">
                       <span className="truncate">{comp.name || comp}</span>
                     </span>
@@ -187,7 +187,7 @@ export default function PosizioneCard({
     </div>
   )
 
-  // ✨ IL FIX: Se l'utente è l'associazione disattiviamo il tag <Link> nativo interno della card
+  // Se l'utente è l'associazione disattiviamo il tag <Link> nativo interno della card
   if (isAssociazione) {
     return (
       <div 
@@ -201,8 +201,8 @@ export default function PosizioneCard({
     )
   }
 
-  // Altrimenti, per il volontario lasciamo attiva la navigazione classica sul profilo pubblico
-  let urlVolontario = `/posizione/${posizione.id}`
+  // ✨ IL FIX: Puntiamo alla URL pulita dello SLUG (con fallback di sicurezza su ID se null)
+  let urlVolontario = `/posizione/${posizione.slug || posizione.id}`
   if (pathname?.includes('/esplora') || pathname?.includes('/mappa')) {
     urlVolontario += '?from=mappa'
   }
