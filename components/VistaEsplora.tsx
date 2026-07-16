@@ -22,7 +22,32 @@ function getBoundsFromCenter(lat: number, lng: number): MapBounds {
   };
 }
 
-export default function VistaEsplora() {
+// ⚡ SKELETON CARD PROFESSIONALE: Evita lo sfarfallio visivo e dà un feedback di caricamento istantaneo
+function PosizioneCardSkeleton() {
+  return (
+    <div className="w-full bg-white rounded-3xl p-6 border border-slate-100 animate-pulse flex flex-col gap-4">
+      <div className="flex justify-between items-start gap-4">
+        <div className="flex-1 space-y-3">
+          <div className="w-1/3 h-4 bg-slate-200 rounded-full" />
+          <div className="w-5/6 h-6 bg-slate-200 rounded-full" />
+        </div>
+        <div className="w-12 h-12 bg-slate-100 rounded-full shrink-0" />
+      </div>
+      <div className="w-full h-16 bg-slate-100/70 rounded-2xl" />
+      <div className="flex gap-2.5 pt-2">
+        <div className="w-20 h-7 bg-slate-200/80 rounded-full" />
+        <div className="w-24 h-7 bg-slate-200/80 rounded-full" />
+      </div>
+    </div>
+  )
+}
+
+// 🟢 Definiamo l'interfaccia per le props del componente
+interface VistaEsploraProps {
+  initialData?: any[];
+}
+
+export default function VistaEsplora({ initialData = [] }: VistaEsploraProps) {
   const router = useRouter()
   const searchParams = useSearchParams()
   const supabase = createBrowserClient(
@@ -135,9 +160,7 @@ export default function VistaEsplora() {
       // ✨ NORMALIZZAZIONE DATI PER IL COINVOLGIMENTO DEGLI SLUG
       const formattedData = (data || []).map((pos: any) => ({
         ...pos,
-        // Iniettiamo la colonna "slug" derivante dalla funzione o calcolata al volo come fallback
         slug: pos.slug || null, 
-        // Modelliamo la relazione dell'associazione per passarla pulita alla Card
         associazioni: pos.associazione_denominazione ? {
           denominazione: pos.associazione_denominazione,
           slug: pos.associazione_slug || null
@@ -149,12 +172,13 @@ export default function VistaEsplora() {
     } catch (error) { console.error(error) } finally { setLoading(false) }
   }
 
+  // ⚡ DEBOUNCE PROFESSIONALE OTTIMIZZATO: Ridotto da 1500ms a 350ms
   const handleBoundsChange = (b: MapBounds) => {
     boundsRef.current = b;
     if (debounceTimer.current) clearTimeout(debounceTimer.current);
     debounceTimer.current = setTimeout(() => {
       fetchPosizioni(b);
-    }, 1500); 
+    }, 350); 
   }
 
   const handleMapReady = useCallback((initialBounds: MapBounds) => {
@@ -187,21 +211,39 @@ export default function VistaEsplora() {
 
         <div className="flex flex-col gap-1 mt-2 mb-2">
           <h1 className="text-[2rem] font-bold text-slate-900 tracking-tight leading-none">Risultati ricerca</h1>
-          <p className="text-slate-500 font-medium">{posizioni.length} {posizioni.length === 1 ? 'attività trovata' : 'attività trovate'}</p>
+          {loading ? (
+            <p className="text-slate-400 font-medium animate-pulse">Aggiorno i risultati...</p>
+          ) : (
+            <p className="text-slate-500 font-medium">{posizioni.length} {posizioni.length === 1 ? 'attività trovata' : 'attività trovate'}</p>
+          )}
         </div>
         
         <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 pb-20 pr-2">
-          {posizioni.map((pos: any) => (
-            <div key={pos.id} id={`card-${pos.id}`}>
-              <PosizioneCard 
-                posizione={pos} 
-                isHovered={hoveredId === pos.id}
-                isFocused={focusedId === pos.id}
-                onMouseEnter={() => setHoveredId(pos.id)}
-                onMouseLeave={() => setHoveredId(null)}
-              />
+          {loading ? (
+            // ✨ Renderizziamo gli Skeletons durante il caricamento per una reattività immediata
+            <>
+              <PosizioneCardSkeleton />
+              <PosizioneCardSkeleton />
+              <PosizioneCardSkeleton />
+              <PosizioneCardSkeleton />
+            </>
+          ) : posizioni.length === 0 ? (
+            <div className="col-span-1 xl:col-span-2 py-12 text-center text-slate-400 border border-dashed border-slate-200 rounded-3xl bg-slate-50/50">
+              Nessun bando di volontariato trovato in questa zona.<br/>Trascina o muovi la mappa per cercare altrove!
             </div>
-          ))}
+          ) : (
+            posizioni.map((pos: any) => (
+              <div key={pos.id} id={`card-${pos.id}`}>
+                <PosizioneCard 
+                  posizione={pos} 
+                  isHovered={hoveredId === pos.id}
+                  isFocused={focusedId === pos.id}
+                  onMouseEnter={() => setHoveredId(pos.id)}
+                  onMouseLeave={() => setHoveredId(null)}
+                />
+              </div>
+            ))
+          )}
         </div>
       </div>
 
@@ -218,7 +260,7 @@ export default function VistaEsplora() {
           
           {loading && (
             <div className="absolute top-24 lg:top-6 left-1/2 -translate-x-1/2 z-[999] pointer-events-none">
-              <div className="bg-white/90 backdrop-blur-md px-4 py-2 rounded-full shadow-md border border-slate-100 flex items-center gap-2 animate-in fade-in zoom-in duration-200">
+              <div className="bg-white/90 backdrop-blur-md px-4 py-2 rounded-full shadow-md border border-slate-100/55 flex items-center gap-2 animate-in fade-in zoom-in duration-200">
                 <div className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-slate-900 border-t-transparent" />
                 <span className="text-xs font-bold text-slate-800">Cerco nell'area...</span>
               </div>
@@ -284,11 +326,24 @@ export default function VistaEsplora() {
           </div>
 
           <div className="px-5 pb-[calc(env(safe-area-inset-bottom)+2rem)] overflow-y-auto flex-grow flex flex-col gap-5 pt-1">
-            {posizioni.map((pos: any) => (
-              <div key={pos.id} onClick={() => { if (!wasDragging.current) { setFocusedId(pos.id); setIsDrawerOpen(false); } }}>
-                <PosizioneCard posizione={pos} isHovered={hoveredId === pos.id} isFocused={focusedId === pos.id} />
+            {loading ? (
+              // ✨ Skeleton loading anche per il drawer mobile per evitare lag fisici nel render del DOM
+              <>
+                <PosizioneCardSkeleton />
+                <PosizioneCardSkeleton />
+                <PosizioneCardSkeleton />
+              </>
+            ) : posizioni.length === 0 ? (
+              <div className="py-12 text-center text-slate-400 border border-dashed border-slate-200 rounded-3xl bg-slate-50/50">
+                Nessuna attività in questa zona.
               </div>
-            ))}
+            ) : (
+              posizioni.map((pos: any) => (
+                <div key={pos.id} onClick={() => { if (!wasDragging.current) { setFocusedId(pos.id); setIsDrawerOpen(false); } }}>
+                  <PosizioneCard posizione={pos} isHovered={hoveredId === pos.id} isFocused={focusedId === pos.id} />
+                </div>
+              ))
+            )}
           </div>
         </div>
 
