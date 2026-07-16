@@ -90,10 +90,12 @@ export async function generateMetadata(
   const tagline = (associazione.grafica as any)?.tagline || `Scopri i progetti di utilità sociale e i bandi di volontariato aperti di ${denominazione}.`
   const description = tagline.replace(/\s+/g, ' ').trim().slice(0, 155) + '...'
 
-  // 🟢 FORMATTAZIONE IMMAGINI CON PROTOCOLLO ASSOLUTO PER WHATSAPP
+  // 🟢 FORMATTAZIONE IMMAGINI CON PROTOCOLLO ASSOLUTO PER SOCIAL E WHATSAPP
   const rawLogoUrl = associazione.logo_url || 'https://volontariando.work/opengraph-image.png'
   const rawCoverUrl = (associazione.grafica as any)?.cover_url || rawLogoUrl
+  
   const coverUrl = getAbsoluteImageUrl(rawCoverUrl)
+  const logoUrl = getAbsoluteImageUrl(rawLogoUrl)
 
   const cleanSlugWithoutQueries = (resolvedParams.slug || '').split('?')[0].trim()
 
@@ -108,7 +110,22 @@ export async function generateMetadata(
       type: 'profile',
       url: `https://volontariando.work/associazione/${cleanSlugWithoutQueries}`,
       siteName: 'Volontariando',
-      images: [{ url: coverUrl, width: 1200, height: 630, alt: `Copertina di ${denominazione}` }]
+      images: [
+        { 
+          // 1. Immagine principale widescreen (1200x630) per Facebook/Linkedin
+          url: coverUrl, 
+          width: 1200, 
+          height: 630, 
+          alt: `Copertina di ${denominazione}` 
+        },
+        {
+          // 2. Immagine quadrata leggera (400x400) specifica per superare il blocco 300KB di WhatsApp mobile
+          url: logoUrl,
+          width: 400,
+          height: 400,
+          alt: `Logo di ${denominazione}`
+        }
+      ]
     },
     twitter: {
       card: 'summary_large_image',
