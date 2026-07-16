@@ -1,40 +1,54 @@
 import { createServerClient } from '@supabase/ssr'
 import { createClient } from '@supabase/supabase-js'
 import type { Metadata, ResolvingMetadata } from 'next'
-// Rimossa l'importazione di 'cookies' che rischia di rompere la cache
 import Link from 'next/link'
 import { FileText, Link2, Quote, Settings2, Sparkles, Users, Heart, Briefcase, Video, Mail, Target, Eye } from 'lucide-react'
 import PosizioneCard from '@/components/PosizioneCard'
 
-// ==========================================
-// 1. CONFIGURAZIONE ISR (Incremental Static Regeneration)
-// ==========================================
-export const revalidate = 3600 // La cache scade dopo un'ora (o istantaneamente via API)
-export const dynamicParams = true // Permette di generare e mettere in cache nuovi slug non presenti al build time
+export const revalidate = 3600 
+export const dynamicParams = true 
 
-// ==========================================
-// 2. GENERAZIONE STATICA AL BUILD TIME (La vera magia SEO)
-// ==========================================
+// 🛡️ ESTRAZIONE ID CENTRALIZZATA CON DIAGNOSTICA
+function extractShortId(slugWithQueries: string): string {
+  const cleanSlug = decodeURIComponent(slugWithQueries).split('?')[0].trim();
+  const parts = cleanSlug.split('-');
+  const id = parts[parts.length - 1] || cleanSlug;
+  console.log(`[DIAGNOSTICA] extractShortId (Associazione): Input "${slugWithQueries}" -> Output "${id}"`);
+  return id;
+}
+
+// 🛡️ FUNZIONE AUSILIARIA PER FORZARE URL IMMAGINI ASSOLUTI (Richiesto da WhatsApp/Social)
+function getAbsoluteImageUrl(url: string | null | undefined): string {
+  const fallbackImage = 'https://volontariando.work/opengraph-image.png';
+  if (!url) return fallbackImage;
+  
+  const cleanUrl = url.trim();
+  if (cleanUrl.startsWith('http://') || cleanUrl.startsWith('https://')) {
+    return cleanUrl;
+  }
+  
+  // Se l'URL è un path relativo di Supabase, ricostruiamo l'endpoint CDN pubblico assoluto
+  return `https://kbgguubqwpthsbvnfdnq.supabase.co/storage/v1/object/public/${cleanUrl.replace(/^\//, '')}`;
+}
+
 export async function generateStaticParams() {
   const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
   )
 
-  // Chiediamo a Supabase SOLO gli slug di tutte le associazioni
   const { data: associazioni } = await supabase
     .from('associazioni')
     .select('slug')
-    .not('slug', 'is', null) // Ignoriamo chi non ha ancora lo slug
+    .not('slug', 'is', null)
 
-  // Diciamo a Next.js quali HTML statici costruire al momento del "npm run build"
   return associazioni?.map((associazione) => ({
     slug: associazione.slug,
   })) || []
 }
 
 // ==========================================
-// 🎯 GENERAZIONE METADATI SEO & SOCIAL DINAMICI
+// 🎯 GENERAZIONE METADATI SEO & SOCIAL DINAMICI (Fix Immagine WhatsApp + Isolamento ID)
 // ==========================================
 export async function generateMetadata(
   { params }: { params: Promise<{ slug: string }> },
@@ -43,43 +57,56 @@ export async function generateMetadata(
   await parent
   const resolvedParams = await params
 
+  console.log(`[DIAGNOSTICA - METADATA ASSOCIAZIONE] Inizio per slug grezzo: "${resolvedParams.slug}"`);
+  const shortId = extractShortId(resolvedParams.slug || '');
+
   const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
   )
 
-  const { data: associazione } = await supabase
+  // Utilizziamo l'ID parziale estratto per proteggere la query da modifiche client-side allo slug
+  const { data: associazione, error } = await supabase
     .from('associazioni')
     .select('denominazione, forma_giuridica, logo_url, grafica:associazioni_grafica(tagline, cover_url)')
-    .eq('slug', resolvedParams.slug)
+    .ilike('slug', `%${shortId}%`)
     .maybeSingle()
 
+  if (error) {
+    console.error(`[DIAGNOSTICA - METADATA ASSOCIAZIONE] Errore Query Supabase:`, error);
+  }
+
   if (!associazione) {
+    console.warn(`[DIAGNOSTICA - METADATA ASSOCIAZIONE] Nessuna associazione trovata nel DB per l'ID: "${shortId}".`);
     return {
-      title: 'Profilo Associazione', // ✨ Rimosso "| Volontariando"
+      title: 'Profilo Associazione', 
     }
   }
 
   const denominazione = associazione.denominazione || 'Associazione'
   const formaGiuridica = associazione.forma_giuridica ? ` (${associazione.forma_giuridica})` : ''
-  
-  // ✨ Solo il nome dell'associazione. Il layout farà il resto!
   const title = `${denominazione}${formaGiuridica}`
   
   const tagline = (associazione.grafica as any)?.tagline || `Scopri i progetti di utilità sociale e i bandi di volontariato aperti di ${denominazione}.`
   const description = tagline.replace(/\s+/g, ' ').trim().slice(0, 155) + '...'
 
-  const logoUrl = associazione.logo_url || 'https://volontariando.work/opengraph-image.png'
-  const coverUrl = (associazione.grafica as any)?.cover_url || logoUrl
+  // 🟢 FORMATTAZIONE IMMAGINI CON PROTOCOLLO ASSOLUTO PER WHATSAPP
+  const rawLogoUrl = associazione.logo_url || 'https://volontariando.work/opengraph-image.png'
+  const rawCoverUrl = (associazione.grafica as any)?.cover_url || rawLogoUrl
+  const coverUrl = getAbsoluteImageUrl(rawCoverUrl)
+
+  const cleanSlugWithoutQueries = (resolvedParams.slug || '').split('?')[0].trim()
 
   return {
-    title,
+    title: {
+      absolute: `${title} | Volontariando`, // 🔒 Lock del titolo nell'head
+    },
     description,
     openGraph: {
-      title: `${title} | Volontariando`, // Per i social lo teniamo completo
+      title: `${title} | Volontariando`, 
       description,
       type: 'profile',
-      url: `https://volontariando.work/associazione/${resolvedParams.slug}`,
+      url: `https://volontariando.work/associazione/${cleanSlugWithoutQueries}`,
       siteName: 'Volontariando',
       images: [{ url: coverUrl, width: 1200, height: 630, alt: `Copertina di ${denominazione}` }]
     },
@@ -91,6 +118,7 @@ export async function generateMetadata(
     }
   }
 }
+
 // ==========================================
 // BLOCCHI READ-ONLY PUBBLICI
 // ==========================================
@@ -473,31 +501,40 @@ function createFallbackLayout(associazione: any, grafica: any) {
 // ==========================================
 export default async function ProfiloAssociazione({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params
+  console.log(`[DIAGNOSTICA - PAGINA ASSOCIAZIONE] Caricamento pagina per slug grezzo: "${slug}"`);
+
+  const shortId = extractShortId(slug);
 
   const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
   )
 
+  // 🟢 Allineamento perfetto con lo stesso ID corto usato da generateMetadata
   const { data: associazione } = await supabase
     .from('associazioni')
     .select('*, grafica:associazioni_grafica(*)')
-    .eq('slug', slug)
+    .ilike('slug', `%${shortId}%`)
     .maybeSingle()
 
-  if (!associazione) return <div className="min-h-screen flex items-center justify-center font-sans text-slate-500">Associazione non trovata</div>
+  if (!associazione) {
+    console.warn(`[DIAGNOSTICA - PAGINA ASSOCIAZIONE] Nessun record trovato nel DB per: "${shortId}".`);
+    return <div className="min-h-screen flex items-center justify-center font-sans text-slate-500">Associazione non trovata</div>
+  }
+
+  console.log(`[DIAGNOSTICA - PAGINA ASSOCIAZIONE] Record caricato con successo: "${associazione.denominazione}"`);
 
   const associazioneId = associazione.id
   const grafica = associazione.grafica || {}
   const coloreBrand = grafica.colore_brand || '#111827'
   
-  const { data: posizioniRaw } = await supabase
+  const { data: posPositionsRaw } = await supabase
     .from('posizioni')
     .select('*, media_associazioni(url), tags:posizione_tags(tag:tags(id, name))')
     .eq('associazione_id', associazioneId)
     .order('created_at', { ascending: false })
 
-  const posizioni = posizioniRaw?.map(p => ({ 
+  const posizioni = posPositionsRaw?.map(p => ({ 
     ...p, 
     slug: p.slug || null,
     associazioni: {
@@ -517,13 +554,12 @@ export default async function ProfiloAssociazione({ params }: { params: Promise<
   // ========================================================
   const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://volontariando.work'
   
-  // 1. Schema Base per la NGO (Organizzazione Non Profit)
   const schemaNGO: any = {
     '@context': 'https://schema.org',
     '@type': 'NGO',
     name: associazione.denominazione,
-    url: `${baseUrl}/associazione/${slug}`,
-    logo: associazione.logo_url || `${baseUrl}/opengraph-image.png`,
+    url: `${baseUrl}/associazione/${slug.split('?')[0]}`,
+    logo: associazione.logo_url ? getAbsoluteImageUrl(associazione.logo_url) : `${baseUrl}/opengraph-image.png`,
     sameAs: [
       grafica.sito_web,
       grafica.instagram ? `https://instagram.com/${grafica.instagram.replace('@', '')}` : null,
@@ -531,7 +567,6 @@ export default async function ProfiloAssociazione({ params }: { params: Promise<
     ].filter(Boolean)
   }
 
-  // Aggiungiamo i contatti se l'associazione li ha inseriti nel database
   if (grafica.email || grafica.phone || grafica.address) {
     schemaNGO.contactPoint = {
       '@type': 'ContactPoint',
@@ -546,7 +581,6 @@ export default async function ProfiloAssociazione({ params }: { params: Promise<
     }
   }
 
-  // 2. Schema Opzionale FAQPage (se l'associazione ha configurato delle domande frequenti)
   let schemaFAQ: any = null
   const faqBlock = layout.find((block: any) => block.type === 'faq')
   const faqItems = faqBlock?.content?.items?.filter((f: any) => f.q && f.a) || []
@@ -568,7 +602,6 @@ export default async function ProfiloAssociazione({ params }: { params: Promise<
 
   return (
     <div className="min-h-screen bg-white font-sans pb-32 text-slate-900">
-      {/* ✨ Dati Strutturati iniettati per i motori di ricerca */}
       <script
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(schemaNGO) }}

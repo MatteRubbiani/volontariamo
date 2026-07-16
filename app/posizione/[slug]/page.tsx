@@ -9,6 +9,29 @@ import PannelloCandidatura from '@/components/PannelloCandidatura'
 export const revalidate = 3600 
 export const dynamicParams = true 
 
+// 🛡️ ESTRAZIONE ID CENTRALIZZATA CON DIAGNOSTICA
+function extractShortId(slugWithQueries: string): string {
+  const cleanSlug = decodeURIComponent(slugWithQueries).split('?')[0].trim();
+  const parts = cleanSlug.split('-');
+  const id = parts[parts.length - 1] || cleanSlug;
+  console.log(`[DIAGNOSTICA] extractShortId: Input "${slugWithQueries}" -> Output "${id}"`);
+  return id;
+}
+
+// 🛡️ FUNZIONE AUSILIARIA PER FORZARE URL IMMAGINI ASSOLUTI (Richiesto da WhatsApp/Social)
+function getAbsoluteImageUrl(url: string | null | undefined): string {
+  const fallbackImage = 'https://volontariando.work/opengraph-image.png';
+  if (!url) return fallbackImage;
+  
+  const cleanUrl = url.trim();
+  if (cleanUrl.startsWith('http://') || cleanUrl.startsWith('https://')) {
+    return cleanUrl;
+  }
+  
+  // Se l'URL è un path relativo di Supabase, ricostruiamo l'endpoint CDN pubblico assoluto
+  return `https://kbgguubqwpthsbvnfdnq.supabase.co/storage/v1/object/public/${cleanUrl.replace(/^\//, '')}`;
+}
+
 export async function generateStaticParams() {
   const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -22,43 +45,44 @@ export async function generateStaticParams() {
   return posizioni?.map((pos) => ({ slug: pos.slug })) || []
 }
 
-// 🎯 GENERAZIONE METADATI BLINDATA (Estrattore Universale ID)
+// 🎯 GENERAZIONE METADATI DINAMICI BLINDATA (Senza Join fallimentari + Fix Immagine WhatsApp)
 export async function generateMetadata(
   { params }: { params: Promise<{ slug: string }> },
   parent: ResolvingMetadata
 ): Promise<Metadata> {
   await parent
   const resolvedParams = await params
-
-  // 1. Estraiamo l'ID usando un mix di Split e Regex per massima tolleranza
-  const rawSlug = resolvedParams.slug || ''
-  const cleanUrl = rawSlug.split('?')[0] // Togliamo params espliciti
   
-  // Estraiamo gli ultimi 6 caratteri alfanumerici prima del parametro
-  const match = cleanUrl.match(/([a-zA-Z0-9]{6})$/) 
-  const shortId = match ? match[1] : cleanUrl
+  const shortId = extractShortId(resolvedParams.slug || '');
 
   const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
   )
 
-  const { data: posizione } = await supabase
+  // 1. Prendiamo SOLO i dati della posizione e l'id dell'associazione (senza fare JOIN rotte)
+  const { data: posizione, error: posError } = await supabase
     .from('posizioni')
-    .select(`
-      titolo, 
-      descrizione, 
-      associazioni(denominazione),
-      media_associazioni(url)
-    `)
+    .select('titolo, descrizione, associazione_id, immagine_id')
     .ilike('slug', `%${shortId}%`)
     .maybeSingle()
 
-  if (!posizione) {
+  if (posError || !posizione) {
+    console.warn(`[DIAGNOSTICA] Posizione non trovata o errore:`, posError);
     return { title: 'Opportunità di Volontariato' }
   }
 
-  const nomeAssociazione = (posizione as any).associazioni?.denominazione || 'Associazione'
+  // 2. Recuperiamo il nome dell'associazione e l'immagine in parallelo con query separate e sicure
+  const [assocRes, mediaRes] = await Promise.all([
+    posizione.associazione_id 
+      ? supabase.from('associazioni').select('denominazione').eq('id', posizione.associazione_id).maybeSingle()
+      : Promise.resolve({ data: null }),
+    posizione.immagine_id
+      ? supabase.from('media_associazioni').select('url').eq('id', posizione.immagine_id).maybeSingle()
+      : Promise.resolve({ data: null })
+  ])
+
+  const nomeAssociazione = assocRes.data?.denominazione || 'Associazione'
   const titoloPulito = posizione.titolo || 'Bando di Volontariato'
   const title = `${titoloPulito} con ${nomeAssociazione}`
   
@@ -67,18 +91,20 @@ export async function generateMetadata(
     .trim()
     .slice(0, 155) + '...'
 
-  const imageUrl = (posizione as any).media_associazioni?.url || 'https://volontariando.work/opengraph-image.png'
+  // 🟢 TRASFORMAZIONE URL ASSOLUTO PER WHATSAPP
+  const imageUrl = getAbsoluteImageUrl(mediaRes.data?.url)
+  const cleanSlugWithoutQueries = (resolvedParams.slug || '').split('?')[0].trim()
 
   return {
     title: {
-      absolute: `${title} | Volontariando`, // ✨ "ABSOLUTE" FORZA NEXT A NON AGGIUNGERE IL SUFFISSO
+      absolute: `${title} | Volontariando`, 
     },
     description,
     openGraph: {
       title: `${title} | Volontariando`,
       description,
       type: 'article',
-      url: `https://volontariando.work/posizione/${shortId}`,
+      url: `https://volontariando.work/posizione/${cleanSlugWithoutQueries}`,
       siteName: 'Volontariando',
       images: [{ url: imageUrl, width: 1200, height: 630, alt: title }]
     },
@@ -90,17 +116,17 @@ export async function generateMetadata(
     }
   }
 }
+
 export default async function DettaglioPosizioneVolontario({
   params
 }: {
   params: Promise<{ slug: string }>
 }) {
   const { slug } = await params
-  
-  // Stessa pulizia garantita per il corpo della pagina
-  const cleanSlug = decodeURIComponent(slug.split('?')[0]).trim()
-  const lastDashIndex = cleanSlug.lastIndexOf('-')
-  const shortId = lastDashIndex !== -1 ? cleanSlug.substring(lastDashIndex + 1) : cleanSlug
+  console.log(`[DIAGNOSTICA - PAGINA] Caricamento pagina per slug grezzo: "${slug}"`);
+
+  const shortId = extractShortId(slug);
+  const cleanSlugWithoutQueries = decodeURIComponent(slug).split('?')[0].trim();
 
   const publicSupabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
@@ -113,7 +139,16 @@ export default async function DettaglioPosizioneVolontario({
     .ilike('slug', `%${shortId}%`)
     .maybeSingle()
 
-  if (posError || !posBase) redirect('/esplora')
+  if (posError) {
+    console.error(`[DIAGNOSTICA - PAGINA] Errore Query Corpo Pagina:`, posError);
+  }
+
+  if (!posBase) {
+    console.warn(`[DIAGNOSTICA - PAGINA] Record non trovato per ID: "${shortId}". Reindirizzamento a /esplora.`);
+    redirect('/esplora')
+  }
+
+  console.log(`[DIAGNOSTICA - PAGINA] Record caricato nel corpo pagina: "${posBase.titolo}" (ID: ${posBase.id})`);
 
   const id = posBase.id 
 
@@ -192,7 +227,9 @@ export default async function DettaglioPosizioneVolontario({
   const associazioneSlug = pos.associazioni?.slug || pos.associazioni?.id
   const inizialeAssociazione = nomeAssociazione.charAt(0).toUpperCase()
   const competenzeRichieste = pos.competenze?.map((c: any) => c.competenza).filter(Boolean) || []
-  const imgUrl = pos.media_associazioni?.url || null;
+  
+  // Usiamo la funzione di sicurezza anche per la visualizzazione dell'immagine nel layout della pagina
+  const imgUrl = pos.media_associazioni?.url ? getAbsoluteImageUrl(pos.media_associazioni.url) : null;
   const inizialePosizione = pos.titolo ? pos.titolo.charAt(0).toUpperCase() : 'V';
   const dataFormattata = formattaData(pos.quando, pos.tipo);
 
@@ -224,7 +261,7 @@ export default async function DettaglioPosizioneVolontario({
       },
       offers: {
         '@type': 'Offer',
-        url: `${baseUrl}/posizione/${cleanSlug}`,
+        url: `${baseUrl}/posizione/${cleanSlugWithoutQueries}`,
         price: '0',
         priceCurrency: 'EUR',
         availability: 'https://schema.org/InStock',
@@ -263,7 +300,11 @@ export default async function DettaglioPosizioneVolontario({
 
   return (
     <div className="min-h-screen bg-white text-slate-900 font-sans selection:bg-slate-200">
-      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+      />
+      
       <div className="w-full h-[35vh] md:h-[50vh] relative bg-slate-100">
         {imgUrl ? (
           <img src={imgUrl} alt={pos.titolo} className="w-full h-full object-cover" />
@@ -272,6 +313,7 @@ export default async function DettaglioPosizioneVolontario({
             <span className="text-slate-200 text-8xl font-black">{inizialePosizione}</span>
           </div>
         )}
+        
         <div className="absolute top-6 left-4 md:left-10 z-10">
           <Link href="/esplora" className="inline-flex items-center justify-center w-10 h-10 bg-white text-slate-900 rounded-full shadow-md hover:scale-105 transition-transform">
             <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-5 h-5">
@@ -368,6 +410,7 @@ export default async function DettaglioPosizioneVolontario({
             )}
           </div>
 
+          {/* COLONNA DESKTOP INTERATTIVA */}
           <div className="hidden md:block w-[340px] flex-shrink-0 relative">
             <div className="sticky top-28 bg-white p-6 rounded-2xl border border-slate-200 shadow-[0_12px_28px_rgba(0,0,0,0.12)]">
               <div className="mb-6">
@@ -376,7 +419,7 @@ export default async function DettaglioPosizioneVolontario({
               </div>
               <PannelloCandidatura 
                 posizioneId={id} 
-                slug={cleanSlug} 
+                slug={cleanSlugWithoutQueries} 
                 associazioneId={pos.associazione_id} 
                 associazioneNome={nomeAssociazione} 
                 competenzeRichieste={competenzeRichieste}
@@ -387,6 +430,7 @@ export default async function DettaglioPosizioneVolontario({
         </div>
       </div>
 
+      {/* FOOTER MOBILE INTERATTIVO */}
       <div className="md:hidden fixed bottom-0 left-0 w-full bg-white border-t border-slate-200 px-5 py-4 z-50 flex flex-col gap-3 pb-[calc(1rem+env(safe-area-inset-bottom))] shadow-[0_-8px_24px_rgba(0,0,0,0.06)]">
         <div className="flex flex-col min-w-0">
           <span className="font-semibold text-slate-900 truncate capitalize">{dataFormattata}</span>
@@ -394,7 +438,7 @@ export default async function DettaglioPosizioneVolontario({
         </div>
         <PannelloCandidatura 
           posizioneId={id} 
-          slug={cleanSlug} 
+          slug={cleanSlugWithoutQueries} 
           associazioneId={pos.associazione_id} 
           associazioneNome={nomeAssociazione} 
           competenzeRichieste={competenzeRichieste}
