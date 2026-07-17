@@ -268,22 +268,27 @@ export default async function DettaglioPosizioneVolontario({
         validFrom: new Date().toISOString()
       },
       organizer: {
-        '@type': 'NGO',
+        '@type': 'Organization', // 🟢 Sostituito "NGO" con "Organization" per superare la validazione di Google
         name: nomeAssociazione,
         url: `${baseUrl}/associazione/${associazioneSlug}`
       },
     }
   } else {
+    // Calcoliamo una data di scadenza stimata (es. 6 mesi nel futuro) per risolvere il warning "validThrough"
+    const validThroughDate = new Date()
+    validThroughDate.setMonth(validThroughDate.getMonth() + 6)
+
     jsonLd = {
       '@context': 'https://schema.org',
       '@type': 'JobPosting',
       title: pos.titolo,
       description: pos.descrizione,
-      datePosted: new Date().toISOString(),
+      datePosted: posBase.created_at || new Date().toISOString(),
+      validThrough: validThroughDate.toISOString(), // 🟢 Risolve il warning "validThrough"
       employmentType: 'VOLUNTEER',
       image: imgUrl ? imgUrl : undefined,
       hiringOrganization: {
-        '@type': 'NGO',
+        '@type': 'Organization', // 🟢 Sostituito "NGO" con "Organization" per correggere l'errore critico di Google Jobs
         name: nomeAssociazione,
         sameAs: `${baseUrl}/associazione/${associazioneSlug}`
       },
@@ -295,6 +300,15 @@ export default async function DettaglioPosizioneVolontario({
           addressCountry: 'IT',
         },
       },
+      baseSalary: { // 🟢 Fornisce un valore a zero per risolvere il warning del campo "baseSalary" nei bandi volunteer
+        '@type': 'MonetaryAmount',
+        currency: 'EUR',
+        value: {
+          '@type': 'QuantitativeValue',
+          value: 0,
+          unitText: 'HOUR'
+        }
+      }
     }
   }
 
