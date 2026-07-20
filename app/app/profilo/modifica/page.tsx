@@ -1,10 +1,10 @@
-// src/app/profilo/modifica/page.tsx
+'use server'
+
 import { createServerClient } from '@supabase/ssr'
 import { cookies } from 'next/headers'
 import { updateProfilo } from '../actions'
 import { redirect } from 'next/navigation'
 
-// Importiamo i tre nuovi form modulari
 import FormModificaAssociazione from './components/FormModificaAssociazione'
 import FormModificaVolontario from './components/FormModificaVolontario'
 import FormModificaImpresa from './components/FormModificaImpresa'
@@ -21,20 +21,25 @@ export default async function ModificaProfiloPage() {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) redirect('/auth/login')
     
-    const { data: hub, error: hubError } = await supabase.from('profili').select('ruolo').eq('id', user.id).maybeSingle()
+    const { data: hub, error: hubError } = await supabase
+      .from('profili')
+      .select('ruolo')
+      .eq('id', user.id)
+      .maybeSingle()
+
     if (hubError || !hub?.ruolo) {
       return <div className="p-10 text-center text-red-600 font-bold">Errore: Profilo Hub non trovato.</div>
     }
 
     const role = hub.ruolo.toLowerCase().trim()
     
-    // 1. Cataloghi Generali (Tags e Competenze)
+    // Cataloghi Generali
     const { data: allTags } = await supabase.from('tags').select('*').order('name')
     const { data: allCompetenze } = await supabase.from('competenze').select('*').eq('is_official', true).order('name')
 
-    // 2. RENDERING CONDIZIONALE BASATO SUL RUOLO
-    
-    // --- VOLONTARIO ---
+    // ==========================================================
+    // 👤 FLUSSO VOLONTARIO
+    // ==========================================================
     if (role === 'volontario') {
       const { data: vol } = await supabase.from('volontari').select('*').eq('id', user.id).maybeSingle()
       const { data: volTags } = await supabase.from('volontario_tags').select('tag_id').eq('volontario_id', user.id)
@@ -44,9 +49,8 @@ export default async function ModificaProfiloPage() {
       const competenzeIniziali = volComp?.map(c => c.competenza_id) || []
 
       return (
-        <div className="bg-slate-50 min-h-screen py-12">
-          <div className="max-w-5xl mx-auto px-6">
-            <h1 className="text-4xl font-black mb-10 text-slate-900 tracking-tight">Modifica Profilo Volontario</h1>
+        <div className="bg-white min-h-screen py-12 font-sans antialiased selection:bg-slate-100">
+          <div className="max-w-[540px] mx-auto px-6">
             <FormModificaVolontario 
               profilo={vol || { id: user.id }} 
               allTags={allTags || []}
@@ -60,13 +64,15 @@ export default async function ModificaProfiloPage() {
       )
     }
 
-    // --- ASSOCIAZIONE ---
+    // ==========================================================
+    // 🏢 FLUSSO ASSOCIAZIONE
+    // ==========================================================
     if (role === 'associazione') {
-      const { data: ass } = await supabase
-        .from('associazioni')
-        .select(`*, associazioni_trasparenza (*), associazioni_sedi (*)`)
-        .eq('id', user.id)
-        .maybeSingle()
+      const [{ data: ass }, { data: graph }, { data: assTags }] = await Promise.all([
+        supabase.from('associazioni').select(`*, associazioni_trasparenza (*), associazioni_sedi (*)`).eq('id', user.id).maybeSingle(),
+        supabase.from('associazioni_grafica').select('layout_draft, layout_config').eq('associazione_id', user.id).maybeSingle(),
+        supabase.from('associazione_tags').select('tag_id').eq('associazione_id', user.id)
+      ])
 
       const base = ass || { id: user.id }
       const trasp = Array.isArray(base.associazioni_trasparenza) ? base.associazioni_trasparenza[0] : base.associazioni_trasparenza || {}
@@ -74,8 +80,25 @@ export default async function ModificaProfiloPage() {
                    ? (base.associazioni_sedi.find((s: any) => s.is_principale) || base.associazioni_sedi[0] || {}) 
                    : base.associazioni_sedi || {}
 
+      // Fallback tattico: Se associazioni.logo_url non esiste ancora, proviamo ad estrarlo dalla vetrina grafica
+      let logoUrlVetrina = ''
+      if (!base.logo_url) {
+        const rawLayout = graph?.layout_draft || graph?.layout_config
+        if (rawLayout) {
+          const layout = typeof rawLayout === 'string' ? JSON.parse(rawLayout) : rawLayout
+          if (Array.isArray(layout)) {
+            const heroBlock = layout.find((b: any) => b.type === 'hero')
+            if (heroBlock?.content?.logoUrl) {
+              logoUrlVetrina = heroBlock.content.logoUrl
+            }
+          }
+        }
+      }
+
       const profiloData = {
         ...base,
+        logo_url: base.logo_url || logoUrlVetrina, // 🟢 Master primario con fallback vetrina
+        logo_url_vetrina: logoUrlVetrina,
         denominazione: base.denominazione || '',
         indirizzo: sede.indirizzo || '',
         cap: sede.cap || '',
@@ -93,13 +116,11 @@ export default async function ModificaProfiloPage() {
         is_iscritto_runts: trasp.is_iscritto_runts || false,
       }
       
-      const { data: assTags } = await supabase.from('associazione_tags').select('tag_id').eq('associazione_id', user.id)
       const tagsIniziali = assTags?.map(t => t.tag_id) || []
 
       return (
-        <div className="bg-slate-50 min-h-screen py-12">
-          <div className="max-w-5xl mx-auto px-6">
-            <h1 className="text-4xl font-black mb-10 text-slate-900 tracking-tight text-center md:text-left">Profilo Ente</h1>
+        <div className="bg-white min-h-screen py-12 font-sans antialiased selection:bg-slate-100">
+          <div className="max-w-[540px] mx-auto px-6">
             <FormModificaAssociazione 
               profilo={profiloData} 
               allTags={allTags || []}
@@ -111,25 +132,8 @@ export default async function ModificaProfiloPage() {
       )
     }
 
-    // --- IMPRESA ---
-    if (role === 'impresa') {
-      const { data: imp } = await supabase.from('imprese').select('*').eq('id', user.id).maybeSingle()
-      return (
-        <div className="bg-slate-50 min-h-screen py-12">
-          <div className="max-w-5xl mx-auto px-6">
-            <h1 className="text-4xl font-black mb-10 text-slate-900 tracking-tight">Profilo Aziendale</h1>
-            <FormModificaImpresa 
-              profilo={imp || { id: user.id }} 
-              salvaAction={updateProfilo}
-            />
-          </div>
-        </div>
-      )
-    }
-
     redirect('/app/onboarding')
-
   } catch (error: any) {
-    return <div className="p-10 text-red-600 font-bold text-center">Errore critico: {error.message}</div>
+    return <div className="p-10 text-red-600 font-medium text-center text-sm">Errore critico: {error.message}</div>
   }
 }
