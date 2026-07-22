@@ -5,20 +5,21 @@ import Link from 'next/link'
 import TagBadge from '@/components/TagBadge'
 import CompetenzaBadge from '@/components/CompetenzaBadge'
 import PannelloCandidatura from '@/components/PannelloCandidatura'
+import TastoIndietro from '@/components/TastoIndietro'
+import { Calendar, Clock, MapPin, CheckCircle2 } from 'lucide-react'
 
 export const revalidate = 3600 
 export const dynamicParams = true 
 
-// 🛡️ ESTRAZIONE ID CENTRALIZZATA CON DIAGNOSTICA
+// 🛡️ ESTRAZIONE ID CENTRALIZZATA
 function extractShortId(slugWithQueries: string): string {
   const cleanSlug = decodeURIComponent(slugWithQueries).split('?')[0].trim();
   const parts = cleanSlug.split('-');
   const id = parts[parts.length - 1] || cleanSlug;
-  console.log(`[DIAGNOSTICA] extractShortId: Input "${slugWithQueries}" -> Output "${id}"`);
   return id;
 }
 
-// 🛡️ FUNZIONE AUSILIARIA PER FORZARE URL IMMAGINI ASSOLUTI (Richiesto da WhatsApp/Social)
+// 🛡️ URL IMMAGINI ASSOLUTI
 function getAbsoluteImageUrl(url: string | null | undefined): string {
   const fallbackImage = 'https://volontariando.work/opengraph-image.png';
   if (!url) return fallbackImage;
@@ -28,7 +29,6 @@ function getAbsoluteImageUrl(url: string | null | undefined): string {
     return cleanUrl;
   }
   
-  // Se l'URL è un path relativo di Supabase, ricostruiamo l'endpoint CDN pubblico assoluto
   return `https://kbgguubqwpthsbvnfdnq.supabase.co/storage/v1/object/public/${cleanUrl.replace(/^\//, '')}`;
 }
 
@@ -45,14 +45,13 @@ export async function generateStaticParams() {
   return posizioni?.map((pos) => ({ slug: pos.slug })) || []
 }
 
-// 🎯 GENERAZIONE METADATI DINAMICI BLINDATA (Senza Join fallimentari + Fix Immagine WhatsApp)
+// 🎯 GENERAZIONE METADATI DINAMICI
 export async function generateMetadata(
   { params }: { params: Promise<{ slug: string }> },
   parent: ResolvingMetadata
 ): Promise<Metadata> {
   await parent
   const resolvedParams = await params
-  
   const shortId = extractShortId(resolvedParams.slug || '');
 
   const supabase = createClient(
@@ -60,7 +59,6 @@ export async function generateMetadata(
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
   )
 
-  // 1. Prendiamo SOLO i dati della posizione e l'id dell'associazione (senza fare JOIN rotte)
   const { data: posizione, error: posError } = await supabase
     .from('posizioni')
     .select('titolo, descrizione, associazione_id, immagine_id')
@@ -68,11 +66,9 @@ export async function generateMetadata(
     .maybeSingle()
 
   if (posError || !posizione) {
-    console.warn(`[DIAGNOSTICA] Posizione non trovata o errore:`, posError);
     return { title: 'Opportunità di Volontariato' }
   }
 
-  // 2. Recuperiamo il nome dell'associazione e l'immagine in parallelo con query separate e sicure
   const [assocRes, mediaRes] = await Promise.all([
     posizione.associazione_id 
       ? supabase.from('associazioni').select('denominazione').eq('id', posizione.associazione_id).maybeSingle()
@@ -91,7 +87,6 @@ export async function generateMetadata(
     .trim()
     .slice(0, 155) + '...'
 
-  // 🟢 TRASFORMAZIONE URL ASSOLUTO PER WHATSAPP
   const imageUrl = getAbsoluteImageUrl(mediaRes.data?.url)
   const cleanSlugWithoutQueries = (resolvedParams.slug || '').split('?')[0].trim()
 
@@ -123,8 +118,6 @@ export default async function DettaglioPosizioneVolontario({
   params: Promise<{ slug: string }>
 }) {
   const { slug } = await params
-  console.log(`[DIAGNOSTICA - PAGINA] Caricamento pagina per slug grezzo: "${slug}"`);
-
   const shortId = extractShortId(slug);
   const cleanSlugWithoutQueries = decodeURIComponent(slug).split('?')[0].trim();
 
@@ -133,22 +126,15 @@ export default async function DettaglioPosizioneVolontario({
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
   )
 
-  const { data: posBase, error: posError } = await publicSupabase
+  const { data: posBase } = await publicSupabase
     .from('posizioni')
     .select('*')
     .ilike('slug', `%${shortId}%`)
     .maybeSingle()
 
-  if (posError) {
-    console.error(`[DIAGNOSTICA - PAGINA] Errore Query Corpo Pagina:`, posError);
-  }
-
   if (!posBase) {
-    console.warn(`[DIAGNOSTICA - PAGINA] Record non trovato per ID: "${shortId}". Reindirizzamento a /esplora.`);
     redirect('/esplora')
   }
-
-  console.log(`[DIAGNOSTICA - PAGINA] Record caricato nel corpo pagina: "${posBase.titolo}" (ID: ${posBase.id})`);
 
   const id = posBase.id 
 
@@ -208,14 +194,17 @@ export default async function DettaglioPosizioneVolontario({
     })),
   }
 
-  const formattaOra = (ora: string | null) => ora ? ora.substring(0, 5) : '--:--'
+  const formattaOra = (ora: string | null) => {
+    if (!ora) return null
+    return ora.substring(0, 5)
+  }
   
-  const formattaData = (dataString: string | null, tipo: string) => {
+  const formattaDataLeggibile = (dataString: string | null, tipo: string) => {
     if (!dataString) return 'Data da definire';
     if (tipo === 'una_tantum') {
       try {
         const dateObj = new Date(dataString);
-        return dateObj.toLocaleDateString('it-IT', { day: 'numeric', month: 'long', year: 'numeric' });
+        return dateObj.toLocaleDateString('it-IT', { day: 'numeric', month: 'short', year: 'numeric' });
       } catch (e) {
         return dataString;
       }
@@ -228,98 +217,23 @@ export default async function DettaglioPosizioneVolontario({
   const inizialeAssociazione = nomeAssociazione.charAt(0).toUpperCase()
   const competenzeRichieste = pos.competenze?.map((c: any) => c.competenza).filter(Boolean) || []
   
-  // Usiamo la funzione di sicurezza anche per la visualizzazione dell'immagine nel layout della pagina
   const imgUrl = pos.media_associazioni?.url ? getAbsoluteImageUrl(pos.media_associazioni.url) : null;
   const inizialePosizione = pos.titolo ? pos.titolo.charAt(0).toUpperCase() : 'V';
-  const dataFormattata = formattaData(pos.quando, pos.tipo);
-
-  const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://volontariando.work';
-  let jsonLd = {}
-
-  if (pos.tipo === 'una_tantum') {
-    const startDate = pos.data_esatta ? `${pos.data_esatta}T${pos.ora_inizio || '08:00'}:00` : new Date().toISOString()
-    const endDate = pos.data_esatta && pos.ora_fine ? `${pos.data_esatta}T${pos.ora_fine}:00` : undefined
-
-    jsonLd = {
-      '@context': 'https://schema.org',
-      '@type': 'Event',
-      name: pos.titolo,
-      description: pos.descrizione,
-      startDate: startDate,
-      endDate: endDate,
-      eventAttendanceMode: 'https://schema.org/OfflineEventAttendanceMode',
-      eventStatus: 'https://schema.org/EventScheduled',
-      image: imgUrl ? [imgUrl] : [],
-      location: {
-        '@type': 'Place',
-        name: pos.dove,
-        address: {
-          '@type': 'PostalAddress',
-          addressLocality: pos.dove,
-          addressCountry: 'IT',
-        },
-      },
-      offers: {
-        '@type': 'Offer',
-        url: `${baseUrl}/posizione/${cleanSlugWithoutQueries}`,
-        price: '0',
-        priceCurrency: 'EUR',
-        availability: 'https://schema.org/InStock',
-        validFrom: new Date().toISOString()
-      },
-      organizer: {
-        '@type': 'Organization', // 🟢 Sostituito "NGO" con "Organization" per superare la validazione di Google
-        name: nomeAssociazione,
-        url: `${baseUrl}/associazione/${associazioneSlug}`
-      },
-    }
-  } else {
-    // Calcoliamo una data di scadenza stimata (es. 6 mesi nel futuro) per risolvere il warning "validThrough"
-    const validThroughDate = new Date()
-    validThroughDate.setMonth(validThroughDate.getMonth() + 6)
-
-    jsonLd = {
-      '@context': 'https://schema.org',
-      '@type': 'JobPosting',
-      title: pos.titolo,
-      description: pos.descrizione,
-      datePosted: posBase.created_at || new Date().toISOString(),
-      validThrough: validThroughDate.toISOString(), // 🟢 Risolve il warning "validThrough"
-      employmentType: 'VOLUNTEER',
-      image: imgUrl ? imgUrl : undefined,
-      hiringOrganization: {
-        '@type': 'Organization', // 🟢 Sostituito "NGO" con "Organization" per correggere l'errore critico di Google Jobs
-        name: nomeAssociazione,
-        sameAs: `${baseUrl}/associazione/${associazioneSlug}`
-      },
-      jobLocation: {
-        '@type': 'Place',
-        address: {
-          '@type': 'PostalAddress',
-          addressLocality: pos.dove,
-          addressCountry: 'IT',
-        },
-      },
-      baseSalary: { // 🟢 Fornisce un valore a zero per risolvere il warning del campo "baseSalary" nei bandi volunteer
-        '@type': 'MonetaryAmount',
-        currency: 'EUR',
-        value: {
-          '@type': 'QuantitativeValue',
-          value: 0,
-          unitText: 'HOUR'
-        }
-      }
-    }
-  }
+  
+  const dataFormattata = formattaDataLeggibile(pos.quando || pos.data_esatta, pos.tipo);
+  const oraInizio = formattaOra(pos.ora_inizio);
+  const oraFine = formattaOra(pos.ora_fine);
+  const orarioFormattato = (oraInizio && oraFine) 
+    ? `${oraInizio} - ${oraFine}` 
+    : oraInizio 
+      ? `Dalle ${oraInizio}` 
+      : 'Orario flessibile';
 
   return (
     <div className="min-h-screen bg-white text-slate-900 font-sans selection:bg-slate-200">
-      <script
-        type="application/ld+json"
-        dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
-      />
       
-      <div className="w-full h-[35vh] md:h-[50vh] relative bg-slate-100">
+      {/* IMMAGINE COPERTINA */}
+      <div className="w-full h-[32vh] md:h-[48vh] relative bg-slate-100">
         {imgUrl ? (
           <img src={imgUrl} alt={pos.titolo} className="w-full h-full object-cover" />
         ) : (
@@ -328,93 +242,102 @@ export default async function DettaglioPosizioneVolontario({
           </div>
         )}
         
-        <div className="absolute top-6 left-4 md:left-10 z-10">
-          <Link href="/esplora" className="inline-flex items-center justify-center w-10 h-10 bg-white text-slate-900 rounded-full shadow-md hover:scale-105 transition-transform">
-            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-5 h-5">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 19.5 8.25 12l7.5-7.5" />
-            </svg>
-          </Link>
+        {/* TASTO INDIETRO CON MEMORIA */}
+        <div className="absolute top-4 left-4 md:left-10 z-20">
+          <TastoIndietro />
         </div>
       </div>
 
-      <div className="max-w-[1120px] mx-auto px-6 md:px-10 pb-40 md:pb-24">
-        <div className="flex flex-col md:flex-row pt-8 md:pt-12 md:gap-24">
+      {/* CORPO CONTENUTO */}
+      <div className="max-w-[1120px] mx-auto px-5 md:px-10 pb-36 md:pb-24">
+        <div className="flex flex-col md:flex-row pt-6 md:pt-12 md:gap-20">
+          
           <div className="w-full md:flex-1">
-            <div className="mb-8 border-b border-slate-100 pb-8">
-              <div className="flex items-center gap-2 mb-4">
-                <span className={`text-[11px] font-black uppercase tracking-widest ${pos.tipo === 'una_tantum' ? 'text-slate-500' : 'text-slate-900'}`}>
+            <div className="mb-6 border-b border-slate-100 pb-6">
+              <div className="flex items-center gap-2 mb-3">
+                <span className="text-[10px] font-black uppercase tracking-widest px-2.5 py-1 rounded-full bg-slate-100 text-slate-600">
                   {pos.tipo === 'una_tantum' ? 'Evento Singolo' : 'Ricorrente'}
                 </span>
               </div>
-              <h1 className="text-[1.75rem] md:text-4xl font-semibold text-slate-900 leading-[1.15] tracking-tight mb-4">
+              <h1 className="text-2xl md:text-4xl font-extrabold text-slate-900 leading-tight tracking-tight mb-3">
                 {pos.titolo}
               </h1>
-              <div className="text-sm font-medium text-slate-900 flex flex-wrap items-center gap-2">
-                <span className="underline">{pos.dove}</span>
-                <span>·</span>
-                <span className="text-slate-500">{pos.tipo === 'una_tantum' ? 'Evento Singolo' : 'Ricorrente'}</span>
+              <div className="text-sm font-medium text-slate-600 flex items-center gap-2">
+                <MapPin className="w-4 h-4 text-slate-400 shrink-0" />
+                <span className="font-bold text-slate-900">{pos.dove}</span>
               </div>
             </div>
 
-            <div className="flex items-center gap-4">
-              <Link href={`/associazione/${associazioneSlug}`} className="w-12 h-12 rounded-full bg-slate-900 flex items-center justify-center text-white font-bold text-lg hover:bg-slate-800 transition-colors">
+            <Link 
+              href={`/associazione/${associazioneSlug}`}
+              className="flex items-center gap-3.5 p-3 -mx-3 rounded-2xl hover:bg-slate-50 transition-colors"
+            >
+              <div className="w-11 h-11 rounded-full bg-slate-950 flex items-center justify-center text-white font-bold text-base shrink-0 shadow-xs">
                 {inizialeAssociazione}
-              </Link>
-              <div>
-                <p className="font-semibold text-slate-900 text-base">Organizzato da {nomeAssociazione}</p>
-                <p className="text-sm text-slate-500">Iscritto a Volontariando</p>
+              </div>
+              <div className="min-w-0">
+                <div className="flex items-center gap-1.5">
+                  <p className="font-bold text-slate-900 text-sm truncate">Organizzato da {nomeAssociazione}</p>
+                  <CheckCircle2 className="w-4 h-4 text-violet-600 shrink-0" />
+                </div>
+                <p className="text-xs text-slate-400 font-medium">Associazione verificata</p>
+              </div>
+            </Link>
+
+            <hr className="border-slate-100 my-6" />
+
+            {/* DETTAGLI ORARI E LUOGO */}
+            <div className="flex flex-col gap-4">
+              <div className="flex items-start gap-3.5">
+                <div className="p-2.5 rounded-2xl bg-slate-50 text-slate-800 shrink-0">
+                  <MapPin className="w-5 h-5 text-slate-700" />
+                </div>
+                <div>
+                  <p className="font-bold text-slate-900 text-sm">{pos.dove}</p>
+                  <p className="text-xs text-slate-400 mt-0.5">Indirizzo esatto inviato dopo la candidatura.</p>
+                </div>
+              </div>
+
+              <div className="flex items-start gap-3.5">
+                <div className="p-2.5 rounded-2xl bg-slate-50 text-slate-800 shrink-0">
+                  <Calendar className="w-5 h-5 text-slate-700" />
+                </div>
+                <div>
+                  <p className="font-bold text-slate-900 text-sm capitalize">{dataFormattata}</p>
+                  <p className="text-xs text-slate-400 mt-0.5">Orario: {orarioFormattato}</p>
+                </div>
               </div>
             </div>
 
-            <hr className="border-slate-200 my-8" />
-            <div className="flex flex-col gap-6">
-              <div className="flex items-start gap-4">
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-7 h-7 text-slate-900 flex-shrink-0">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M15 10.5a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1 1 15 0Z" />
-                </svg>
-                <div>
-                  <p className="font-semibold text-slate-900 text-base">{pos.dove}</p>
-                  <p className="text-sm text-slate-500 mt-0.5">La posizione esatta verrà fornita dopo la candidatura.</p>
-                </div>
-              </div>
-              <div className="flex items-start gap-4">
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-7 h-7 text-slate-900 flex-shrink-0">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0v-7.5A2.25 2.25 0 0 1 5.25 9h13.5A2.25 2.25 0 0 1 21 11.25v7.5" />
-                </svg>
-                <div>
-                  <p className="font-semibold text-slate-900 text-base capitalize">{dataFormattata}</p>
-                  <p className="text-sm text-slate-500 mt-0.5">Orario previsto: {formattaOra(pos.ora_inizio)} - {formattaOra(pos.ora_fine)}</p>
-                </div>
-              </div>
-            </div>
+            <hr className="border-slate-100 my-6" />
 
-            <hr className="border-slate-200 my-8" />
             <div>
-              <h2 className="text-xl font-semibold text-slate-900 mb-4">Informazioni sull'attività</h2>
-              <div className="prose prose-slate prose-lg max-w-none text-slate-700 leading-relaxed font-normal">
+              <h2 className="text-lg font-bold text-slate-900 mb-3">Informazioni sull'attività</h2>
+              <div className="text-slate-600 text-sm leading-relaxed font-normal whitespace-pre-wrap">
                 {pos.descrizione}
               </div>
             </div>
 
-            <hr className="border-slate-200 my-8" />
             {pos.tags && pos.tags.length > 0 && (
-              <div>
-                <h2 className="text-xl font-semibold text-slate-900 mb-4">Settori di intervento</h2>
-                <div className="flex flex-wrap gap-3">
-                  {pos.tags.map((t: any) => (
-                    <TagBadge key={t.tag.name} nome={t.tag.name} size="sm" />
-                  ))}
+              <>
+                <hr className="border-slate-100 my-6" />
+                <div>
+                  <h2 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-3">Settori</h2>
+                  <div className="flex flex-wrap gap-2">
+                    {pos.tags.map((t: any) => (
+                      <TagBadge key={t.tag.name} nome={t.tag.name} size="sm" />
+                    ))}
+                  </div>
                 </div>
-              </div>
+              </>
             )}
 
             {competenzeRichieste.length > 0 && (
               <>
-                <hr className="border-slate-200 my-8" />
+                <hr className="border-slate-100 my-6" />
                 <div>
-                  <h2 className="text-xl font-semibold text-slate-900 mb-4">Competenze richieste</h2>
-                  <div className="flex flex-wrap gap-2.5">
+                  <h2 className="text-xs font-black text-slate-400 uppercase tracking-widest mb-3">Competenze richieste</h2>
+                  <div className="flex flex-wrap gap-2">
                     {competenzeRichieste.map((comp: any) => (
                       <CompetenzaBadge key={comp.id} nome={comp.name} />
                     ))}
@@ -424,13 +347,14 @@ export default async function DettaglioPosizioneVolontario({
             )}
           </div>
 
-          {/* COLONNA DESKTOP INTERATTIVA */}
+          {/* SIDEBAR DESKTOP */}
           <div className="hidden md:block w-[340px] flex-shrink-0 relative">
-            <div className="sticky top-28 bg-white p-6 rounded-2xl border border-slate-200 shadow-[0_12px_28px_rgba(0,0,0,0.12)]">
-              <div className="mb-6">
-                <span className="text-xl font-semibold text-slate-900 capitalize block leading-tight">{dataFormattata}</span>
-                <p className="text-sm text-slate-500 mt-1">{formattaOra(pos.ora_inizio)} - {formattaOra(pos.ora_fine)}</p>
+            <div className="sticky top-28 bg-white p-6 rounded-3xl border border-slate-200/80 shadow-xl space-y-6">
+              <div>
+                <span className="text-2xl font-extrabold text-slate-900 capitalize block leading-tight">{dataFormattata}</span>
+                <p className="text-xs font-semibold text-slate-500 mt-1">{orarioFormattato}</p>
               </div>
+
               <PannelloCandidatura 
                 posizioneId={id} 
                 slug={cleanSlugWithoutQueries} 
@@ -438,25 +362,45 @@ export default async function DettaglioPosizioneVolontario({
                 associazioneNome={nomeAssociazione} 
                 competenzeRichieste={competenzeRichieste}
               />
-              <p className="text-center text-xs text-slate-500 mt-4">L'associazione valuterà il tuo profilo.</p>
+              
+              <p className="text-center text-[11px] font-semibold text-slate-400">
+                Processo di selezione gestito dall'associazione
+              </p>
             </div>
           </div>
+
         </div>
       </div>
 
-      {/* FOOTER MOBILE INTERATTIVO */}
-      <div className="md:hidden fixed bottom-0 left-0 w-full bg-white border-t border-slate-200 px-5 py-4 z-50 flex flex-col gap-3 pb-[calc(1rem+env(safe-area-inset-bottom))] shadow-[0_-8px_24px_rgba(0,0,0,0.06)]">
-        <div className="flex flex-col min-w-0">
-          <span className="font-semibold text-slate-900 truncate capitalize">{dataFormattata}</span>
-          <span className="text-sm text-slate-500">{formattaOra(pos.ora_inizio)} - {formattaOra(pos.ora_fine)}</span>
+      {/* 🔴 BARRA MOBILE PREMIUM STILE AIRBNB / UBER */}
+      <div className="md:hidden fixed bottom-0 left-0 right-0 z-[99999] bg-white/95 backdrop-blur-2xl border-t border-slate-200/80 px-5 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] shadow-[0_-10px_35px_rgba(0,0,0,0.08)] flex items-center justify-between gap-3">
+        
+        {/* COLONNA SINISTRA: DATA ED ORARIO */}
+        <div className="flex flex-col min-w-0 flex-1 pr-1">
+          <div className="flex items-center gap-1.5 text-slate-900">
+            <span className="font-extrabold text-sm truncate capitalize leading-snug tracking-tight">
+              {dataFormattata}
+            </span>
+          </div>
+          <div className="flex items-center gap-1 text-slate-500 mt-0.5">
+            <Clock className="w-3 h-3 text-slate-400 shrink-0" />
+            <span className="text-xs font-semibold truncate leading-none">
+              {orarioFormattato}
+            </span>
+          </div>
         </div>
-        <PannelloCandidatura 
-          posizioneId={id} 
-          slug={cleanSlugWithoutQueries} 
-          associazioneId={pos.associazione_id} 
-          associazioneNome={nomeAssociazione} 
-          competenzeRichieste={competenzeRichieste}
-        />
+
+        {/* COLONNA DESTRA: PULSANTE CANDIDATURA COMPATTO & BILANCIATO */}
+        <div className="shrink-0 flex items-center justify-end max-w-[50%]">
+          <PannelloCandidatura 
+            posizioneId={id} 
+            slug={cleanSlugWithoutQueries} 
+            associazioneId={pos.associazione_id} 
+            associazioneNome={nomeAssociazione} 
+            competenzeRichieste={competenzeRichieste}
+          />
+        </div>
+
       </div>
     </div>
   )

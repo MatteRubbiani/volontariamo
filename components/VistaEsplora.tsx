@@ -6,6 +6,7 @@ import { createBrowserClient } from '@supabase/ssr'
 import PosizioneCard from '@/components/PosizioneCard'
 import MappaWrapper from '@/components/MappaWrapper'
 import SearchPill from '@/components/SearchPill'
+import { X } from 'lucide-react'
 
 interface MapBounds {
   sw: { lat: number; lng: number };
@@ -22,27 +23,25 @@ function getBoundsFromCenter(lat: number, lng: number): MapBounds {
   };
 }
 
-// ⚡ SKELETON CARD PROFESSIONALE: Evita lo sfarfallio visivo e dà un feedback di caricamento istantaneo
 function PosizioneCardSkeleton() {
   return (
-    <div className="w-full bg-white rounded-3xl p-6 border border-slate-100 animate-pulse flex flex-col gap-4">
+    <div className="w-full bg-white rounded-3xl p-5 border border-slate-100 animate-pulse flex flex-col gap-4">
       <div className="flex justify-between items-start gap-4">
-        <div className="flex-1 space-y-3">
-          <div className="w-1/3 h-4 bg-slate-200 rounded-full" />
-          <div className="w-5/6 h-6 bg-slate-200 rounded-full" />
+        <div className="flex-1 space-y-2.5">
+          <div className="w-1/3 h-3.5 bg-slate-200 rounded-full" />
+          <div className="w-5/6 h-5 bg-slate-200 rounded-full" />
         </div>
-        <div className="w-12 h-12 bg-slate-100 rounded-full shrink-0" />
+        <div className="w-10 h-10 bg-slate-100 rounded-full shrink-0" />
       </div>
-      <div className="w-full h-16 bg-slate-100/70 rounded-2xl" />
-      <div className="flex gap-2.5 pt-2">
-        <div className="w-20 h-7 bg-slate-200/80 rounded-full" />
-        <div className="w-24 h-7 bg-slate-200/80 rounded-full" />
+      <div className="w-full h-14 bg-slate-100/70 rounded-2xl" />
+      <div className="flex gap-2 pt-1">
+        <div className="w-16 h-6 bg-slate-200/80 rounded-full" />
+        <div className="w-20 h-6 bg-slate-200/80 rounded-full" />
       </div>
     </div>
   )
 }
 
-// 🟢 Definiamo l'interfaccia per le props del componente
 interface VistaEsploraProps {
   initialData?: any[];
 }
@@ -60,7 +59,7 @@ export default function VistaEsplora({ initialData = [] }: VistaEsploraProps) {
   const [hoveredId, setHoveredId] = useState<string | null>(null)
   const [focusedId, setFocusedId] = useState<string | null>(null)
   
-  // 📱 STATI PER IL DRAGGING E MAPPA
+  // STATI DRAWER E MOBILE
   const [isDrawerOpen, setIsDrawerOpen] = useState(false)
   const [dragY, setDragY] = useState(0)
   const [isDragging, setIsDragging] = useState(false)
@@ -68,7 +67,6 @@ export default function VistaEsplora({ initialData = [] }: VistaEsploraProps) {
   const wasDragging = useRef(false)
   const boundsRef = useRef<MapBounds | null>(null)
   const isFirstLoad = useRef(true)
-  const checkedCap = useRef(false)
   const debounceTimer = useRef<any>(null)
 
   const q = searchParams.get('q') || null
@@ -87,6 +85,7 @@ export default function VistaEsplora({ initialData = [] }: VistaEsploraProps) {
 
   const selectedPos = posizioni.find(p => p.id === focusedId)
 
+  // TOUCH & DRAG DRAWER
   const handlePointerDown = (e: React.PointerEvent) => {
     e.currentTarget.setPointerCapture(e.pointerId)
     pointerStartY.current = e.clientY
@@ -106,7 +105,7 @@ export default function VistaEsplora({ initialData = [] }: VistaEsploraProps) {
   const handlePointerUp = (e: React.PointerEvent) => {
     if (!isDragging) return
     setIsDragging(false)
-    const threshold = 50
+    const threshold = 40
     if (dragY < -threshold && !isDrawerOpen) setIsDrawerOpen(true)
     else if (dragY > threshold && isDrawerOpen) { setIsDrawerOpen(false); setFocusedId(null) }
     setDragY(0)
@@ -114,35 +113,9 @@ export default function VistaEsplora({ initialData = [] }: VistaEsploraProps) {
     e.currentTarget.releasePointerCapture(e.pointerId)
   }
 
-  useEffect(() => {
-    async function autoCenterUser() {
-      if (checkedCap.current) return
-      checkedCap.current = true
-      if (searchParams.get('lat') || searchParams.get('indirizzo')) return
-      const { data: { user } } = await supabase.auth.getUser()
-      if (!user) return
-      const { data: vol } = await supabase.from('volontari').select('cap, citta_residenza').eq('id', user.id).single()
-      if (vol?.cap) {
-        try {
-          const res = await fetch(`https://nominatim.openstreetmap.org/search?postalcode=${vol.cap}&country=italy&format=json`)
-          const data = await res.json()
-          if (data && data.length > 0) {
-            const params = new URLSearchParams(searchParams.toString())
-            params.set('lat', data[0].lat)
-            params.set('lng', data[0].lon)
-            params.set('indirizzo', vol.citta_residenza || vol.cap) 
-            router.replace(`?${params.toString()}`)
-          }
-        } catch (err) { console.error(err) }
-      }
-    }
-    autoCenterUser()
-  }, [searchParams, router, supabase])
-
   const fetchPosizioni = async (targetBounds: MapBounds) => {
     setLoading(true)
     try {
-      // Chiamata alla RPC avanzata di Supabase
       const { data, error } = await supabase.rpc('ricerca_avanzata_posizioni', {
         min_lat: targetBounds.sw.lat,
         min_lng: targetBounds.sw.lng,
@@ -157,7 +130,6 @@ export default function VistaEsplora({ initialData = [] }: VistaEsploraProps) {
       })
       if (error) throw error
       
-      // ✨ NORMALIZZAZIONE DATI PER IL COINVOLGIMENTO DEGLI SLUG
       const formattedData = (data || []).map((pos: any) => ({
         ...pos,
         slug: pos.slug || null, 
@@ -172,7 +144,6 @@ export default function VistaEsplora({ initialData = [] }: VistaEsploraProps) {
     } catch (error) { console.error(error) } finally { setLoading(false) }
   }
 
-  // ⚡ DEBOUNCE PROFESSIONALE OTTIMIZZATO: Ridotto da 1500ms a 350ms
   const handleBoundsChange = (b: MapBounds) => {
     boundsRef.current = b;
     if (debounceTimer.current) clearTimeout(debounceTimer.current);
@@ -199,7 +170,7 @@ export default function VistaEsplora({ initialData = [] }: VistaEsploraProps) {
   }, [q, tipo, tagsStr, competenzeStr, lat, lng, filterData, giorniStr])
 
   return (
-    <div className="flex flex-col lg:flex-row w-full h-[calc(100dvh-76px)] overflow-hidden relative bg-slate-50 lg:bg-white">
+    <div className="flex flex-col lg:flex-row w-full h-[calc(100dvh-3.5rem)] overflow-hidden relative bg-slate-50 lg:bg-white">
       <style dangerouslySetInnerHTML={{ __html: `.leaflet-popup-pane { display: none !important; }` }} />
 
       {/* 🚀 SIDEBAR DESKTOP */}
@@ -220,7 +191,6 @@ export default function VistaEsplora({ initialData = [] }: VistaEsploraProps) {
         
         <div className="grid grid-cols-1 xl:grid-cols-2 gap-6 pb-20 pr-2">
           {loading ? (
-            // ✨ Renderizziamo gli Skeletons durante il caricamento per una reattività immediata
             <>
               <PosizioneCardSkeleton />
               <PosizioneCardSkeleton />
@@ -250,17 +220,19 @@ export default function VistaEsplora({ initialData = [] }: VistaEsploraProps) {
       {/* 🗺️ AREA MAPPA E MOBILE */}
       <div className="w-full h-full lg:w-[45%] xl:w-[45%] order-1 lg:order-2 z-20 relative bg-white lg:p-5 xl:p-6 lg:pl-0">
         
-        {/* PILLOLA MOBILE */}
-        <div className={`lg:hidden absolute top-4 left-1/2 -translate-x-1/2 z-[1002] w-[92%] max-w-[400px] transition-all duration-300 ${isDrawerOpen ? 'opacity-0 -translate-y-10 pointer-events-none' : 'opacity-100 translate-y-0'}`}>
+        {/* BARRA RICERCA MOBILE */}
+        <div className={`lg:hidden absolute top-3 left-1/2 -translate-x-1/2 z-[1002] w-[92%] max-w-[400px] transition-all duration-300 ${
+          isDrawerOpen ? 'opacity-0 -translate-y-10 pointer-events-none' : 'opacity-100 translate-y-0'
+        }`}>
           <SearchPill />
         </div>
 
-        {/* LA CORNICE MAPPA */}
+        {/* CONTENITORE MAPPA */}
         <div className="w-full h-full relative lg:rounded-3xl overflow-hidden lg:shadow-[0_8px_30px_rgba(0,0,0,0.08)] lg:border border-slate-200 bg-slate-100">
           
           {loading && (
-            <div className="absolute top-24 lg:top-6 left-1/2 -translate-x-1/2 z-[999] pointer-events-none">
-              <div className="bg-white/90 backdrop-blur-md px-4 py-2 rounded-full shadow-md border border-slate-100/55 flex items-center gap-2 animate-in fade-in zoom-in duration-200">
+            <div className="absolute top-20 lg:top-6 left-1/2 -translate-x-1/2 z-[999] pointer-events-none">
+              <div className="bg-white/95 backdrop-blur-md px-4 py-2 rounded-full shadow-lg border border-slate-200/80 flex items-center gap-2 animate-in fade-in zoom-in duration-200">
                 <div className="h-3.5 w-3.5 animate-spin rounded-full border-2 border-slate-900 border-t-transparent" />
                 <span className="text-xs font-bold text-slate-800">Cerco nell'area...</span>
               </div>
@@ -279,39 +251,45 @@ export default function VistaEsplora({ initialData = [] }: VistaEsploraProps) {
             forcedLat={lat} forcedLng={lng} forcedZoom={12} 
           />
 
-          {/* CARD FLUTTUANTE SULLA MAPPA */}
+          {/* CARD SELEZIONATA SULLA MAPPA (FLUTTUANTE SOPRA LA BOTTOM NAV) */}
           {selectedPos && (
             <div 
-              className={`absolute left-1/2 -translate-x-1/2 z-[1001] flex flex-col items-end gap-3 w-[92%] sm:w-[380px] pointer-events-none transition-all duration-500 ease-[cubic-bezier(0.32,0.72,0,1)] ${
+              className={`absolute left-1/2 -translate-x-1/2 z-[1001] flex flex-col items-end gap-2.5 w-[92%] sm:w-[380px] pointer-events-none transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] ${
                 isDrawerOpen ? 'opacity-0 translate-y-10 pointer-events-none' : 'opacity-100 translate-y-0 animate-in fade-in slide-in-from-bottom-8'
               }`}
-              style={{ bottom: 'calc(env(safe-area-inset-bottom) + 1.5rem)' }}
+              style={{ bottom: 'calc(env(safe-area-inset-bottom) + 5.5rem)' }}
             >
-              <button onClick={() => setFocusedId(null)} className="p-2.5 bg-white shadow-xl rounded-full text-slate-900 pointer-events-auto hover:bg-slate-100 transition-colors border border-slate-200 active:scale-95">
-                <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-4 h-4"><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>
+              <button 
+                onClick={() => setFocusedId(null)} 
+                className="p-2 bg-slate-950 text-white shadow-2xl rounded-full pointer-events-auto hover:bg-black transition-transform active:scale-90 border border-slate-800"
+              >
+                <X className="w-4 h-4" />
               </button>
-              <div className="w-full bg-white rounded-3xl shadow-[0_20px_60px_-15px_rgba(0,0,0,0.3)] overflow-hidden border border-slate-100 pointer-events-auto">
+              <div className="w-full bg-white rounded-3xl shadow-[0_20px_60px_-15px_rgba(0,0,0,0.25)] overflow-hidden border border-slate-200/80 pointer-events-auto">
                 <PosizioneCard posizione={selectedPos} layout="horizontal" />
               </div>
             </div>
           )}
         </div>
 
-        {/* 📱 TENDINA DRAWER MOBILE */}
+        {/* 📱 TENDINA DRAWER MOBILE (SOSPESA PERFETTAMENTE SOPRA LA BOTTOM NAV) */}
         <div 
-          className={`lg:hidden absolute inset-x-0 bottom-0 z-[1000] bg-white rounded-t-[2.5rem] shadow-[0_-15px_40px_rgba(0,0,0,0.12)] border-t border-slate-100 flex flex-col ${!isDragging ? 'transition-transform duration-500 ease-[cubic-bezier(0.32,0.72,0,1)]' : ''}`}
+          className={`lg:hidden fixed inset-x-0 bottom-0 z-[1000] bg-white rounded-t-[2.5rem] shadow-[0_-12px_40px_rgba(0,0,0,0.15)] border-t border-slate-200/80 flex flex-col ${
+            !isDragging ? 'transition-transform duration-500 ease-[cubic-bezier(0.16,1,0.3,1)]' : ''
+          }`}
           style={{ 
-            height: '85dvh',
+            height: '82dvh',
             transform: selectedPos && !isDrawerOpen
                 ? 'translateY(100%)' 
                 : isDrawerOpen 
                     ? `translateY(${Math.max(0, dragY)}px)` 
-                    : `translateY(calc(100% - 65px - env(safe-area-inset-bottom) + ${Math.min(0, dragY)}px))`,
+                    : `translateY(calc(100% - 65px - env(safe-area-inset-bottom) - 4.5rem + ${Math.min(0, dragY)}px))`,
             touchAction: 'none'
           }}
         >
+          {/* LINGUETTA HANDLER */}
           <div 
-            className="w-full h-[65px] flex-shrink-0 flex flex-col items-center justify-start pt-4 cursor-grab active:cursor-grabbing touch-none"
+            className="w-full h-[60px] shrink-0 flex flex-col items-center justify-start pt-3 cursor-grab active:cursor-grabbing touch-none select-none"
             onPointerDown={handlePointerDown}
             onPointerMove={handlePointerMove}
             onPointerUp={handlePointerUp}
@@ -319,23 +297,23 @@ export default function VistaEsplora({ initialData = [] }: VistaEsploraProps) {
                if (!wasDragging.current) setIsDrawerOpen(!isDrawerOpen); 
             }}
           >
-            <div className="w-12 h-1.5 bg-slate-300 rounded-full mb-2.5" />
-            <span className="text-[10px] font-bold uppercase tracking-widest text-slate-500 select-none">
-              {isDrawerOpen ? 'Scorri in basso per chiudere' : `${posizioni.length} attività`}
+            <div className="w-10 h-1.5 bg-slate-300 rounded-full mb-2" />
+            <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-500">
+              {isDrawerOpen ? 'Tocca per chiudere' : `${posizioni.length} attività trovate`}
             </span>
           </div>
 
-          <div className="px-5 pb-[calc(env(safe-area-inset-bottom)+2rem)] overflow-y-auto flex-grow flex flex-col gap-5 pt-1">
+          {/* LISTA RISULTATI INTERNA */}
+          <div className="px-4 pb-28 overflow-y-auto flex-grow flex flex-col gap-4 pt-1">
             {loading ? (
-              // ✨ Skeleton loading anche per il drawer mobile per evitare lag fisici nel render del DOM
               <>
                 <PosizioneCardSkeleton />
                 <PosizioneCardSkeleton />
                 <PosizioneCardSkeleton />
               </>
             ) : posizioni.length === 0 ? (
-              <div className="py-12 text-center text-slate-400 border border-dashed border-slate-200 rounded-3xl bg-slate-50/50">
-                Nessuna attività in questa zona.
+              <div className="py-12 text-center text-slate-400 border border-dashed border-slate-200 rounded-3xl bg-slate-50/50 text-xs font-semibold">
+                Nessuna attività in questa zona.<br/>Sposta la mappa per esplorare altrove!
               </div>
             ) : (
               posizioni.map((pos: any) => (

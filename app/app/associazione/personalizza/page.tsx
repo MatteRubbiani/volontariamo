@@ -4,10 +4,10 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { createBrowserClient } from '@supabase/ssr'
-import { DndContext, PointerSensor, closestCenter, DragEndEvent, useSensor, useSensors } from '@dnd-kit/core'
+import { DndContext, PointerSensor, TouchSensor, MouseSensor, closestCenter, DragEndEvent, useSensor, useSensors } from '@dnd-kit/core'
 import { SortableContext, arrayMove, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import { FileText, GripVertical, Image as ImageIcon, LayoutGrid, Link2, Plus, Quote, Save, Settings2, Sparkles, Trash2, Users, Loader2, UploadCloud, Heart, Briefcase, MessageSquare, Video, Mail, Target, Eye, Move } from 'lucide-react'
+import { FileText, GripVertical, Image as ImageIcon, LayoutGrid, Link2, Plus, Quote, Save, Settings2, Sparkles, Trash2, Users, Loader2, UploadCloud, Heart, Briefcase, MessageSquare, Video, Mail, Target, Eye, Move, ChevronUp, ChevronDown } from 'lucide-react'
 import PosizioneCard from '@/components/PosizioneCard'
 
 // ==========================================
@@ -66,17 +66,28 @@ async function uploadFileToSupabase(file: File, folder: 'images' | 'documents'):
 }
 
 // ==========================================
-// 3. COMPONENTI UI PREMIUM (EDITING IN-PLACE)
+// 3. COMPONENTI UI PREMIUM (CON FOCUS & KEYBOARD AUTO-SCROLL)
 // ==========================================
 function EditableField({ value, placeholder, onChange, className = '', inputClassName = '', multiline = false, tag = 'div', disableWFull = false }: any) {
   const [isEditing, setIsEditing] = useState(false)
   const ref = useRef<any>(null)
 
-  useEffect(() => { if (isEditing) window.requestAnimationFrame(() => ref.current?.focus()) }, [isEditing])
+  // 🟢 AUTO-SCROLL SULLA TASTIERA MOBILE + FOCUS INTELLIGENTE
+  useEffect(() => { 
+    if (isEditing) {
+      window.requestAnimationFrame(() => {
+        if (ref.current) {
+          ref.current.focus()
+          ref.current.scrollIntoView({ behavior: 'smooth', block: 'center' })
+        }
+      })
+    } 
+  }, [isEditing])
 
   if (isEditing) {
     const widthClass = disableWFull ? '' : 'w-full'
-    const commonClasses = `${widthClass} bg-slate-50 outline-none ring-4 ring-slate-100/50 rounded-xl transition-all p-2 -ml-2 text-inherit ${inputClassName} ${className}`
+    // 🟢 text-base (16px) PREVIENE LO ZOOM AUTOMATICO SU SAFARI MOBILE
+    const commonClasses = `${widthClass} bg-slate-50 outline-none ring-4 ring-slate-100/50 rounded-xl transition-all p-2 -ml-2 text-base md:text-inherit ${inputClassName} ${className}`
     if (multiline) {
       return <textarea ref={ref} value={value} onChange={e => onChange(e.target.value)} onBlur={() => setIsEditing(false)} 
         onKeyDown={e => { if (e.key === 'Escape') setIsEditing(false) }}
@@ -123,7 +134,7 @@ function EditableImage({ value, onChange, className = '', children }: any) {
         </div>
       )}
       {value && !isUploading && (
-        <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-all duration-300 flex items-center justify-center gap-3 z-10 backdrop-blur-[2px]">
+        <div className="absolute inset-0 bg-black/20 md:opacity-0 group-hover:opacity-100 transition-all duration-300 flex items-center justify-center gap-3 z-10 backdrop-blur-[2px]">
           <button onClick={(e) => { e.stopPropagation(); inputRef.current?.click() }} className="p-2 bg-white text-black rounded-full shadow-2xl hover:scale-110 transition-all" title="Sostituisci"><UploadCloud className="w-3.5 h-3.5" /></button>
           <button onClick={(e) => { e.stopPropagation(); onChange('') }} className="p-2 bg-red-500 text-white rounded-full shadow-2xl hover:scale-110 transition-all" title="Rimuovi"><Trash2 className="w-3.5 h-3.5" /></button>
         </div>
@@ -183,101 +194,54 @@ function EditableDocumentItem({ doc, onFileUploaded, onRemove, onNameChange }: {
   )
 }
 
-// COMPONENTE DRAG-TO-PAN PER COPERTINA E LOGO
-function InteractiveCropImage({ url, x = 50, y = 50, zoom = 1, isAxisYOnly = false, onChange }: { url: string, x?: number, y?: number, zoom?: number, isAxisYOnly?: boolean, onChange: (data: { x: number, y: number, zoom: number }) => void }) {
-  const containerRef = useRef<HTMLDivElement>(null)
-  const [isDragging, setIsDragging] = useState(false)
-  const dragStart = useRef({ x: 0, y: 0, posX: 50, posY: 50 })
-
-  const handleMouseDown = (e: React.MouseEvent) => {
-    if (!url || e.button !== 0) return
-    e.preventDefault()
-    setIsDragging(true)
-    dragStart.current = { x: e.clientX, y: e.clientY, posX: x, posY: y }
-  }
-
-  const handleWheel = (e: React.WheelEvent) => {
-    if (!url) return
-    e.preventDefault()
-    const zoomFactor = e.deltaY < 0 ? 0.05 : -0.05
-    let newZoom = zoom + zoomFactor
-    newZoom = Math.max(1, Math.min(3, newZoom))
-    onChange({ x, y, zoom: parseFloat(newZoom.toFixed(2)) })
-  }
-
-  useEffect(() => {
-    const handleMouseMove = (e: MouseEvent) => {
-      if (!isDragging || !containerRef.current) return
-      const rect = containerRef.current.getBoundingClientRect()
-      
-      const deltaX = ((e.clientX - dragStart.current.x) / rect.width) * 100 / zoom
-      const deltaY = ((e.clientY - dragStart.current.y) / rect.height) * 100 / zoom
-
-      let newX = dragStart.current.posX - (isAxisYOnly ? 0 : deltaX)
-      let newY = dragStart.current.posY - deltaY
-
-      newX = Math.max(0, Math.min(100, newX))
-      newY = Math.max(0, Math.min(100, newY))
-
-      onChange({ x: Math.round(newX), y: Math.round(newY), zoom })
-    }
-
-    const handleMouseUp = () => { if (isDragging) setIsDragging(false) }
-
-    if (isDragging) {
-      window.addEventListener('mousemove', handleMouseMove)
-      window.addEventListener('mouseup', handleMouseUp)
-    }
-    return () => {
-      window.addEventListener('mousemove', handleMouseMove)
-      window.removeEventListener('mouseup', handleMouseUp)
-    }
-  }, [isDragging, x, y, zoom, isAxisYOnly])
-
-  return (
-    <div ref={containerRef} onMouseDown={handleMouseDown} onWheel={handleWheel} className={`w-full h-full relative overflow-hidden select-none ${url ? 'cursor-grab active:cursor-grabbing' : ''}`}>
-      {url ? (
-        <img src={url} className="w-full h-full object-cover pointer-events-none origin-center" 
-          style={{ 
-            objectPosition: `${isAxisYOnly ? 50 : x}% ${y}%`, 
-            transform: `scale(${zoom})` 
-          }} 
-          alt="Inquadratura" 
-        />
-      ) : (
-        <div className="absolute inset-0 flex flex-col items-center justify-center text-slate-400">
-          <ImageIcon className="w-8 h-8 mb-2 opacity-40" />
-          <span className="text-[10px] uppercase font-bold tracking-widest">Carica Immagine</span>
-        </div>
-      )}
-      
-      {url && (
-        <div className="absolute top-3 left-3 bg-black/60 backdrop-blur-md text-white text-[9px] font-bold px-2 py-1 rounded-lg flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none tracking-wide">
-          <Move className="w-3 h-3" /> Drag per muovere • Usa la rotella per Zoomare
-        </div>
-      )}
-    </div>
-  )
-}
-
-// FIX DRAG & DROP DEFORMAZIONE: Usiamo CSS.Translate e non Transform
-function SortableBlockShell({ block, onRemove, children, locked = false }: any) {
+// 🟢 WRAPPER BLOCCO CON TRANSIZIONI CSS E ID PER AUTO-SCROLL
+function SortableBlockShell({ block, onRemove, onMoveUp, onMoveDown, isFirst, isLast, children, locked = false }: any) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: block.id, disabled: locked })
   
-  // Translate previene lo schiacciamento nativo causato da Transform
+  // 🟢 TRANSIZIONE MORBIDA PER LO SPOSTAMENTO DEI BLOCCHI
   const style = { 
     transform: CSS.Translate.toString(transform), 
-    transition,
+    transition: transition || 'transform 300ms cubic-bezier(0.2, 0, 0, 1)',
     zIndex: isDragging ? 50 : 1,
   }
 
   return (
-    <div ref={setNodeRef} style={style} className={`group flex relative w-full rounded-[2.5rem] transition-all duration-200 ${isDragging ? 'opacity-95 shadow-2xl bg-white ring-1 ring-slate-200' : ''}`}>
-      <div className={`absolute -left-12 top-6 flex flex-col items-center gap-1 opacity-0 transition-opacity duration-200 ${!locked && 'group-hover:opacity-100'}`}>
+    <div 
+      id={`block-${block.id}`}
+      ref={setNodeRef} 
+      style={style} 
+      className={`group flex flex-col relative w-full rounded-[2.5rem] transition-all duration-300 ${isDragging ? 'opacity-95 shadow-2xl bg-white ring-1 ring-slate-200' : ''}`}
+    >
+      
+      {/* CONTROLLI MOBILE (Barra orizzontale in alto al blocco) */}
+      {!locked && (
+        <div className="md:hidden flex items-center justify-between px-3 py-1.5 bg-slate-100/90 backdrop-blur-md rounded-2xl mb-1 border border-slate-200/60 shadow-xs">
+          <div className="flex items-center gap-1">
+            <button type="button" onClick={onMoveUp} disabled={isFirst} className="p-1.5 bg-white text-slate-700 active:scale-90 disabled:opacity-30 rounded-xl shadow-xs border border-slate-200/80">
+              <ChevronUp className="w-4 h-4" />
+            </button>
+            <button type="button" onClick={onMoveDown} disabled={isLast} className="p-1.5 bg-white text-slate-700 active:scale-90 disabled:opacity-30 rounded-xl shadow-xs border border-slate-200/80">
+              <ChevronDown className="w-4 h-4" />
+            </button>
+          </div>
+          
+          <div className="flex items-center gap-2">
+            <button {...attributes} {...listeners} className="p-1.5 bg-white text-slate-600 rounded-xl shadow-xs border border-slate-200/80 flex items-center gap-1 text-[10px] font-bold">
+              <GripVertical className="w-4 h-4" /> Trascina
+            </button>
+            <button type="button" onClick={() => onRemove(block.id)} className="p-1.5 bg-white text-rose-600 active:scale-90 rounded-xl shadow-xs border border-slate-200/80">
+              <Trash2 className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* CONTROLLI DESKTOP (Sidecar a sinistra) */}
+      <div className={`hidden md:flex absolute -left-12 top-6 flex-col items-center gap-1 opacity-0 transition-opacity duration-200 ${!locked && 'group-hover:opacity-100'}`}>
         <button {...attributes} {...listeners} className="p-2 text-slate-400 hover:text-black hover:bg-slate-100 rounded-lg cursor-grab active:cursor-grabbing shadow-sm bg-white border border-slate-100"><GripVertical className="h-5 w-5" /></button>
         <button onClick={() => onRemove(block.id)} className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg shadow-sm bg-white border border-slate-100"><Trash2 className="h-4 w-4" /></button>
       </div>
-      {/* Ridotto il padding interno verticale per compattare gli spazi stile Notion */}
+
       <div className={`flex-1 w-full rounded-[2.5rem] px-2 py-1 transition-colors ${!isDragging && 'hover:bg-slate-50/50'}`}>
         {children}
       </div>
@@ -375,7 +339,7 @@ const Blocks = {
           )}
 
           {!isEditing && (
-            <div className="absolute top-3 right-3 flex items-center bg-white/95 backdrop-blur-md border border-slate-200 p-1.5 rounded-xl shadow-sm gap-1 opacity-0 group-hover/cover:opacity-100 transition-opacity z-30">
+            <div className="absolute top-3 right-3 flex items-center bg-white/95 backdrop-blur-md border border-slate-200 p-1.5 rounded-xl shadow-sm gap-1 md:opacity-0 group-hover/cover:opacity-100 transition-opacity z-30">
                <button onClick={() => coverInputRef.current?.click()} className="text-[11px] font-bold text-slate-700 hover:text-black hover:bg-slate-100 px-2 py-1 rounded-lg transition-colors">Cambia</button>
                {content.coverUrl && <button onClick={() => startReposition('cover')} className="text-[11px] font-bold text-slate-700 hover:text-black hover:bg-slate-100 px-2 py-1 rounded-lg transition-colors">Riposiziona</button>}
                {content.coverUrl && <button onClick={() => onChange({...content, coverUrl: ''})} className="text-slate-400 hover:text-red-500 p-1 rounded-lg hover:bg-red-50 ml-1"><Trash2 className="w-3.5 h-3.5" /></button>}
@@ -431,15 +395,15 @@ const Blocks = {
           </div>
 
           {!isEditing && (
-            <div className="absolute top-0 -right-2 translate-x-full flex flex-col bg-white/95 backdrop-blur-md border border-slate-200 p-1.5 rounded-xl shadow-sm gap-1 opacity-0 group-hover/logo:opacity-100 transition-opacity z-30">
-               <button onClick={() => logoInputRef.current?.click()} className="text-[10px] font-bold text-slate-700 hover:text-black hover:bg-slate-100 px-2 py-1 rounded-lg transition-colors text-left">Cambia Logo</button>
-               {content.logoUrl && <button onClick={() => startReposition('logo')} className="text-[10px] font-bold text-slate-700 hover:text-black hover:bg-slate-100 px-2 py-1 rounded-lg transition-colors text-left">Riposiziona</button>}
-               {content.logoUrl && <button onClick={() => onChange({...content, logoUrl: ''})} className="text-[10px] font-bold text-red-500 hover:bg-red-50 px-2 py-1 rounded-lg transition-colors text-left mt-1 border-t border-slate-100 pt-1">Rimuovi</button>}
+            <div className="absolute top-full left-0 mt-2 md:top-0 md:left-auto md:-right-2 md:translate-x-full flex flex-row md:flex-col bg-white/95 backdrop-blur-md border border-slate-200 p-1.5 rounded-xl shadow-md gap-1 md:opacity-0 group-hover/logo:opacity-100 transition-opacity z-30">
+               <button onClick={() => logoInputRef.current?.click()} className="text-[10px] font-bold text-slate-700 hover:text-black hover:bg-slate-100 px-2 py-1 rounded-lg transition-colors text-left whitespace-nowrap">Cambia Logo</button>
+               {content.logoUrl && <button onClick={() => startReposition('logo')} className="text-[10px] font-bold text-slate-700 hover:text-black hover:bg-slate-100 px-2 py-1 rounded-lg transition-colors text-left whitespace-nowrap">Riposiziona</button>}
+               {content.logoUrl && <button onClick={() => onChange({...content, logoUrl: ''})} className="text-[10px] font-bold text-red-500 hover:bg-red-50 px-2 py-1 rounded-lg transition-colors text-left whitespace-nowrap">Rimuovi</button>}
             </div>
           )}
 
           {isEditing && (
-            <div className="absolute top-1/2 -right-4 translate-x-full -translate-y-1/2 flex flex-col bg-white/95 backdrop-blur-md border border-slate-200 p-1.5 rounded-2xl shadow-2xl gap-2 z-40 min-w-[120px]">
+            <div className="absolute top-full left-0 mt-2 md:top-1/2 md:left-auto md:-right-4 md:translate-x-full md:-translate-y-1/2 flex flex-col bg-white/95 backdrop-blur-md border border-slate-200 p-2 rounded-2xl shadow-2xl gap-2 z-40 min-w-[140px]">
                <div className="text-[10px] text-center font-bold text-slate-400 uppercase tracking-wider pt-1">Zoom</div>
                <div className="flex bg-slate-100 rounded-xl p-1 gap-1 w-full justify-between">
                  <button onClick={() => adjustZoom(-0.1)} className="w-8 h-8 flex items-center justify-center bg-white rounded-lg shadow-sm text-slate-600 hover:text-black font-bold">-</button>
@@ -455,10 +419,9 @@ const Blocks = {
     };
 
     return (
-      // FIX PADDING: Ridotto il margin bottom della hero (pb-8 -> pb-0) per rimuovere spazio eccessivo col primo blocco
       <div className="relative w-full group/heroblock pt-4 pb-0">
         {renderCover()}
-        <div className={`px-4 md:px-8 relative -mt-10 md:-mt-12 flex flex-col items-start ${editMode === 'cover' ? 'opacity-30 pointer-events-none' : 'opacity-100'} transition-opacity duration-300`}>
+        <div className={`px-2 md:px-8 relative -mt-10 md:-mt-12 flex flex-col items-start ${editMode === 'cover' ? 'opacity-30 pointer-events-none' : 'opacity-100'} transition-opacity duration-300`}>
           {renderLogo()}
           <div className="mt-4 w-full space-y-1 pointer-events-auto">
             <EditableField tag="span" value={content.eyebrow} placeholder="Es. Ente del Terzo Settore" onChange={(n: string) => onChange({...content, eyebrow: n})} className="text-[10px] md:text-xs font-bold tracking-[0.2em] uppercase text-slate-400" />
@@ -490,14 +453,14 @@ const Blocks = {
           )}
         </div>
         
-        <div className="flex flex-wrap justify-center items-center gap-12 md:gap-20 py-4 border-y border-slate-50 w-full text-center">
+        <div className="flex flex-wrap justify-center items-center gap-8 md:gap-20 py-4 border-y border-slate-50 w-full text-center">
           {items.map((stat: any, i: number) => (
             <div key={i} className="min-w-[120px] flex flex-col items-center group/stat relative">
-              <EditableField disableWFull tag="div" value={stat.value} placeholder="0" inputClassName="max-w-[130px] text-center !text-5xl md:!text-7xl font-extrabold tracking-tighter" onChange={(n: string) => { const newItems = [...items]; newItems[i].value = n; onChange({...content, items: newItems}) }} className="text-5xl md:text-7xl font-extrabold tracking-tighter text-slate-900 mb-1 leading-none" />
+              <EditableField disableWFull tag="div" value={stat.value} placeholder="0" inputClassName="max-w-[130px] text-center !text-4xl md:!text-7xl font-extrabold tracking-tighter" onChange={(n: string) => { const newItems = [...items]; newItems[i].value = n; onChange({...content, items: newItems}) }} className="text-4xl md:text-7xl font-extrabold tracking-tighter text-slate-900 mb-1 leading-none" />
               <EditableField disableWFull tag="div" value={stat.label} placeholder="Etichetta" inputClassName="max-w-[150px] text-center text-xs" onChange={(n: string) => { const newItems = [...items]; newItems[i].label = n; onChange({...content, items: newItems}) }} className="text-xs font-bold text-slate-400 uppercase tracking-widest mt-1 px-4" />
               
               {items.length > 1 && (
-                <button onClick={() => onChange({...content, items: items.filter((_: any, idx: number) => idx !== i)})} className="absolute -top-3 -right-2 p-1.5 bg-white text-slate-300 hover:text-red-500 border border-slate-100 rounded-full shadow-sm opacity-0 group-hover/stat:opacity-100 transition-opacity" title="Rimuovi"><Trash2 className="w-3 h-3" /></button>
+                <button onClick={() => onChange({...content, items: items.filter((_: any, idx: number) => idx !== i)})} className="absolute -top-3 -right-2 p-1.5 bg-white text-slate-300 hover:text-red-500 border border-slate-100 rounded-full shadow-sm md:opacity-0 group-hover/stat:opacity-100 transition-opacity" title="Rimuovi"><Trash2 className="w-3 h-3" /></button>
               )}
             </div>
           ))}
@@ -522,15 +485,15 @@ const Blocks = {
     const getGridLayout = () => {
       const count = images.length
       if (count === 1) return 'grid-cols-1'
-      if (count === 2) return 'grid-cols-2 gap-4'
-      if (count === 3) return 'grid-cols-3 gap-4'
-      if (count === 4) return 'grid-cols-2 gap-4'
-      return 'grid-cols-3 gap-3 md:gap-4 auto-rows-[120px] md:auto-rows-[160px]'
+      if (count === 2) return 'grid-cols-2 gap-2 md:gap-4'
+      if (count === 3) return 'grid-cols-1 md:grid-cols-3 gap-3 md:gap-4'
+      if (count === 4) return 'grid-cols-2 gap-2 md:gap-4'
+      return 'grid-cols-2 md:grid-cols-3 gap-2 md:gap-4 auto-rows-[120px] md:auto-rows-[160px]'
     }
 
     const getImageStyle = (index: number) => {
       const count = images.length
-      if (count === 1) return 'w-full h-64 md:h-80 rounded-[2rem]'
+      if (count === 1) return 'w-full h-52 md:h-80 rounded-[2rem]'
       if (count === 2 || count === 3) return 'w-full aspect-[4/3] rounded-2xl md:rounded-[1.75rem]'
       if (count === 4) return 'w-full aspect-video rounded-2xl'
       if (index === 0) return 'col-span-2 row-span-2 rounded-[2rem]'
@@ -569,7 +532,7 @@ const Blocks = {
             ))}
           </div>
         ) : (
-          <div className="p-12 border-2 border-slate-100 border-dashed rounded-3xl bg-slate-50 flex flex-col items-center justify-center text-slate-400">
+          <div className="p-8 md:p-12 border-2 border-slate-100 border-dashed rounded-3xl bg-slate-50 flex flex-col items-center justify-center text-slate-400 text-center">
             <ImageIcon className="w-8 h-8 mb-2 opacity-40" />
             <p className="text-sm font-medium">Nessuna foto inserita. Clicca su aggiungi in alto a destra.</p>
           </div>
@@ -595,7 +558,7 @@ const Blocks = {
   donations: ({ content, onChange }: any) => {
     const handleCopy = (text: string) => { if (text) { navigator.clipboard.writeText(text); alert('Copiato negli appunti!'); } }
     return (
-      <section className="bg-gradient-to-br from-rose-50/50 to-white p-6 md:p-8 rounded-[2.5rem] border border-rose-100/60">
+      <section className="bg-gradient-to-br from-rose-50/50 to-white p-5 md:p-8 rounded-[2.5rem] border border-rose-100/60">
         <EditableField tag="h3" value={content.title || 'Sostieni la nostra causa'} placeholder="Titolo" onChange={(n: string) => onChange({...content, title: n})} className="text-2xl md:text-3xl font-extrabold tracking-tight text-slate-900 mb-2" />
         <EditableField tag="p" value={content.description || 'Ogni piccolo contributo si trasforma in un impatto tangibile per la nostra comunità locale.'} placeholder="Descrizione" multiline onChange={(n: string) => onChange({...content, description: n})} className="text-slate-600 font-light mb-6 max-w-2xl text-base whitespace-pre-wrap" />
         
@@ -645,7 +608,7 @@ const Blocks = {
               </div>
             </div>
           ))}
-          <button onClick={() => onChange({...content, items: [...items, { title: 'Nuovo Progetto', desc: 'Breve descrizione.', img: '' }]})} className="border-2 border-dashed border-slate-200 hover:border-slate-400 rounded-3xl p-8 flex flex-col items-center justify-center text-slate-400 hover:text-slate-600 transition-all min-h-[220px]">
+          <button onClick={() => onChange({...content, items: [...items, { title: 'Nuovo Progetto', desc: 'Breve descrizione.', img: '' }]})} className="border-2 border-dashed border-slate-200 hover:border-slate-400 rounded-3xl p-6 md:p-8 flex flex-col items-center justify-center text-slate-400 hover:text-slate-600 transition-all min-h-[180px]">
             <Plus className="w-8 h-8 mb-2 opacity-50" />
             <span className="text-sm font-bold">Aggiungi un Progetto</span>
           </button>
@@ -657,14 +620,14 @@ const Blocks = {
   testimonials: ({ content, onChange }: any) => {
     const items = content.items || [{ quote: 'Fare volontariato qui ha completamente cambiato la mia prospettiva di comunità.', author: 'Marco, 24 anni', role: 'Volontario dal 2024', avatarUrl: '' }]
     return (
-      <section className="px-2">
+      <section className="px-1 md:px-2">
         <EditableField tag="h3" value={content.title || 'La voce di chi vive l’associazione'} placeholder="Titolo" onChange={(n: string) => onChange({...content, title: n})} className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-6" />
-        <div className="flex gap-6 overflow-x-auto pb-4 snap-x snap-mandatory scrollbar-hide" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
+        <div className="flex gap-4 md:gap-6 overflow-x-auto pb-4 snap-x snap-mandatory scrollbar-hide" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
           {items.map((test: any, i: number) => (
-            <div key={i} className="snap-start shrink-0 w-[90%] md:w-[65%] bg-slate-50 p-6 md:p-8 rounded-[2.5rem] flex flex-col justify-between border border-slate-100/50 min-h-[220px]">
+            <div key={i} className="snap-start shrink-0 w-[92%] md:w-[65%] bg-slate-50 p-6 md:p-8 rounded-[2.5rem] flex flex-col justify-between border border-slate-100/50 min-h-[220px]">
               <div className="space-y-4">
                 <Quote className="w-8 h-8 text-slate-300 transform rotate-180" />
-                <EditableField tag="p" value={test.quote} placeholder="Inserisci la citazione..." multiline onChange={(n: string) => { const newItems = [...items]; newItems[i].quote = n; onChange({...content, items: newItems}) }} className="text-lg md:text-xl font-light text-slate-800 leading-relaxed italic whitespace-pre-wrap" />
+                <EditableField tag="p" value={test.quote} placeholder="Inserisci la citazione..." multiline onChange={(n: string) => { const newItems = [...items]; newItems[i].quote = n; onChange({...content, items: newItems}) }} className="text-base md:text-xl font-light text-slate-800 leading-relaxed italic whitespace-pre-wrap" />
               </div>
               <div className="mt-6 flex items-end justify-between">
                 <div className="flex items-center gap-3">
@@ -680,7 +643,7 @@ const Blocks = {
               </div>
             </div>
           ))}
-          <button onClick={() => onChange({...content, items: [...items, { quote: 'La mia testimonianza.', author: 'Nome Volontario', role: 'Ruolo', avatarUrl: '' }]})} className="snap-start shrink-0 w-[40%] md:w-[25%] border-2 border-dashed border-slate-200 hover:border-slate-400 rounded-[2.5rem] flex flex-col items-center justify-center text-slate-400 hover:text-slate-600 transition-all">
+          <button onClick={() => onChange({...content, items: [...items, { quote: 'La mia testimonianza.', author: 'Nome Volontario', role: 'Ruolo', avatarUrl: '' }]})} className="snap-start shrink-0 w-[50%] md:w-[25%] border-2 border-dashed border-slate-200 hover:border-slate-400 rounded-[2.5rem] flex flex-col items-center justify-center text-slate-400 hover:text-slate-600 transition-all">
             <Plus className="w-6 h-6 mb-1" />
             <span className="text-xs font-bold">Aggiungi</span>
           </button>
@@ -711,25 +674,78 @@ const Blocks = {
             </div>
           )}
         </div>
-        <div className="bg-slate-50 p-3 rounded-2xl border border-slate-100 flex items-center gap-3">
+        <div className="bg-slate-50 p-3 rounded-2xl border border-slate-100 flex flex-col md:flex-row items-start md:items-center gap-2 md:gap-3">
           <span className="text-xs font-bold text-slate-400 uppercase tracking-widest shrink-0 pl-2">Link YouTube:</span>
-          <input type="text" value={content.url || ''} onChange={(e) => onChange({...content, url: e.target.value})} placeholder="Incolla l’URL del video (es. https://www.youtube.com/watch?v=...)" className="w-full text-sm bg-white border border-slate-200 outline-none p-2 rounded-xl text-slate-700" />
+          <input type="text" value={content.url || ''} onChange={(e) => onChange({...content, url: e.target.value})} placeholder="Incolla l’URL del video (es. https://www.youtube.com/watch?v=...)" className="w-full text-base md:text-sm bg-white border border-slate-200 outline-none p-2 rounded-xl text-slate-700" />
         </div>
       </section>
     )
   },
 
   faq: ({ content, onChange }: any) => {
-    const items = content.items || [{ q: '', a: '' }, { q: '', a: '' }]
+    const rawItems = Array.isArray(content.items) ? content.items : []
+    const items = rawItems.length > 0 ? rawItems : [{ q: '', a: '' }]
+
+    const handleAddItem = () => {
+      onChange({ ...content, items: [...items, { q: '', a: '' }] })
+    }
+
+    const handleRemoveItem = (index: number) => {
+      if (items.length <= 1) return
+      const newItems = items.filter((_: any, idx: number) => idx !== index)
+      onChange({ ...content, items: newItems })
+    }
+
+    const handleUpdateItem = (index: number, key: 'q' | 'a', value: string) => {
+      const newItems = [...items]
+      newItems[index] = { ...newItems[index], [key]: value }
+      onChange({ ...content, items: newItems })
+    }
+
     return (
       <section className="space-y-6">
-        <h3 className="text-2xl md:text-3xl font-extrabold tracking-tight text-slate-900 mb-4">Domande frequenti</h3>
-        {items.map((item: any, i: number) => (
-          <div key={i} className="border-b border-slate-100 pb-4 last:border-0 last:pb-0">
-            <EditableField tag="h4" value={item.q} placeholder={`Domanda ${i+1}`} onChange={(n: string) => { const newItems = [...items]; newItems[i].q = n; onChange({...content, items: newItems}) }} className="text-lg font-bold text-slate-900 mb-1" />
-            <EditableField tag="p" value={item.a} placeholder="Risposta..." multiline onChange={(n: string) => { const newItems = [...items]; newItems[i].a = n; onChange({...content, items: newItems}) }} className="text-base text-slate-600 font-light leading-relaxed whitespace-pre-wrap" />
-          </div>
-        ))}
+        <div className="flex items-center justify-between px-1">
+          <h3 className="text-xl md:text-3xl font-extrabold tracking-tight text-slate-900">Domande frequenti</h3>
+          <button 
+            type="button"
+            onClick={handleAddItem} 
+            className="flex items-center gap-1.5 text-xs font-bold text-slate-500 hover:text-slate-900 transition-colors bg-slate-50 hover:bg-slate-100 px-3 py-1.5 rounded-xl border border-slate-100"
+          >
+            <Plus className="w-3.5 h-3.5" /> Domanda
+          </button>
+        </div>
+
+        <div className="space-y-4">
+          {items.map((item: any, i: number) => (
+            <div key={i} className="group/faq relative border-b border-slate-100 pb-4 last:border-0 last:pb-0 pr-8">
+              <EditableField 
+                tag="h4" 
+                value={item.q} 
+                placeholder={`Domanda ${i + 1}...`} 
+                onChange={(val: string) => handleUpdateItem(i, 'q', val)} 
+                className="text-base md:text-lg font-bold text-slate-900 mb-1" 
+              />
+              <EditableField 
+                tag="p" 
+                value={item.a} 
+                placeholder="Inserisci la risposta..." 
+                multiline 
+                onChange={(val: string) => handleUpdateItem(i, 'a', val)} 
+                className="text-sm md:text-base text-slate-600 font-light leading-relaxed whitespace-pre-wrap" 
+              />
+              {items.length > 1 && (
+                <button 
+                  type="button"
+                  onClick={() => handleRemoveItem(i)} 
+                  className="absolute right-0 top-2 p-1.5 text-slate-300 hover:text-rose-500 hover:bg-rose-50 rounded-xl transition-all md:opacity-0 group-hover/faq:opacity-100" 
+                  title="Elimina domanda"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </button>
+              )}
+            </div>
+          ))}
+        </div>
       </section>
     )
   },
@@ -737,7 +753,7 @@ const Blocks = {
   documents: ({ content, onChange }: any) => {
     const items = content.items || [{ nome: '', url: '' }, { nome: '', url: '' }, { nome: '', url: '' }]
     return (
-      <section className="bg-slate-50 p-6 md:p-8 rounded-[2rem] border border-slate-100">
+      <section className="bg-slate-50 p-5 md:p-8 rounded-[2rem] border border-slate-100">
         <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4">Documenti Utili</h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {items.map((doc: any, i: number) => (
@@ -769,7 +785,7 @@ const Blocks = {
   links: ({ content, onChange }: any) => (
     <div className="bg-white py-2">
       <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-3 px-1">Link Utili</h3>
-      <div className="flex flex-wrap gap-2">
+      <div className="flex flex-col md:flex-row flex-wrap gap-2">
         <div className="flex items-center gap-2 bg-slate-50 border border-slate-100 hover:border-slate-200 p-2 rounded-xl transition-all">
           <Link2 className="w-3.5 h-3.5 text-slate-400 shrink-0" />
           <span className="text-xs font-bold text-slate-500 uppercase tracking-wider shrink-0">Sito:</span>
@@ -790,7 +806,7 @@ const Blocks = {
   ),
 
   contacts: ({ content, onChange }: any) => (
-    <section className="grid grid-cols-1 md:grid-cols-2 gap-8 bg-slate-50 p-6 md:p-8 rounded-[2.5rem] border border-slate-100">
+    <section className="grid grid-cols-1 md:grid-cols-2 gap-6 md:gap-8 bg-slate-50 p-5 md:p-8 rounded-[2.5rem] border border-slate-100">
       <div className="space-y-4">
         <div>
           <span className="text-[10px] font-black tracking-widest text-slate-400 uppercase block mb-1">Mettiti in contatto</span>
@@ -823,12 +839,12 @@ const Blocks = {
           </button>
         </div>
 
-        <div className="flex flex-wrap justify-center gap-x-10 gap-y-6 opacity-75 grayscale items-center pt-2">
+        <div className="flex flex-wrap justify-center gap-x-6 gap-y-4 md:gap-x-10 md:gap-y-6 opacity-75 grayscale items-center pt-2">
           {items.map((partner: string, i: number) => (
              <div key={i} className="flex items-center gap-2 group/partner bg-slate-50/50 hover:bg-slate-50 px-4 py-2 rounded-2xl transition-all border border-transparent hover:border-slate-100 relative">
-               <EditableField disableWFull tag="span" value={partner} placeholder="Nome Partner..." onChange={(n: string) => { const newItems = [...items]; newItems[i] = n; onChange({...content, items: newItems}) }} className="font-bold text-base text-slate-800" />
+               <EditableField disableWFull tag="span" value={partner} placeholder="Nome Partner..." onChange={(n: string) => { const newItems = [...items]; newItems[i] = n; onChange({...content, items: newItems}) }} className="font-bold text-sm md:text-base text-slate-800" />
                {items.length > 1 && (
-                 <button onClick={() => onChange({...content, items: items.filter((_: any, idx: number) => idx !== i)})} className="p-1 text-slate-300 hover:text-red-500 rounded-full transition-colors opacity-0 group-hover/partner:opacity-100" title="Elimina"><Trash2 className="w-3.5 h-3.5" /></button>
+                 <button onClick={() => onChange({...content, items: items.filter((_: any, idx: number) => idx !== i)})} className="p-1 text-slate-300 hover:text-red-500 rounded-full transition-colors md:opacity-0 group-hover/partner:opacity-100" title="Elimina"><Trash2 className="w-3.5 h-3.5" /></button>
                )}
              </div>
           ))}
@@ -840,20 +856,20 @@ const Blocks = {
   positions: ({ positions, brandColor }: any) => (
     <div>
       <div className="flex items-center justify-between mb-6">
-        <h3 className="text-2xl md:text-3xl font-extrabold text-slate-900 tracking-tight">Posizioni aperte</h3>
-        <span className="bg-slate-100 text-slate-700 px-4 py-1.5 rounded-full font-bold text-base">{positions?.length || 0}</span>
+        <h3 className="text-xl md:text-3xl font-extrabold text-slate-900 tracking-tight">Posizioni aperte</h3>
+        <span className="bg-slate-100 text-slate-700 px-3 py-1 rounded-full font-bold text-sm md:text-base">{positions?.length || 0}</span>
       </div>
       {positions?.length > 0 ? (
         <div className="flex gap-4 overflow-x-auto pb-4 snap-x snap-mandatory scrollbar-hide" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
           {positions.map((p: any) => (
-            <div key={p.id} className="snap-start shrink-0 w-[85%] md:w-[45%]">
+            <div key={p.id} className="snap-start shrink-0 w-[88%] md:w-[45%]">
               <PosizioneCard posizione={p} ruolo="volontario" coloreBrand={brandColor} />
             </div>
           ))}
         </div>
       ) : (
-        <div className="p-8 border-2 border-slate-100 border-dashed rounded-3xl bg-white text-center">
-          <p className="text-slate-400 font-medium text-base">Le tue posizioni aperte appariranno qui automaticamente.</p>
+        <div className="p-6 md:p-8 border-2 border-slate-100 border-dashed rounded-3xl bg-white text-center">
+          <p className="text-slate-400 font-medium text-sm md:text-base">Le tue posizioni aperte appariranno qui automaticamente.</p>
         </div>
       )}
     </div>
@@ -867,7 +883,7 @@ const Blocks = {
 }
 
 // ==========================================
-// 5. PAGINA PRINCIPALE CON AUTO-SAVE FISSO
+// 5. PAGINA PRINCIPALE CON SENSORI TOUCH & AUTO-SCROLL
 // ==========================================
 export default function PersonalizzaPagina() {
   const router = useRouter()
@@ -877,12 +893,21 @@ export default function PersonalizzaPagina() {
   const [isSaving, setIsSaving] = useState(false)
   const [autoSaveStatus, setAutoSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle')
   const [showAddMenu, setShowAddMenu] = useState(false)
-  const [associazioneSlug, setAssociazioneSlug] = useState<string | null>(null) // ✨ Tracciamento dello slug
+  const [associazioneSlug, setAssociazioneSlug] = useState<string | null>(null)
 
-  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }))
+  // SENSORE TOUCH CALIBRATO
+  const sensors = useSensors(
+    useSensor(MouseSensor, {
+      activationConstraint: { distance: 8 }
+    }),
+    useSensor(TouchSensor, {
+      activationConstraint: { delay: 250, tolerance: 5 }
+    })
+  )
+
   const brandColor = (layout.find(b => b.type === 'hero')?.content as HeroContent)?.brandColor || DEFAULT_BRAND
 
-  // Caricamento Iniziale: priorità assoluta alla bozza draft
+  // Caricamento Iniziale
   useEffect(() => {
     const loadData = async () => {
       const { data: { user } } = await supabase.auth.getUser()
@@ -894,7 +919,6 @@ export default function PersonalizzaPagina() {
         supabase.from('posizioni').select('*, media_associazioni(url), tags:posizione_tags(tag:tags(id, name))').eq('associazione_id', user.id)
       ])
 
-      // ✨ Salviamo lo slug dell'associazione per la futura invalidazione on-demand
       if (assoc?.slug) {
         setAssociazioneSlug(assoc.slug)
       }
@@ -935,7 +959,7 @@ export default function PersonalizzaPagina() {
     loadData()
   }, [router])
 
-  // AUTO-SAVE EMENDATO: Scrittura blindata con chiave primaria esplicita su layout_draft
+  // AUTO-SAVE BOZZA
   useEffect(() => {
     if (isLoading || layout.length === 0) return
 
@@ -956,7 +980,6 @@ export default function PersonalizzaPagina() {
     return () => clearTimeout(timer)
   }, [layout, isLoading])
 
-  // ✨ FUNZIONE DI PUBBLICAZIONE MODIFICATA CON REVALIDATION ON-DEMAND
   const handlePublish = async () => {
     setIsSaving(true)
     const { data: { user } } = await supabase.auth.getUser()
@@ -971,7 +994,6 @@ export default function PersonalizzaPagina() {
       updated_at: new Date().toISOString()
     }, { onConflict: 'associazione_id' })
     
-    // Se la pubblicazione su database va a buon fine, lanciamo la revalidation
     if (!error && associazioneSlug) {
       try {
         await fetch('/api/revalidate', {
@@ -986,7 +1008,7 @@ export default function PersonalizzaPagina() {
     
     setIsSaving(false)
     const btn = document.getElementById('publish-btn')
-    if(btn) { btn.innerText = 'Vetrina Pubblicata!'; setTimeout(() => btn.innerText = 'Pubblica modifiche', 2500) }
+    if(btn) { btn.innerText = 'Vetrina Pubblicata!'; setTimeout(() => btn.innerText = 'Pubblica', 2500) }
   }
 
   const handleDragEnd = (event: DragEndEvent) => {
@@ -998,6 +1020,29 @@ export default function PersonalizzaPagina() {
       if (current[oldIndex]?.type === 'hero' || current[newIndex]?.type === 'hero') return current 
       return arrayMove(current, oldIndex, newIndex)
     })
+  }
+
+  // 🟢 SPOSTAMENTO ESPLICITO A FRECCE CON AUTO-SCROLL FLUIDO
+  const moveBlockUp = (index: number) => {
+    if (index <= 1) return
+    const targetBlockId = layout[index].id
+    setLayout(current => arrayMove(current, index, index - 1))
+    
+    setTimeout(() => {
+      const element = document.getElementById(`block-${targetBlockId}`)
+      element?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    }, 80)
+  }
+
+  const moveBlockDown = (index: number) => {
+    if (index >= layout.length - 1) return
+    const targetBlockId = layout[index].id
+    setLayout(current => arrayMove(current, index, index + 1))
+
+    setTimeout(() => {
+      const element = document.getElementById(`block-${targetBlockId}`)
+      element?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+    }, 80)
   }
 
   const usedBlockTypes = layout.map(b => b.type)
@@ -1018,36 +1063,51 @@ export default function PersonalizzaPagina() {
 
       {/* NAVBAR SUPERIORE */}
       <div className="sticky top-0 z-50 bg-white/90 backdrop-blur-xl border-b border-slate-100">
-        <div className="max-w-[860px] mx-auto flex items-center justify-between p-4 px-4 md:px-0">
-          <div className="flex items-center gap-4">
-            <Link href="/app/associazione" className="text-sm font-bold text-slate-400 hover:text-black transition-colors flex items-center gap-2">
-               <span className="text-lg leading-none mb-0.5">←</span> Torna indietro
+        <div className="max-w-[860px] mx-auto flex items-center justify-between p-3 md:p-4 px-4 md:px-0">
+          <div className="flex items-center gap-2 md:gap-4">
+            <Link href="/app/associazione" className="text-xs md:text-sm font-bold text-slate-400 hover:text-black transition-colors flex items-center gap-1 md:gap-2">
+               <span className="text-base md:text-lg leading-none mb-0.5">←</span> Torna indietro
             </Link>
-            <span className="text-xs font-medium text-slate-400 border-l border-slate-200 pl-4">
-              {autoSaveStatus === 'saving' && 'Salvataggio bozza...'}
+            <span className="text-[10px] md:text-xs font-medium text-slate-400 border-l border-slate-200 pl-2 md:pl-4 truncate max-w-[120px] md:max-w-none">
+              {autoSaveStatus === 'saving' && 'Salvataggio...'}
               {autoSaveStatus === 'saved' && 'Bozza salvata'}
-              {autoSaveStatus === 'idle' && 'Bozza sincronizzata'}
+              {autoSaveStatus === 'idle' && 'Bozza ok'}
             </span>
           </div>
-          <div className="flex items-center gap-6">
+          <div className="flex items-center gap-3 md:gap-6">
             <span className="hidden md:inline text-[10px] font-black uppercase tracking-[0.2em] text-slate-300">Editor Vetrina</span>
-            <button id="publish-btn" onClick={handlePublish} disabled={isSaving} className="bg-slate-900 text-white px-6 py-2.5 rounded-full text-sm font-bold shadow-lg hover:bg-black transition-all hover:scale-105 active:scale-95">
-              {isSaving ? 'Pubblicazione...' : 'Pubblica modifiche'}
+            <button id="publish-btn" onClick={handlePublish} disabled={isSaving} className="bg-slate-900 text-white px-4 py-2 md:px-6 md:py-2.5 rounded-full text-xs md:text-sm font-bold shadow-lg hover:bg-black transition-all active:scale-95">
+              {isSaving ? 'Pubblicazione...' : 'Pubblica'}
             </button>
           </div>
         </div>
       </div>
 
-      {/* CANVAS (Gap ridotto per effetto coeso Notion Style) */}
-      <main className="max-w-[860px] mx-auto pt-8 px-4 md:px-0">
+      {/* CANVAS */}
+      <main className="max-w-[860px] mx-auto pt-4 md:pt-8 px-3 md:px-0">
         <DndContext collisionDetection={closestCenter} onDragEnd={handleDragEnd} sensors={sensors}>
           <SortableContext items={layout.map(b => b.id)} strategy={verticalListSortingStrategy}>
             <div className="flex flex-col gap-4 md:gap-8">
-              {layout.map((block) => {
+              {layout.map((block, index) => {
                 const BlockComponent = Blocks[block.type as keyof typeof Blocks] || Blocks.generic
                 return (
-                  <SortableBlockShell key={block.id} block={block} locked={block.type === 'hero'} onRemove={(id: string) => setLayout(l => l.filter(b => b.id !== id))}>
-                    <BlockComponent type={block.type} content={block.content} positions={positions} brandColor={brandColor} onChange={(next: any) => setLayout(l => l.map(b => b.id === block.id ? { ...b, content: next } : b))} />
+                  <SortableBlockShell 
+                    key={block.id} 
+                    block={block} 
+                    locked={block.type === 'hero'} 
+                    isFirst={index === 1}
+                    isLast={index === layout.length - 1}
+                    onMoveUp={() => moveBlockUp(index)}
+                    onMoveDown={() => moveBlockDown(index)}
+                    onRemove={(id: string) => setLayout(l => l.filter(b => b.id !== id))}
+                  >
+                    <BlockComponent 
+                      type={block.type} 
+                      content={block.content} 
+                      positions={positions} 
+                      brandColor={brandColor} 
+                      onChange={(next: any) => setLayout(l => l.map(b => b.id === block.id ? { ...b, content: next } : b))} 
+                    />
                   </SortableBlockShell>
                 )
               })}
@@ -1057,24 +1117,32 @@ export default function PersonalizzaPagina() {
 
         {/* MENU AGGIUNTA BLOCCHI */}
         {availableBlocks.length > 0 && (
-          <div className="w-full mt-10 relative pb-20">
+          <div className="w-full mt-8 md:mt-10 relative pb-20">
             {!showAddMenu ? (
-              <button onClick={() => setShowAddMenu(true)} className="w-full py-6 flex items-center justify-center gap-3 text-slate-400 hover:text-slate-900 bg-slate-50 hover:bg-slate-100 rounded-3xl transition-all">
-                <Plus className="w-6 h-6" />
-                <span className="font-bold text-lg">Aggiungi sezione</span>
+              <button onClick={() => setShowAddMenu(true)} className="w-full py-5 md:py-6 flex items-center justify-center gap-2 md:gap-3 text-slate-400 hover:text-slate-900 bg-slate-50 hover:bg-slate-100 rounded-3xl transition-all">
+                <Plus className="w-5 h-5 md:w-6 md:h-6" />
+                <span className="font-bold text-base md:text-lg">Aggiungi sezione</span>
               </button>
             ) : (
-              <div className="bg-white border border-slate-100 shadow-2xl rounded-3xl p-8 animate-in fade-in slide-in-from-bottom-8 duration-200">
-                <div className="flex justify-between items-center mb-8">
-                  <h3 className="font-extrabold text-2xl text-slate-900 tracking-tight">Aggiungi alla Vetrina</h3>
+              <div className="bg-white border border-slate-100 shadow-2xl rounded-3xl p-5 md:p-8 animate-in fade-in slide-in-from-bottom-8 duration-200">
+                <div className="flex justify-between items-center mb-6 md:mb-8">
+                  <h3 className="font-extrabold text-xl md:text-2xl text-slate-900 tracking-tight">Aggiungi alla Vetrina</h3>
                   <button onClick={() => setShowAddMenu(false)} className="text-slate-400 hover:text-black bg-slate-100 hover:bg-slate-200 rounded-full p-2 transition-colors">✕</button>
                 </div>
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 md:gap-4">
                   {availableBlocks.map(item => {
                     const Icon = item.icon
                     return (
-                      <button key={item.type} onClick={() => { setLayout([...layout, { id: uid(), type: item.type as BlockType, content: {} }]); setShowAddMenu(false) }}
-                        className="flex flex-col items-start gap-3 p-5 rounded-2xl bg-slate-50 hover:bg-slate-900 hover:text-white transition-all text-left group border border-transparent hover:border-slate-800 hover:shadow-xl"
+                      <button key={item.type} onClick={() => { 
+                        const initialContent = item.type === 'faq' ? { items: [{ q: '', a: '' }] } : {}
+                        const newId = uid()
+                        setLayout([...layout, { id: newId, type: item.type as BlockType, content: initialContent }]); 
+                        setShowAddMenu(false) 
+                        setTimeout(() => {
+                          document.getElementById(`block-${newId}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+                        }, 100)
+                      }}
+                        className="flex flex-col items-start gap-3 p-4 md:p-5 rounded-2xl bg-slate-50 hover:bg-slate-900 hover:text-white transition-all text-left group border border-transparent hover:border-slate-800 hover:shadow-xl"
                       >
                         <div className="bg-white shadow-sm border border-slate-100 p-2.5 rounded-xl group-hover:bg-slate-800 group-hover:border-slate-700 transition-colors">
                           <Icon className="w-5 h-5 text-slate-600 group-hover:text-white" />

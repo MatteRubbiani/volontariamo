@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { usePathname } from 'next/navigation'
+import { usePathname, useSearchParams } from 'next/navigation'
 
 interface PosizioneCardProps {
   posizione: any;
@@ -28,6 +28,7 @@ export default function PosizioneCard({
 }: PosizioneCardProps) { 
   
   const pathname = usePathname()
+  const searchParams = useSearchParams()
   const isAssociazione = ruolo === 'associazione'
   const isHorizontal = layout === 'horizontal' 
   
@@ -201,11 +202,10 @@ export default function PosizioneCard({
     )
   }
 
-  // ✨ IL FIX: Puntiamo alla URL pulita dello SLUG (con fallback di sicurezza su ID se null)
-  let urlVolontario = `/posizione/${posizione.slug || posizione.id}`
-  if (pathname?.includes('/esplora') || pathname?.includes('/mappa')) {
-    urlVolontario += '?from=mappa'
-  }
+  // 🟢 Manteniamo intatti i parametri dell'URL attuale (?lat=...&lng=...&q=...)
+  const currentParams = searchParams ? searchParams.toString() : ''
+  const baseUrl = `/posizione/${posizione.slug || posizione.id}`
+  const urlVolontario = currentParams ? `${baseUrl}?${currentParams}` : baseUrl
 
   return (
     <Link 

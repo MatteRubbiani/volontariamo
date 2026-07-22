@@ -80,11 +80,7 @@ return (
 <html lang="it" suppressHydrationWarning>
 
 <body className={`${geistSans.className} antialiased`}>
-{/* 🛡️ SCRIPT IUBENDA SPOSTATO QUI: afterInteractive permette a React di idratarsi senza errori */}
-<Script
-src="https://embeds.iubenda.com/widgets/ac16b250-4a44-4116-840c-17b6b89a502b.js"
-strategy="afterInteractive"
-/>
+
 
 <ThemeProvider
 attribute="class"

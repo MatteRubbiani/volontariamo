@@ -1,6 +1,7 @@
 'use client'
 
 import Link from 'next/link'
+import TastoLogout from '@/components/TastoLogout'
 
 interface ProfiloAssociazioneProps {
   data: any
@@ -52,15 +53,18 @@ export default function ProfiloAssociazione({ data, email, percentage, suggerime
   return (
     <div className="max-w-[800px] mx-auto py-12 px-6 pb-24 font-sans antialiased selection:bg-slate-100 animate-in fade-in duration-500">
       
-      {/* 🌟 CONTROLLI SUPERIORI */}
+      {/* 🌟 CONTROLLI SUPERIORI CON TASTO LOGOUT ICONA */}
       <div className="flex items-center justify-between gap-4 mb-12">
         <Link href="/app/associazione" className="inline-flex items-center gap-2 text-xs font-semibold text-slate-400 hover:text-slate-900 transition-colors group">
           <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-3.5 h-3.5 group-hover:-translate-x-0.5 transition-transform"><path strokeLinecap="round" strokeLinejoin="round" d="M10.5 19.5 3 12m0 0 7.5-7.5M3 12h18" /></svg>
           Torna alla Dashboard
         </Link>
-        <Link href="/app/profilo/modifica" className="inline-flex items-center gap-2 bg-slate-950 text-white hover:bg-black px-4 py-2.5 rounded-xl text-xs font-semibold tracking-wide transition-all shadow-xs active:scale-[0.98]">
-          Modifica informazioni
-        </Link>
+        <div className="flex items-center gap-2">
+          <Link href="/app/profilo/modifica" className="inline-flex items-center gap-2 bg-slate-950 text-white hover:bg-black px-4 py-2.5 rounded-xl text-xs font-semibold tracking-wide transition-all shadow-xs active:scale-[0.98]">
+            Modifica informazioni
+          </Link>
+          <TastoLogout variant="icon" />
+        </div>
       </div>
 
       {/* 📊 BLOCCO STATO & PROGRESSO */}
@@ -89,28 +93,28 @@ export default function ProfiloAssociazione({ data, email, percentage, suggerime
         </div>
       </div>
 
-      {/* 🏛️ SEZIONE INTESTAZIONE (LOGO RIEMPITIVO PREMIUM) */}
-<div className="border-b border-slate-100 pb-10 flex items-start gap-6 mb-10">
-  <div className="w-16 h-16 bg-slate-100 border border-slate-200/80 rounded-2xl flex items-center justify-center overflow-hidden font-semibold text-sm text-slate-400 shrink-0 select-none shadow-xs">
-    {logoEffettivo ? (
-      <img 
-        src={logoEffettivo} 
-        className="w-full h-full object-cover" 
-        alt="Logo Ente" 
-      />
-    ) : (
-      <span className="text-xl font-black text-slate-300 tracking-tighter">{iniziali}</span>
-    )}
-  </div>
-  <div className="space-y-1.5 min-w-0">
-    <span className="bg-slate-900 text-white text-[9px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-md inline-block">
-      {safeData.forma_giuridica || 'ETS'}
-    </span>
-    <h1 className="text-3xl font-semibold tracking-tight text-slate-950 leading-tight">
-      {nomeGrezzo}
-    </h1>
-  </div>
-</div>
+      {/* 🏛️ SEZIONE INTESTAZIONE */}
+      <div className="border-b border-slate-100 pb-10 flex items-start gap-6 mb-10">
+        <div className="w-16 h-16 bg-slate-100 border border-slate-200/80 rounded-2xl flex items-center justify-center overflow-hidden font-semibold text-sm text-slate-400 shrink-0 select-none shadow-xs">
+          {logoEffettivo ? (
+            <img 
+              src={logoEffettivo} 
+              className="w-full h-full object-cover" 
+              alt="Logo Ente" 
+            />
+          ) : (
+            <span className="text-xl font-black text-slate-300 tracking-tighter">{iniziali}</span>
+          )}
+        </div>
+        <div className="space-y-1.5 min-w-0">
+          <span className="bg-slate-900 text-white text-[9px] font-bold uppercase tracking-widest px-2 py-0.5 rounded-md inline-block">
+            {safeData.forma_giuridica || 'ETS'}
+          </span>
+          <h1 className="text-3xl font-semibold tracking-tight text-slate-950 leading-tight">
+            {nomeGrezzo}
+          </h1>
+        </div>
+      </div>
 
       {/* 📄 DETTAGLI CORPO PROFILO */}
       <div className="flex flex-col gap-10">
@@ -160,6 +164,11 @@ export default function ProfiloAssociazione({ data, email, percentage, suggerime
               ))}
             </div>
           ) : <p className="text-slate-400 italic text-xs">Nessun ambito impostato.</p>}
+        </div>
+
+        {/* 🚪 TASTO LOGOUT IN FONDO AL PROFILO */}
+        <div className="pt-8 border-t border-slate-100">
+          <TastoLogout variant="button" />
         </div>
 
       </div>

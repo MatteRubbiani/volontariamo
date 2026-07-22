@@ -5,7 +5,7 @@ import { createBrowserClient } from '@supabase/ssr'
 import { useSearchParams } from 'next/navigation'
 import SharedChatWidget from '@/components/SharedChatWidget'
 import { marcaMessaggiComeLetti } from '@/app/actions/messaggi'
-import { Check, X, Filter, ChevronLeft, User, Award, Sparkles, Loader2, MessageSquare, MapPin, Phone, Briefcase } from 'lucide-react'
+import { Check, X, Filter, ChevronLeft, User, Award, Loader2, MessageSquare, MapPin, Phone, Briefcase } from 'lucide-react'
 
 interface HubMessaggiProps {
   conversazioniIniziali: any[]
@@ -43,7 +43,7 @@ export default function HubMessaggiClient({
         { event: 'INSERT', schema: 'public', table: 'messaggi', filter: `associazione_id=eq.${associazioneId}` },
         (payload) => {
           const m = payload.new
-          if (m.mittente_id === associazioneId) return // Ignoriamo i messaggi inviati da noi
+          if (m.mittente_id === associazioneId) return
 
           setConversazioni(prev => {
             const chiaveDiscussione = m.volontario_id
@@ -62,7 +62,6 @@ export default function HubMessaggiClient({
                 return c
               }).sort((a, b) => new Date(b.ultimo_messaggio_data).getTime() - new Date(a.ultimo_messaggio_data).getTime())
             } else {
-              // Se è un nuovo utente assoluto, ricarichiamo la pagina per includerlo
               window.location.reload()
               return prev
             }
@@ -74,7 +73,6 @@ export default function HubMessaggiClient({
     return () => { supabase.removeChannel(canaleRealtime) }
   }, [associazioneId, selectedKey, supabase])
 
-  // Imposta filtri o utente iniziale dall'URL
   useEffect(() => {
     if (filtroUrl) {
       const posTrovata = posizioniDisponibili.find(p => p.id === filtroUrl)
@@ -83,28 +81,24 @@ export default function HubMessaggiClient({
     if (volontarioDaUrl) setSelectedKey(volontarioDaUrl)
   }, [filtroUrl, volontarioDaUrl, posizioniDisponibili])
 
-// ==========================================
-  // 💾 MARCA COME LETTO (Client e Persistenza)
+  // ==========================================
+  // 💾 MARCA COME LETTO
   // ==========================================
   useEffect(() => {
     if (!selectedKey) return;
 
     const convSelezionata = conversazioni.find(c => c.chiave_id === selectedKey);
     
-    // Se la chat ha effettivamente messaggi non letti, procediamo all'aggiornamento
     if (convSelezionata && convSelezionata.non_letto) {
-      // 1. Spegniamo il pallino blu all'istante lato UI
       setConversazioni(prev => prev.map(c => 
         c.chiave_id === selectedKey ? { ...c, non_letto: false } : c
       ));
 
-      // 2. Chiamiamo il database
       marcaMessaggiComeLetti(convSelezionata.volontario_id, associazioneId)
         .catch(err => console.error("Errore nella action:", err));
     }
-  }, [selectedKey]); // Togliamo "associazioneId" dalle dipendenze per evitare loop indesiderati
+  }, [selectedKey]);
 
-  // Filtro unificato: Tutte o singola posizione
   const filtriDisponibili = useMemo(() => {
     return ['Tutte', ...posizioniDisponibili.map(p => p.titolo).sort()]
   }, [posizioniDisponibili])
@@ -148,13 +142,15 @@ export default function HubMessaggiClient({
   }, [])
 
   return (
-    <div className="flex flex-1 min-h-0 w-full overflow-hidden bg-white border-t border-slate-100 lg:rounded-3xl lg:border lg:shadow-xs">
-      
+    // 🟢 h-[calc(100dvh-4rem)] gestisce l'altezza dinamica compresa di tastiera virtuale mobile
+    // 🟢 pb-20 su mobile garantisce che il widget e gli input restino SOPRA la Bottom Navbar!
+// 🟢 Corretto: Su Desktop (lg) torna ad altezza piena senza alcun padding in basso!
+<div className="flex flex-1 h-[calc(100dvh-3.5rem)] lg:h-full w-full overflow-hidden bg-white border-t border-slate-100 lg:rounded-3xl lg:border lg:shadow-xs pb-20 lg:pb-0">      
       {/* 1️⃣ COLONNA LISTA INBOX */}
       <div className={`flex flex-col h-full border-r border-slate-100 shrink-0 ${selectedKey ? 'hidden lg:flex lg:w-[320px] xl:w-[360px]' : 'flex w-full lg:w-[320px] xl:w-[360px]'}`}>
         
         {/* Selettore Filtri */}
-        <div className="p-4 border-b border-slate-100 bg-slate-50/50 flex items-center gap-2">
+        <div className="p-4 border-b border-slate-100 bg-slate-50/50 flex items-center gap-2 shrink-0">
           <Filter className="w-4 h-4 text-slate-400 shrink-0" />
           <select 
             value={filtro}
@@ -165,7 +161,7 @@ export default function HubMessaggiClient({
           </select>
         </div>
 
-        {/* Lista conversazioni con pallini blu per i non letti */}
+        {/* Lista conversazioni */}
         <div className="flex-1 overflow-y-auto divide-y divide-slate-100">
           {filtrate.length === 0 ? (
             <div className="p-8 text-center text-slate-400 text-sm font-medium">Nessuna conversazione trovata.</div>
@@ -217,7 +213,7 @@ export default function HubMessaggiClient({
       </div>
 
       {/* 2️⃣ COLONNA CHAT CENTRALE */}
-      <div className={`flex flex-col flex-grow min-w-0 bg-white ${selectedKey ? 'flex w-full lg:w-auto' : 'hidden lg:flex'}`}>
+      <div className={`flex flex-col flex-grow h-full min-w-0 bg-white ${selectedKey ? 'flex w-full lg:w-auto' : 'hidden lg:flex'}`}>
         {!selectedConv ? (
           <div className="flex-1 flex flex-col items-center justify-center text-slate-300 gap-3">
             <MessageSquare className="w-10 h-10 stroke-[1.2] text-slate-200" />
@@ -225,20 +221,21 @@ export default function HubMessaggiClient({
           </div>
         ) : (
           <>
-            <div className="shrink-0 border-b border-slate-100 px-6 py-4 flex justify-between items-center bg-white z-10">
-               <div className="flex items-center gap-3">
-                 <button onClick={() => setSelectedKey(null)} className="lg:hidden p-1.5 text-slate-400 hover:bg-slate-100 rounded-lg mr-1 transition-colors">
-                   <ChevronLeft className="w-5 h-5" />
+            {/* Header Conversazione */}
+            <div className="shrink-0 border-b border-slate-100 px-4 md:px-6 py-3 md:py-4 flex justify-between items-center bg-white z-10">
+               <div className="flex items-center gap-2.5">
+                 <button onClick={() => setSelectedKey(null)} className="lg:hidden p-1.5 text-slate-500 hover:bg-slate-100 rounded-xl transition-colors">
+                   <ChevronLeft className="w-6 h-6" />
                  </button>
                  <div>
-                   <h3 className="font-bold text-slate-900 text-lg leading-tight">{profilo?.nome} {profilo?.cognome}</h3>
-                   <p className="text-xs text-slate-500 font-medium mt-0.5">{selectedConv.posizione?.titolo || 'Messaggio Generale'}</p>
+                   <h3 className="font-bold text-slate-900 text-base md:text-lg leading-tight">{profilo?.nome} {profilo?.cognome}</h3>
+                   <p className="text-xs text-slate-500 font-medium mt-0.5 truncate max-w-[220px] md:max-w-none">{selectedConv.posizione?.titolo || 'Messaggio Generale'}</p>
                  </div>
                </div>
             </div>
             
-            <div className="flex-1 min-h-0 bg-slate-50/50">
-              {/* Carichiamo il widget passando l'ID dell'annuncio selezionato */}
+            {/* Area del Widget Chat */}
+            <div className="flex-1 min-h-0 bg-slate-50/50 flex flex-col relative overflow-hidden">
               <SharedChatWidget 
                 volontarioId={selectedConv.volontario_id} 
                 associazioneId={associazioneId} 

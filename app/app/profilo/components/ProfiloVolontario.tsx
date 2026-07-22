@@ -1,12 +1,13 @@
 'use client'
 
 import Link from 'next/link'
+import TastoLogout from '@/components/TastoLogout'
 
 interface ProfiloVolontarioProps {
   data: any
   email: string
   percentage: number
-  suggerimento: string // 🟢 Ereditata dall'algoritmo dinamico server-side
+  suggerimento: string
 }
 
 export default function ProfiloVolontario({ data, email, percentage, suggerimento }: ProfiloVolontarioProps) {
@@ -26,7 +27,7 @@ export default function ProfiloVolontario({ data, email, percentage, suggeriment
   return (
     <div className="max-w-[800px] mx-auto py-12 px-6 pb-24 font-sans antialiased selection:bg-slate-100 animate-in fade-in duration-500">
       
-      {/* 🌟 CONTROLLI SUPERIORI */}
+      {/* 🌟 CONTROLLI SUPERIORI CON TASTO LOGOUT ICONA */}
       <div className="flex items-center justify-between gap-4 mb-12 shrink-0">
         <Link 
           href="/app/volontario" 
@@ -38,17 +39,18 @@ export default function ProfiloVolontario({ data, email, percentage, suggeriment
           Torna alla Dashboard
         </Link>
 
-        <Link 
-          href="/app/profilo/modifica" 
-          className="inline-flex items-center gap-2 bg-slate-950 text-white hover:bg-black px-4 py-2.5 rounded-xl text-xs font-semibold tracking-wide transition-all shadow-xs active:scale-[0.98]"
-        >
-          Modifica informazioni
-        </Link>
+        <div className="flex items-center gap-2">
+          <Link 
+            href="/app/profilo/modifica" 
+            className="inline-flex items-center gap-2 bg-slate-950 text-white hover:bg-black px-4 py-2.5 rounded-xl text-xs font-semibold tracking-wide transition-all shadow-xs active:scale-[0.98]"
+          >
+            Modifica informazioni
+          </Link>
+          <TastoLogout variant="icon" />
+        </div>
       </div>
 
-      {/* ========================================================
-          📊 BLOCCO PERCENTUALE COMPUTATA CON DIALOGO CONTESTUALE REALE
-         ======================================================== */}
+      {/* 📊 BLOCCO STATO & PROGRESSO */}
       <div className="mb-14 border border-slate-100 bg-slate-50/40 p-6 rounded-3xl flex items-center justify-between gap-6">
         <div className="flex items-center gap-4">
           <div className="relative w-12 h-14 flex items-center justify-center shrink-0">
@@ -65,7 +67,7 @@ export default function ProfiloVolontario({ data, email, percentage, suggeriment
           <div className="space-y-0.5">
             <h4 className="text-xs font-semibold text-slate-900">Completamento profilo</h4>
             <p className="text-[11px] text-slate-500 font-normal leading-normal animate-in fade-in duration-300">
-              {suggerimento} {/* 🟢 Mostra l'azione reale mancante elaborata dal server */}
+              {suggerimento}
             </p>
           </div>
         </div>
@@ -79,9 +81,7 @@ export default function ProfiloVolontario({ data, email, percentage, suggeriment
         </div>
       </div>
 
-      {/* ========================================================
-          👤 SEZIONE INTESTAZIONE EDITORIALE (FOTO / AVATAR)
-         ======================================================== */}
+      {/* 👤 SEZIONE INTESTAZIONE */}
       <div className="border-b border-slate-100 pb-10 flex items-start gap-6 mb-10">
         <div className="w-16 h-16 rounded-full bg-slate-50 border border-slate-100 flex items-center justify-center overflow-hidden font-semibold text-sm text-slate-400 shrink-0 select-none">
           {safeData.foto_profilo_url ? (
@@ -100,9 +100,7 @@ export default function ProfiloVolontario({ data, email, percentage, suggeriment
         </div>
       </div>
 
-      {/* ========================================================
-          📄 DETTAGLI CORPO PROFILO
-         ======================================================== */}
+      {/* 📄 DETTAGLI CORPO PROFILO */}
       <div className="flex flex-col gap-10">
         
         {/* PRESENTAZIONE / BIO */}
@@ -117,7 +115,7 @@ export default function ProfiloVolontario({ data, email, percentage, suggeriment
           )}
         </div>
 
-        {/* SCHEDA CONTATTI E LOCALIZZAZIONE COMPATTA */}
+        {/* SCHEDA CONTATTI E LOCALIZZAZIONE */}
         <div className="space-y-4 pt-6 border-t border-slate-100">
           <h3 className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2">Informazioni Personali</h3>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-y-5 gap-x-8 text-sm">
@@ -146,9 +144,7 @@ export default function ProfiloVolontario({ data, email, percentage, suggeriment
           </div>
         </div>
 
-        {/* ========================================================
-            🏷️ CARD COMPETENZE AGGIORNATA (TESTO PREMIUM)
-           ======================================================== */}
+        {/* COMPETENZE */}
         <div className="space-y-4 pt-6 border-t border-slate-100">
           <div>
             <h3 className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Competenze Speciali</h3>
@@ -171,9 +167,7 @@ export default function ProfiloVolontario({ data, email, percentage, suggeriment
           )}
         </div>
 
-        {/* ========================================================
-            🏷️ CARD CAUSE AGGIORNATA (TESTO PREMIUM)
-           ======================================================== */}
+        {/* CAUSE */}
         <div className="space-y-4 pt-6 border-t border-slate-100">
           <div>
             <h3 className="text-[11px] font-bold text-slate-400 uppercase tracking-wider">Cause Supportate</h3>
@@ -194,6 +188,11 @@ export default function ProfiloVolontario({ data, email, percentage, suggeriment
           ) : (
             <p className="text-slate-400 italic text-xs">Nessuna causa sociale configurata.</p>
           )}
+        </div>
+
+        {/* 🚪 TASTO LOGOUT IN FONDO AL PROFILO */}
+        <div className="pt-8 border-t border-slate-100">
+          <TastoLogout variant="button" />
         </div>
 
       </div>

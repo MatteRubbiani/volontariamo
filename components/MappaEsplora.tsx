@@ -44,7 +44,7 @@ function MapEvents({ onBoundsChange, onMapReady, forcedLat, forcedLng, forcedZoo
 }
 
 // ==========================================
-// FUNZIONE PER CREARE I PIN "PREMIUM"
+// PIN DELLE POSIZIONI
 // ==========================================
 const createPositionIcon = (tipo: string, isActive: boolean) => {
   const isUnaTantum = tipo === 'una_tantum';
@@ -68,11 +68,23 @@ const createPositionIcon = (tipo: string, isActive: boolean) => {
   return L.divIcon({ html, className: 'custom-leaflet-marker', iconSize: [32, 32], iconAnchor: [16, 16] })
 }
 
+// 🔵 PIN BLU "LA TUA POSIZIONE"
+const createUserLocationIcon = () => {
+  const html = `
+    <div class="relative flex items-center justify-center w-6 h-6">
+      <div class="absolute w-full h-full bg-blue-500/30 rounded-full animate-ping"></div>
+      <div class="w-4 h-4 bg-blue-600 border-2 border-white rounded-full shadow-md z-10"></div>
+    </div>
+  `
+  return L.divIcon({ html, className: 'user-location-marker', iconSize: [24, 24], iconAnchor: [12, 12] })
+}
+
 export default function MappaEsplora({ 
   posizioni = [], hoveredId, setHoveredId, focusedId, setFocusedId, onMapReady, onBoundsChange, forcedLat, forcedLng, forcedZoom 
 }: any) {
   const [isMounted, setIsMounted] = useState(false)
   const [mapInstance, setMapInstance] = useState<L.Map | null>(null)
+  const [userLocation, setUserLocation] = useState<{ lat: number; lng: number } | null>(null)
   const router = useRouter()
   const searchParams = useSearchParams()
   const [locating, setLocating] = useState(false)
@@ -82,22 +94,26 @@ export default function MappaEsplora({
   const handleLocate = (e: React.MouseEvent) => {
     e.preventDefault();
     if (!("geolocation" in navigator)) {
-      alert("Geolocalizzazione non supportata.");
+      alert("Geolocalizzazione non supportata dal tuo browser.");
       return;
     }
     setLocating(true);
     navigator.geolocation.getCurrentPosition(
       async (position) => {
         const { latitude, longitude } = position.coords;
+        setUserLocation({ lat: latitude, lng: longitude });
+
         try {
           const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${latitude}&lon=${longitude}&zoom=10&addressdetails=1`);
           const data = await res.json();
           const city = data?.address?.city || data?.address?.town || data?.address?.village || "La tua posizione";
+          
           const params = new URLSearchParams(searchParams.toString());
           params.set('lat', latitude.toString());
           params.set('lng', longitude.toString());
           params.set('indirizzo', city);
           router.push(`?${params.toString()}`);
+          
           if (mapInstance) mapInstance.flyTo([latitude, longitude], 13, { animate: true, duration: 1.5 });
         } catch (error) {
            const params = new URLSearchParams(searchParams.toString());
@@ -108,7 +124,11 @@ export default function MappaEsplora({
            if (mapInstance) mapInstance.flyTo([latitude, longitude], 13, { animate: true });
         } finally { setLocating(false); }
       },
-      () => { setLocating(false); alert("Impossibile rilevare la posizione."); },
+      (err) => { 
+        setLocating(false); 
+        console.error(err);
+        alert("Impossibile rilevare la posizione."); 
+      },
       { enableHighAccuracy: true, timeout: 10000 }
     );
   };
@@ -116,10 +136,17 @@ export default function MappaEsplora({
   if (!isMounted) return <div className="w-full h-full bg-slate-100 animate-pulse"></div>
 
   return (
-    <div className="relative h-full w-full z-0 bg-slate-100">
+    <div className="relative h-full w-full bg-slate-100">
       <MapContainer center={[41.8719, 12.5674]} zoom={6} style={{ height: '100%', width: '100%' }} zoomControl={false} ref={setMapInstance}>
         <TileLayer url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png" />
         <MapEvents onMapReady={onMapReady} onBoundsChange={onBoundsChange} forcedLat={forcedLat} forcedLng={forcedLng} forcedZoom={forcedZoom} />
+        
+        {/* PALLINO BLU POSIZIONE UTENTE */}
+        {userLocation && (
+          <Marker position={[userLocation.lat, userLocation.lng]} icon={createUserLocationIcon()} zIndexOffset={2000} />
+        )}
+
+        {/* POSIZIONI */}
         {posizioni.map((pos: any) => {
           if (!pos.lat || !pos.lng) return null;
           const active = hoveredId === pos.id || focusedId === pos.id;
@@ -142,22 +169,23 @@ export default function MappaEsplora({
         })}
       </MapContainer>
 
-      {/* 🎯 IL MIRINO: Spostato a sinistra e alzato su mobile per scavalcare la tendina */}
-      {/* 🎯 IL MIRINO GEOLOCALIZZAZIONE */}
+      {/* 🎯 BOTTONE MIRINO: z-[500] (Supera Leaflet z-400, ma sta SOTTO il drawer z-1000) */}
       <div className="
-        absolute z-[1000] 
-        bottom-[90px] left-[15px]   /* 📱 MOBILE: Sopra la tendina, a sinistra */
-        lg:bottom-[30px] lg:left-[30px] /* 💻 DESKTOP: Ben distanziato dal bordo in basso a sx */
+        absolute z-[500] 
+        bottom-[140px] left-4            /* 📱 MOBILE: Sopra la linguetta del drawer chiuso */
+        lg:bottom-[30px] lg:left-[30px]  /* 💻 DESKTOP: In basso a sinistra */
+        pointer-events-auto
       ">
         <button 
+          type="button"
           onClick={handleLocate}
           title="Trova la mia posizione"
-          className="group relative flex h-14 w-14 items-center justify-center rounded-full bg-white text-slate-800 shadow-[0_4px_16px_rgba(0,0,0,0.15)] transition-all hover:scale-110 active:scale-95 border border-slate-100"
+          className="flex h-12 w-12 lg:h-14 lg:w-14 items-center justify-center rounded-full bg-white text-slate-900 shadow-xl border border-slate-200 active:scale-90 transition-all hover:scale-105"
         >
           {locating ? (
-             <div className="h-5 w-5 animate-spin rounded-full border-2 border-slate-800 border-t-transparent"></div>
+             <div className="h-5 w-5 animate-spin rounded-full border-2 border-slate-900 border-t-transparent" />
           ) : (
-            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="h-6 w-6 transition-transform group-hover:scale-90">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="h-5 w-5 lg:h-6 lg:w-6 text-slate-800">
               <path strokeLinecap="round" strokeLinejoin="round" d="M12 2.25v4.5m0 10.5v4.5m-9.75-9.75h4.5m10.5 0h4.5m-14.25 0a4.5 4.5 0 1 1 9 0 4.5 4.5 0 0 1-9 0Z" />
             </svg>
           )}

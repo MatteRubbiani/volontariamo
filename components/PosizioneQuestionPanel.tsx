@@ -1,16 +1,18 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { createPortal } from 'react-dom'
 import { useRouter } from 'next/navigation'
 import { createBrowserClient } from '@supabase/ssr'
 import SharedChatWidget from '@/components/SharedChatWidget'
+import { MessageSquare, X, Sparkles, Loader2 } from 'lucide-react'
 
 interface PosizioneQuestionPanelProps {
   posizioneId: string
   associazioneNome: string
   userId: string | null
   loginHref: string
-  initialCandidaturaId: string | null // Lo manteniamo nelle props per non rompere il componente padre
+  initialCandidaturaId: string | null
   buttonClassName?: string
 }
 
@@ -22,6 +24,7 @@ export default function PosizioneQuestionPanel({
   buttonClassName = ''
 }: PosizioneQuestionPanelProps) {
   const router = useRouter()
+  const [mounted, setMounted] = useState(false)
   const [isOpen, setIsOpen] = useState(false)
   const [targetAssociazioneId, setTargetAssociazioneId] = useState<string | null>(null)
   const [isInitializing, setIsInitializing] = useState(false)
@@ -31,20 +34,21 @@ export default function PosizioneQuestionPanel({
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
   )
 
+  useEffect(() => {
+    setMounted(true)
+  }, [])
+
   const handleOpenChat = async () => {
-    // 1. Se non è loggato, lo mandiamo al login
     if (!userId) {
       router.push(loginHref)
       return
     }
 
-    // 2. Se abbiamo già recuperato l'ID dell'associazione, apriamo subito
     if (targetAssociazioneId) {
       setIsOpen(true)
       return
     }
 
-    // 3. Altrimenti, recuperiamo al volo a quale associazione appartiene questo annuncio
     setIsInitializing(true)
     try {
       const { data, error } = await supabase
@@ -67,80 +71,87 @@ export default function PosizioneQuestionPanel({
     }
   }
 
+  const modalContent = (
+    <div className="fixed inset-0 z-[999999] flex flex-col justify-end sm:justify-center items-center bg-slate-950/60 backdrop-blur-md animate-in fade-in duration-200 p-0 sm:p-4">
+      
+      {/* SFONDO CLICCABILE PER CHIUDERE SU DESKTOP */}
+      <div 
+        className="absolute inset-0 hidden sm:block" 
+        onClick={() => setIsOpen(false)} 
+      />
+
+      {/* 
+        🎯 SCHEDA CHAT PROPORZIONATA:
+        - MOBILE: 100dvh (Schermo intero nativo per smartphone)
+        - DESKTOP: h-[580px] max-w-[480px] arrotondato con ombra morbida
+      */}
+      <div 
+        className="bg-white w-full h-[100dvh] sm:h-[580px] sm:max-w-[480px] rounded-t-[2.5rem] sm:rounded-[2rem] shadow-2xl flex flex-col relative z-10 overflow-hidden border border-slate-100 animate-in slide-in-from-bottom-full sm:slide-in-from-bottom-6 duration-300"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* HEADER CHAT */}
+        <div className="px-5 py-4 bg-white border-b border-slate-100 flex items-center justify-between shrink-0">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="w-10 h-10 rounded-full bg-slate-950 text-white font-bold text-sm flex items-center justify-center shrink-0 shadow-xs">
+              {associazioneNome.charAt(0).toUpperCase()}
+            </div>
+            <div className="min-w-0">
+              <h3 className="font-extrabold text-sm text-slate-900 truncate">{associazioneNome}</h3>
+              <p className="text-[11px] font-semibold text-slate-400 flex items-center gap-1">
+                <Sparkles className="w-3 h-3 text-violet-500 shrink-0" />
+                <span>Messaggistica Diretta</span>
+              </p>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            onClick={() => setIsOpen(false)}
+            className="p-2.5 rounded-full text-slate-400 hover:text-slate-900 hover:bg-slate-100 transition-colors active:scale-90"
+            title="Chiudi chat"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        {/* 💬 WIDGET CHAT */}
+        <div className="flex-1 overflow-hidden bg-slate-50 flex flex-col relative">
+          {targetAssociazioneId && userId && (
+            <SharedChatWidget 
+              volontarioId={userId} 
+              associazioneId={targetAssociazioneId} 
+              currentUserId={userId} 
+              posizioneId={posizioneId} 
+            />
+          )}
+        </div>
+
+      </div>
+    </div>
+  )
+
   return (
     <>
-      {/* BOTTONE "FAI UNA DOMANDA" */}
       <button
+        type="button"
         onClick={handleOpenChat}
         disabled={isInitializing}
-        className={`flex items-center justify-center font-semibold py-3.5 rounded-xl text-sm border bg-white text-slate-700 border-slate-200 hover:bg-slate-50 hover:border-slate-300 transition-all shadow-sm active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed ${buttonClassName}`}
+        className={buttonClassName || "w-full h-11 rounded-2xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold transition-all border border-slate-200/60 active:scale-95 flex items-center justify-center gap-2 disabled:opacity-50"}
       >
         {isInitializing ? (
           <div className="flex items-center gap-2">
-            <span className="block h-4 w-4 animate-spin rounded-full border-2 border-slate-300 border-t-slate-700" />
+            <Loader2 className="w-4 h-4 animate-spin text-slate-600" />
             <span>Apertura...</span>
           </div>
         ) : (
-          <span>Fai una domanda</span>
+          <>
+            <MessageSquare className="w-4 h-4 text-slate-600 shrink-0" />
+            <span>Fai una domanda</span>
+          </>
         )}
       </button>
 
-      {/* MODAL DELLA CHAT */}
-      {isOpen && targetAssociazioneId && userId && (
-        <>
-          {/* BACKDROP */}
-          <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-[9990] animate-in fade-in duration-300" />
-
-          {/* CONTENITORE MODAL */}
-          <div 
-            className="fixed inset-0 z-[9999] flex items-center justify-center p-4 sm:p-6"
-            onClick={() => setIsOpen(false)}
-          >
-            {/* CARD BIANCA */}
-            <div 
-              className="w-full max-w-3xl bg-white rounded-[2rem] shadow-2xl overflow-hidden flex flex-col max-h-[90vh] h-[600px] animate-in zoom-in-95 slide-in-from-bottom-4 fade-in duration-500"
-              onClick={(e) => e.stopPropagation()}
-            >
-              {/* HEADER DEL MODAL */}
-              <div className="shrink-0 flex items-center justify-between border-b border-slate-200 bg-white/95 p-4 backdrop-blur sm:p-6">
-                <div className="flex items-center gap-4">
-                  <div className="h-12 w-12 rounded-full bg-slate-900 flex items-center justify-center text-white font-bold shadow-md">
-                    {associazioneNome.charAt(0).toUpperCase()}
-                  </div>
-                  <div>
-                    <h3 className="font-black text-slate-900 text-lg">Chat Unificata</h3>
-                    <p className="text-sm font-medium text-slate-500">{associazioneNome}</p>
-                  </div>
-                </div>
-                
-                <button 
-                  onClick={() => setIsOpen(false)}
-                  className="rounded-xl p-2 text-slate-400 transition-colors hover:bg-slate-100 hover:text-slate-700"
-                  title="Chiudi chat"
-                >
-                  <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-6 h-6">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-                  </svg>
-                </button>
-              </div>
-
-              {/* CONTENITORE CHAT CONDIVISA */}
-              <div className="flex-1 overflow-hidden p-4 sm:p-6 bg-slate-50 flex flex-col relative">
-                {/* 
-                  ✨ FIX STRATEGICO: Passiamo la prop "posizioneId" a SharedChatWidget 
-                  in modo che ogni messaggio inviato venga salvato agganciato a questo annuncio!
-                */}
-                <SharedChatWidget 
-                  volontarioId={userId} 
-                  associazioneId={targetAssociazioneId} 
-                  currentUserId={userId} 
-                  posizioneId={posizioneId} 
-                />
-              </div>
-            </div>
-          </div>
-        </>
-      )}
+      {mounted && isOpen && createPortal(modalContent, document.body)}
     </>
   )
 }
