@@ -1,7 +1,7 @@
 'use client'
 
 import Link from 'next/link'
-import { usePathname, useSearchParams } from 'next/navigation'
+import { usePathname } from 'next/navigation'
 
 interface PosizioneCardProps {
   posizione: any;
@@ -28,7 +28,6 @@ export default function PosizioneCard({
 }: PosizioneCardProps) { 
   
   const pathname = usePathname()
-  const searchParams = useSearchParams()
   const isAssociazione = ruolo === 'associazione'
   const isHorizontal = layout === 'horizontal' 
   
@@ -40,13 +39,12 @@ export default function PosizioneCard({
     return ora.substring(0, 5)
   }
 
-  // Logica Temporale & Stati Premium
+  // Logica Temporale & Stati
   const odierna = new Date().toISOString().split('T')[0]
   const isBozza = posizione.stato === 'bozza'
   const isArchiviata = posizione.stato === 'archiviata'
   const isConclusa = posizione.tipo === 'una_tantum' && posizione.data_esatta && posizione.data_esatta < odierna
 
-  // La freccina premium minimale (→) viene condivisa per indicare l'azione di approfondimento
   const IconaAzione = (
     <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2.5} stroke="currentColor" className="w-4 h-4">
       <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
@@ -111,7 +109,7 @@ export default function PosizioneCard({
       isHorizontal ? 'flex flex-row h-32 w-full' : 'flex flex-col h-full'
     } ${isConclusa || isArchiviata ? 'opacity-75 hover:opacity-100' : ''}`}>
       
-      {/* 📸 COPERTINA */}
+      {/* COPERTINA */}
       <div className={`relative shrink-0 overflow-hidden bg-slate-50 flex items-center justify-center ${
         isHorizontal ? 'w-28 sm:w-36 h-full border-r border-slate-100' : 'w-full h-32 md:h-40 border-b border-slate-100'
       }`}>
@@ -131,7 +129,7 @@ export default function PosizioneCard({
         )}
       </div>
 
-      {/* 📝 CONTENUTI RIGIDI */}
+      {/* CONTENUTI */}
       <div className={`flex flex-col flex-grow min-w-0 ${isHorizontal ? 'p-4' : 'p-5 md:p-6'}`}>
         {isHorizontal ? (
           <div className="flex h-full items-center gap-3">
@@ -202,10 +200,10 @@ export default function PosizioneCard({
     )
   }
 
-  // 🟢 Manteniamo intatti i parametri dell'URL attuale (?lat=...&lng=...&q=...)
-  const currentParams = searchParams ? searchParams.toString() : ''
-  const baseUrl = `/posizione/${posizione.slug || posizione.id}`
-  const urlVolontario = currentParams ? `${baseUrl}?${currentParams}` : baseUrl
+  let urlVolontario = `/posizione/${posizione.slug || posizione.id}`
+  if (pathname?.includes('/esplora') || pathname?.includes('/mappa')) {
+    urlVolontario += '?from=mappa'
+  }
 
   return (
     <Link 
