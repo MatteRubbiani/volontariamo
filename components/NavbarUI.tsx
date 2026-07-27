@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { HeartHandshake, LogOut, MapPin, LayoutDashboard, MessageSquare, Search, Palette, Heart, User } from 'lucide-react'
+import { HeartHandshake, LogOut, MapPin, LayoutDashboard, MessageSquare, Search, Palette, Heart, Building2 } from 'lucide-react'
 import { logout } from '@/app/auth/actions'
 import { useWorkspace } from '@/lib/context/WorkspaceContext'
 import { WorkspaceSwitcher } from '@/components/WorkspaceSwitcher'
@@ -84,6 +84,10 @@ export default function NavbarUI({
                         <MapPin className="w-3.5 h-3.5 opacity-70" />
                         Mappa
                       </Link>
+                      <Link href="/associazioni" className={linkClass('/associazioni')}>
+                        <Building2 className="w-3.5 h-3.5 opacity-70" />
+                        Associazioni
+                      </Link>
                       <Link 
                         href={isAziendale ? "/app/volontario/iniziative-team" : "/app/volontario/candidature"} 
                         className={linkClass(isAziendale ? "/app/volontario/iniziative-team" : "/app/volontario/candidature")}
@@ -113,10 +117,16 @@ export default function NavbarUI({
                 </>
               )
             ) : (
-              <Link href="/mappa" className={linkClass('/mappa')}>
-                <MapPin className="w-3.5 h-3.5 opacity-70" />
-                Esplora Mappa
-              </Link>
+              <>
+                <Link href="/mappa" className={linkClass('/mappa')}>
+                  <MapPin className="w-3.5 h-3.5 opacity-70" />
+                  Esplora Mappa
+                </Link>
+                <Link href="/associazioni" className={linkClass('/associazioni')}>
+                  <Building2 className="w-3.5 h-3.5 opacity-70" />
+                  Directory Associazioni
+                </Link>
+              </>
             )}
           </div>
 

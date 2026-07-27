@@ -7,9 +7,17 @@ type AuthPageProps = {
   }>;
 };
 
+function sanitizeRedirect(url?: string): string {
+  if (!url) return "";
+  if (url.startsWith("/") && !url.startsWith("//")) {
+    return url;
+  }
+  return "";
+}
+
 export default async function Page({ searchParams }: AuthPageProps) {
   const params = await searchParams;
-  const redirectTo = params.redirectTo?.startsWith("/") ? params.redirectTo : "";
+  const redirectTo = sanitizeRedirect(params.redirectTo);
   const errorMessage = params.error;
 
   return (

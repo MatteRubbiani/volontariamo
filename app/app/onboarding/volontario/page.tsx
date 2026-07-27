@@ -97,12 +97,12 @@ function VolontarioWizardForm() {
   }
 
   const filteredTags = useMemo(() => {
-    if (!tagQuery.trim()) return tagsCatalog.slice(0, 4)
+    if (!tagQuery.trim()) return tagsCatalog.slice(0, 6)
     return tagsCatalog.filter(t => t.name.toLowerCase().includes(tagQuery.toLowerCase()))
   }, [tagsCatalog, tagQuery])
 
   const filteredCompetenze = useMemo(() => {
-    if (!compQuery.trim()) return competenzeCatalog.slice(0, 4)
+    if (!compQuery.trim()) return competenzeCatalog.slice(0, 6)
     return competenzeCatalog.filter(c => c.name.toLowerCase().includes(compQuery.toLowerCase()))
   }, [competenzeCatalog, compQuery])
 
@@ -113,18 +113,17 @@ function VolontarioWizardForm() {
   const progress = (step / 2) * 100
 
   return (
-    // 🟢 CAMBIO UX FONDAMENTALE: Da "justify-center" a "justify-start pt-8 md:pt-16". 
-    // Ancorando il guscio in alto, la comparsa della tastiera virtuale mobile non causa più scossoni visivi.
-    <main className="h-[calc(100dvh-76px)] w-full bg-white flex flex-col justify-start pt-8 md:pt-16 items-center overflow-hidden font-sans antialiased selection:bg-slate-100">
-      <div className="max-w-[480px] w-full flex flex-col px-6">
+    // 🟢 'min-h' flessibile e 'pb-28' da mobile per evitare il blocco sotto la BottomNav
+    <main className="min-h-[calc(100dvh-3.5rem)] w-full bg-slate-50/50 flex flex-col justify-start pt-6 md:pt-12 pb-28 md:pb-12 items-center overflow-y-auto font-sans antialiased selection:bg-slate-100">
+      <div className="max-w-[480px] w-full flex flex-col px-4 sm:px-6">
         
-        {/* PROGRESS BAR (Ancorata e ferma in alto) */}
-        <div className="mb-8 shrink-0">
-          <div className="mb-3 flex items-center justify-between text-xs font-semibold uppercase tracking-wider text-slate-400">
+        {/* PROGRESS BAR */}
+        <div className="mb-6 md:mb-8 shrink-0">
+          <div className="mb-2.5 flex items-center justify-between text-xs font-bold uppercase tracking-wider text-slate-400">
             <span>Registrazione Volontario</span>
-            <span className="text-slate-900">Fase {step} di 2</span>
+            <span className="text-slate-900 font-extrabold">Fase {step} di 2</span>
           </div>
-          <div className="h-1 w-full bg-slate-100 rounded-full overflow-hidden">
+          <div className="h-1.5 w-full bg-slate-200/70 rounded-full overflow-hidden">
             <div className="h-full bg-slate-950 rounded-full transition-all duration-500 ease-[cubic-bezier(0.32,0.72,0,1)]" style={{ width: `${progress}%` }} />
           </div>
         </div>
@@ -142,60 +141,95 @@ function VolontarioWizardForm() {
         }} className="flex flex-col gap-6 w-full">
           
           {/* ==========================================
-              🎨 STEP 1: ANAGRAFICA CORE
+              STEP 1: ANAGRAFICA CORE
              ========================================== */}
           {step === 1 && (
-            <div className="flex flex-col gap-6 animate-in fade-in slide-in-from-bottom-4 duration-500 ease-[cubic-bezier(0.32,0.72,0,1)]">
+            <div className="flex flex-col gap-5 sm:gap-6 animate-in fade-in slide-in-from-bottom-4 duration-500 ease-[cubic-bezier(0.32,0.72,0,1)]">
               <div className="space-y-1.5">
-                <h1 className="text-3xl font-semibold tracking-tight text-slate-950 leading-none">Come ti chiami?</h1>
-                <p className="text-sm text-slate-500 font-normal">Inserisci i tuoi dati per attivare la piattaforma.</p>
+                <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-950 leading-tight">Come ti chiami?</h1>
+                <p className="text-sm text-slate-500 font-normal">Inserisci i tuoi dati personali per attivare il profilo.</p>
               </div>
 
-              <div className="flex flex-col gap-4 mt-2">
-                <div className="grid grid-cols-2 gap-4">
-                  <input type="text" placeholder="Nome *" value={formData.nome} onChange={(e) => setFormData(p => ({ ...p, nome: e.target.value }))} className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3.5 text-sm font-medium outline-none transition-all focus:border-slate-400" required />
-                  <input type="text" placeholder="Cognome *" value={formData.cognome} onChange={(e) => setFormData(p => ({ ...p, cognome: e.target.value }))} className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3.5 text-sm font-medium outline-none transition-all focus:border-slate-400" required />
+              <div className="flex flex-col gap-3.5 mt-1">
+                <div className="grid grid-cols-2 gap-3 sm:gap-4">
+                  {/* ⚡ 'text-base sm:text-sm' previene l'auto-zoom di iOS/Safari */}
+                  <input 
+                    type="text" 
+                    placeholder="Nome *" 
+                    value={formData.nome} 
+                    onChange={(e) => setFormData(p => ({ ...p, nome: e.target.value }))} 
+                    className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3.5 text-base sm:text-sm font-medium text-slate-900 placeholder:text-slate-400 outline-none transition-all focus:border-slate-900 shadow-xs" 
+                    required 
+                  />
+                  <input 
+                    type="text" 
+                    placeholder="Cognome *" 
+                    value={formData.cognome} 
+                    onChange={(e) => setFormData(p => ({ ...p, cognome: e.target.value }))} 
+                    className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3.5 text-base sm:text-sm font-medium text-slate-900 placeholder:text-slate-400 outline-none transition-all focus:border-slate-900 shadow-xs" 
+                    required 
+                  />
                 </div>
-                <div className="grid grid-cols-2 gap-4 pt-4 border-t border-slate-100 mt-2">
+
+                <div className="grid grid-cols-2 gap-3 sm:gap-4 pt-3 border-t border-slate-200/60 mt-1">
                   <div className="relative">
-                    <input type="text" placeholder="CAP residenza *" value={formData.cap} onChange={(e) => handleCapChange(e.target.value)} className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3.5 text-sm font-medium outline-none transition-all focus:border-slate-400" maxLength={5} required />
-                    {isFetchingCity && <span className="absolute right-4 top-4 w-4 h-4 border-2 border-slate-950 border-t-transparent rounded-full animate-spin"></span>}
+                    <input 
+                      type="text" 
+                      placeholder="CAP *" 
+                      value={formData.cap} 
+                      onChange={(e) => handleCapChange(e.target.value)} 
+                      className="w-full rounded-2xl border border-slate-200 bg-white px-4 py-3.5 text-base sm:text-sm font-medium text-slate-900 placeholder:text-slate-400 outline-none transition-all focus:border-slate-900 shadow-xs" 
+                      maxLength={5} 
+                      required 
+                    />
+                    {isFetchingCity && <span className="absolute right-3.5 top-4 w-4 h-4 border-2 border-slate-950 border-t-transparent rounded-full animate-spin"></span>}
                   </div>
-                  <input type="text" readOnly placeholder="Città" value={formData.cittaResidenza} className="w-full rounded-2xl border border-slate-100 bg-slate-50 px-4 py-3.5 text-sm font-semibold text-slate-600 outline-none cursor-not-allowed" />
+                  <input 
+                    type="text" 
+                    readOnly 
+                    placeholder="Città" 
+                    value={formData.cittaResidenza} 
+                    className="w-full rounded-2xl border border-slate-200/80 bg-slate-100/70 px-4 py-3.5 text-base sm:text-sm font-semibold text-slate-700 outline-none cursor-not-allowed" 
+                  />
                 </div>
               </div>
 
-              <button type="button" disabled={!canGoNext} onClick={() => setStep(2)} className="w-full rounded-2xl bg-slate-950 text-white py-4 text-xs font-semibold uppercase tracking-wider transition-all hover:bg-black disabled:bg-slate-100 disabled:text-slate-400 mt-4 shadow-sm">
+              <button 
+                type="button" 
+                disabled={!canGoNext} 
+                onClick={() => setStep(2)} 
+                className="w-full rounded-2xl bg-slate-950 text-white py-4 text-xs font-bold uppercase tracking-wider transition-all hover:bg-black active:scale-[0.98] disabled:bg-slate-200 disabled:text-slate-400 mt-2 shadow-sm"
+              >
                 Scegli Interessi e Cause
               </button>
             </div>
           )}
 
           {/* ==========================================
-              🎨 STEP 2: ACCORDION DI FOCUS (ZERO SCROLL & TASTIERA IMMUNE)
+              STEP 2: CAUSE E COMPETENZE
              ========================================== */}
           {step === 2 && (
-            <div className="flex flex-col gap-4 animate-in fade-in slide-in-from-bottom-4 duration-500 ease-[cubic-bezier(0.32,0.72,0,1)] h-full">
+            <div className="flex flex-col gap-4 animate-in fade-in slide-in-from-bottom-4 duration-500 ease-[cubic-bezier(0.32,0.72,0,1)]">
               <div className="space-y-1.5 shrink-0">
-                <h2 className="text-3xl font-semibold tracking-tight text-slate-950 leading-none">Cosa ti appassiona?</h2>
-                <p className="text-sm text-slate-500 font-normal">Personalizza le cause e le tue competenze in due tap.</p>
+                <h2 className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-950 leading-tight">Cosa ti appassiona?</h2>
+                <p className="text-sm text-slate-500 font-normal">Personalizza le cause e le tue competenze principali.</p>
               </div>
 
-              <div className="flex flex-col gap-3 mt-2">
+              <div className="flex flex-col gap-3 mt-1">
                 
                 {/* 🟢 SEZIONE 1: LE CAUSE */}
                 <div 
                   onClick={() => activeSection !== 'cause' && setActiveSection('cause')}
-                  className={`border rounded-[2rem] p-5 transition-all duration-500 ease-[cubic-bezier(0.32,0.72,0,1)] cursor-pointer ${
+                  className={`border rounded-[1.75rem] p-4 sm:p-5 transition-all duration-300 cursor-pointer ${
                     activeSection === 'cause' 
-                      ? 'border-slate-300 bg-white shadow-[0_10px_30px_rgba(0,0,0,0.02)]' 
-                      : 'border-slate-100 bg-slate-50/50 hover:bg-slate-50'
+                      ? 'border-slate-900 bg-white shadow-md' 
+                      : 'border-slate-200/80 bg-white hover:bg-slate-50/80'
                   }`}
                 >
                   <div className="flex justify-between items-center mb-1">
                     <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">1. Cause e Ambiti</span>
                     {activeSection !== 'cause' && (
-                      <span className="text-xs font-semibold text-slate-900 bg-white px-2.5 py-1 rounded-full border border-slate-200">
+                      <span className="text-xs font-bold text-slate-900 bg-slate-100 px-2.5 py-1 rounded-full border border-slate-200/60">
                         {selectedTagsDetails.length} {selectedTagsDetails.length === 1 ? 'scelta' : 'scelte'}
                       </span>
                     )}
@@ -204,25 +238,30 @@ function VolontarioWizardForm() {
                   {activeSection === 'cause' ? (
                     <div className="space-y-3 mt-3 animate-in fade-in duration-300">
                       <div className="relative">
+                        {/* ⚡ 'text-base sm:text-xs' evita lo zoom su Safari */}
                         <input 
-                          type="text" placeholder="Cerca causa..." value={tagQuery} 
+                          type="text" 
+                          placeholder="Cerca causa..." 
+                          value={tagQuery} 
                           onChange={(e) => setTagQuery(e.target.value)}
-                          className="w-full rounded-xl border border-slate-200 bg-white pl-9 pr-4 py-2.5 text-xs font-medium outline-none"
+                          className="w-full rounded-xl border border-slate-200 bg-white pl-9 pr-4 py-2.5 text-base sm:text-xs font-medium outline-none transition-colors focus:border-slate-900"
                           onClick={(e) => e.stopPropagation()}
                         />
                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-3.5"><path strokeLinecap="round" strokeLinejoin="round" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z" /></svg>
                       </div>
-                      <div className="grid grid-cols-2 gap-2 max-h-[140px] overflow-y-auto pr-0.5">
+                      <div className="grid grid-cols-2 gap-2 max-h-[160px] overflow-y-auto pr-0.5">
                         {filteredTags.map((tag) => {
                           const active = formData.tags.includes(tag.id)
                           return (
                             <button
-                              key={tag.id} type="button" onClick={(e) => { e.stopPropagation(); toggleMulti('tags', tag.id); setTagQuery(''); }}
-                              className={`px-3 py-2.5 rounded-xl border text-left text-xs font-medium truncate flex items-center gap-2 transition-all ${
-                                active ? 'bg-slate-950 border-slate-950 text-white' : 'bg-white border-slate-200 text-slate-700 hover:border-slate-300'
+                              key={tag.id} 
+                              type="button" 
+                              onClick={(e) => { e.stopPropagation(); toggleMulti('tags', tag.id); setTagQuery(''); }}
+                              className={`px-3 py-2.5 rounded-xl border text-left text-xs font-semibold truncate flex items-center gap-2 transition-all active:scale-95 ${
+                                active ? 'bg-slate-950 border-slate-950 text-white' : 'bg-slate-50 border-slate-200/80 text-slate-700 hover:border-slate-300'
                               }`}
                             >
-                              <span className={`w-1 h-1 rounded-full shrink-0 ${active ? 'bg-white' : 'bg-slate-300'}`} />
+                              <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${active ? 'bg-emerald-400' : 'bg-slate-300'}`} />
                               <span className="truncate">{tag.name}</span>
                             </button>
                           )
@@ -239,16 +278,16 @@ function VolontarioWizardForm() {
                 {/* 🟢 SEZIONE 2: LE COMPETENZE */}
                 <div 
                   onClick={() => activeSection !== 'competenze' && setActiveSection('competenze')}
-                  className={`border rounded-[2rem] p-5 transition-all duration-500 ease-[cubic-bezier(0.32,0.72,0,1)] cursor-pointer ${
+                  className={`border rounded-[1.75rem] p-4 sm:p-5 transition-all duration-300 cursor-pointer ${
                     activeSection === 'competenze' 
-                      ? 'border-slate-300 bg-white shadow-[0_10px_30px_rgba(0,0,0,0.02)]' 
-                      : 'border-slate-100 bg-slate-50/50 hover:bg-slate-50'
+                      ? 'border-slate-900 bg-white shadow-md' 
+                      : 'border-slate-200/80 bg-white hover:bg-slate-50/80'
                   }`}
                 >
                   <div className="flex justify-between items-center mb-1">
                     <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400">2. Le tue Competenze</span>
                     {activeSection !== 'competenze' && (
-                      <span className="text-xs font-semibold text-slate-900 bg-white px-2.5 py-1 rounded-full border border-slate-200">
+                      <span className="text-xs font-bold text-slate-900 bg-slate-100 px-2.5 py-1 rounded-full border border-slate-200/60">
                         {selectedCompetenzeDetails.length} {selectedCompetenzeDetails.length === 1 ? 'scelta' : 'scelte'}
                       </span>
                     )}
@@ -257,25 +296,30 @@ function VolontarioWizardForm() {
                   {activeSection === 'competenze' ? (
                     <div className="space-y-3 mt-3 animate-in fade-in duration-300">
                       <div className="relative">
+                        {/* ⚡ 'text-base sm:text-xs' evita lo zoom su Safari */}
                         <input 
-                          type="text" placeholder="Cerca competenza..." value={compQuery} 
+                          type="text" 
+                          placeholder="Cerca competenza..." 
+                          value={compQuery} 
                           onChange={(e) => setCompQuery(e.target.value)}
-                          className="w-full rounded-xl border border-slate-200 bg-white pl-9 pr-4 py-2.5 text-xs font-medium outline-none"
+                          className="w-full rounded-xl border border-slate-200 bg-white pl-9 pr-4 py-2.5 text-base sm:text-xs font-medium outline-none transition-colors focus:border-slate-900"
                           onClick={(e) => e.stopPropagation()}
                         />
                         <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={2} stroke="currentColor" className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-3.5"><path strokeLinecap="round" strokeLinejoin="round" d="m21 21-5.197-5.197m0 0A7.5 7.5 0 1 0 5.196 5.196a7.5 7.5 0 0 0 10.607 10.607Z" /></svg>
                       </div>
-                      <div className="grid grid-cols-2 gap-2 max-h-[140px] overflow-y-auto pr-0.5">
+                      <div className="grid grid-cols-2 gap-2 max-h-[160px] overflow-y-auto pr-0.5">
                         {filteredCompetenze.map((comp) => {
                           const active = formData.competenze.includes(comp.id)
                           return (
                             <button
-                              key={comp.id} type="button" onClick={(e) => { e.stopPropagation(); toggleMulti('competenze', comp.id); setCompQuery(''); }}
-                              className={`px-3 py-2.5 rounded-xl border text-left text-xs font-medium truncate flex items-center gap-2 transition-all ${
-                                active ? 'bg-slate-900 border-slate-900 text-white' : 'bg-white border-slate-200 text-slate-700 hover:border-slate-300'
+                              key={comp.id} 
+                              type="button" 
+                              onClick={(e) => { e.stopPropagation(); toggleMulti('competenze', comp.id); setCompQuery(''); }}
+                              className={`px-3 py-2.5 rounded-xl border text-left text-xs font-semibold truncate flex items-center gap-2 transition-all active:scale-95 ${
+                                active ? 'bg-slate-950 border-slate-950 text-white' : 'bg-slate-50 border-slate-200/80 text-slate-700 hover:border-slate-300'
                               }`}
                             >
-                              <span className={`w-1 h-1 rounded-full shrink-0 ${active ? 'bg-white' : 'bg-slate-300'}`} />
+                              <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${active ? 'bg-emerald-400' : 'bg-slate-300'}`} />
                               <span className="truncate">{comp.name}</span>
                             </button>
                           )
@@ -291,12 +335,19 @@ function VolontarioWizardForm() {
 
               </div>
 
-              {/* CONTROLLI FISSI IN BASSO ANCORATI */}
-              <div className="flex gap-4 pt-4 border-t border-slate-100 mt-2 shrink-0">
-                <button type="button" onClick={() => setStep(1)} className="w-1/3 rounded-2xl bg-slate-50 border border-slate-200 text-slate-700 py-4 text-xs font-semibold uppercase tracking-wider transition-all hover:bg-slate-100">Indietro</button>
+              {/* PULSANTI DI AZIONE */}
+              <div className="flex gap-3 pt-3 border-t border-slate-200/60 mt-2 shrink-0">
                 <button 
-                  type="submit" disabled={isSubmitting} 
-                  className="w-2/3 rounded-2xl bg-slate-950 text-white py-4 text-xs font-semibold uppercase tracking-wider transition-all hover:bg-black disabled:bg-slate-100 shadow-md flex items-center justify-center gap-2"
+                  type="button" 
+                  onClick={() => setStep(1)} 
+                  className="w-1/3 rounded-2xl bg-white border border-slate-200 text-slate-700 py-3.5 text-xs font-bold uppercase tracking-wider transition-all hover:bg-slate-100 active:scale-95"
+                >
+                  Indietro
+                </button>
+                <button 
+                  type="submit" 
+                  disabled={isSubmitting} 
+                  className="w-2/3 rounded-2xl bg-slate-950 text-white py-3.5 text-xs font-bold uppercase tracking-wider transition-all hover:bg-black active:scale-95 disabled:bg-slate-200 shadow-sm flex items-center justify-center gap-2"
                 >
                   {isSubmitting ? (
                     <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
@@ -316,7 +367,7 @@ function VolontarioWizardForm() {
 export default function VolontarioWizard() {
   return (
     <Suspense fallback={
-      <div className="flex h-[calc(100dvh-76px)] w-full items-center justify-center bg-white">
+      <div className="flex min-h-[calc(100dvh-3.5rem)] w-full items-center justify-center bg-slate-50/50">
         <div className="w-6 h-6 border-2 border-slate-950 border-t-transparent rounded-full animate-spin" />
       </div>
     }>

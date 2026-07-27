@@ -4,21 +4,30 @@ type AuthPageProps = {
   searchParams: Promise<{
     redirectTo?: string;
     error?: string;
-    message?: string; // 🚨 1. Aggiungiamo il tipo per il messaggio di successo
+    message?: string;
   }>;
 };
 
+// Helper di sicurezza per il redirect interno
+function sanitizeRedirect(url?: string): string {
+  if (!url) return "";
+  if (url.startsWith("/") && !url.startsWith("//")) {
+    return url;
+  }
+  return "";
+}
+
 export default async function Page({ searchParams }: AuthPageProps) {
   const params = await searchParams;
-  const redirectTo = params.redirectTo?.startsWith("/") ? params.redirectTo : "";
+  const redirectTo = sanitizeRedirect(params.redirectTo);
   const errorMessage = params.error;
-  const successMessage = params.message; // 🚨 2. Estraiamo il messaggio
+  const successMessage = params.message;
 
   return (
     <div className="flex min-h-svh w-full flex-col items-center justify-center p-6 md:p-10">
       <div className="w-full max-w-sm">
         
-        {/* 🚨 3. BANNER DI SUCCESSO PREMIUM (Appare solo se c'è il messaggio) */}
+        {/* BANNER DI SUCCESSO PREMIUM */}
         {successMessage && (
           <div className="mb-6 rounded-2xl border border-emerald-200 bg-emerald-50 p-4 text-center shadow-sm animate-in fade-in slide-in-from-top-4 duration-500">
             <div className="flex items-center justify-center gap-2">

@@ -11,6 +11,12 @@ function getSafeRedirectTo(value: FormDataEntryValue | null) {
   return value
 }
 
+function parseCoordinate(val: FormDataEntryValue | null): number | null {
+  if (typeof val !== 'string' || !val.trim()) return null
+  const num = parseFloat(val)
+  return isNaN(num) ? null : num
+}
+
 export async function completeOnboarding(formData: FormData) {
   const supabase = await createClient()
   
@@ -20,7 +26,9 @@ export async function completeOnboarding(formData: FormData) {
   const role = formData.get('role') as string
   const redirectTo = getSafeRedirectTo(formData.get('redirectTo')) || `/app/${role}`
 
-  // --- 1. LOGICA VOLONTARIO (Sincronizzata) ---
+  // =========================================================================
+  // 1. LOGICA VOLONTARIO
+  // =========================================================================
   if (role === 'volontario') {
     const { error: volError } = await supabase.from('volontari').upsert({
       id: user.id,
@@ -40,7 +48,6 @@ export async function completeOnboarding(formData: FormData) {
     const tagsIds = formData.getAll('tags') as string[]
     const compIds = formData.getAll('competenze') as string[]
 
-    // Pulizia e inserimento per tag e competenze
     await supabase.from('volontario_tags').delete().eq('volontario_id', user.id)
     if (tagsIds.length > 0) {
       await supabase.from('volontario_tags').insert(tagsIds.map(id => ({ volontario_id: user.id, tag_id: id })))
@@ -52,67 +59,104 @@ export async function completeOnboarding(formData: FormData) {
     }
   } 
 
-  // --- 🚀 2. LOGICA ASSOCIAZIONE (ALLINEATA AL NUOVO SCHEMA) ---
+  // =========================================================================
+  // 🚀 2. LOGICA ASSOCIAZIONE (CLAIMING RUNTS & PROTEZIONE ANTI-TROLL)
+  // =========================================================================
   else if (role === 'associazione') {
     
-    // A. Anagrafica Core
+    const rawCF = formData.get('codice_fiscale')
+    const cf = rawCF ? String(rawCF).toUpperCase().replace(/\s/g, '') : ''
+    if (!cf) throw new Error('Codice Fiscale obbligatorio')
+
+    // 🛡️ SICUREZZA 1: Check se il CF esiste già per evitare "Duplicate Key"
+    const { data: existingEntity } = await supabase
+      .from('associazioni')
+      .select('id, claimed')
+      .eq('codice_fiscale', cf)
+      .maybeSingle()
+
+    if (existingEntity && existingEntity.id !== user.id) {
+      if (!existingEntity.claimed) {
+        // CLEANUP ARCHITETTURALE: Elimino la scheda importata fittizia
+        // per lasciare il posto all'ID reale dell'utente autenticato (user.id)
+        await supabase.from('associazioni_sedi').delete().eq('associazione_id', existingEntity.id)
+        await supabase.from('associazioni_trasparenza').delete().eq('associazione_id', existingEntity.id)
+        await supabase.from('associazione_tags').delete().eq('associazione_id', existingEntity.id)
+        await supabase.from('associazioni').delete().eq('id', existingEntity.id)
+      } else {
+        // L'Associazione è GIA' di qualcun altro che l'ha verificata.
+        throw new Error('Questo Codice Fiscale è già stato rivendicato da un altro Referente. Contatta il supporto per contestazioni.')
+      }
+    }
+
+    // Estraggo Coordinate
+    const lat = parseCoordinate(formData.get('lat'))
+    const lng = parseCoordinate(formData.get('lng'))
+    const comune = formData.get('comune') ? String(formData.get('comune')) : null
+    const provincia = formData.get('provincia') ? String(formData.get('provincia')) : null
+    const indirizzo = formData.get('indirizzo') ? String(formData.get('indirizzo')) : null
+
+    // A. Crea la Scheda (Modalità Sandbox: in_attesa + PIN visibile subito)
     const { error: coreError } = await supabase.from('associazioni').upsert({
       id: user.id,
       denominazione: formData.get('denominazione'),
-      forma_giuridica: formData.get('forma_giuridica'),
-      codice_fiscale: formData.get('codice_fiscale'),
+      forma_giuridica: formData.get('forma_giuridica') || 'APS',
+      codice_fiscale: cf,
       email_associazione: formData.get('email_associazione'),
       telefono: formData.get('telefono') || null,
       descrizione: formData.get('descrizione') || null,
-    })
+      comune: comune,
+      provincia: provincia,
+      lat: lat, // Il PIN si accende in tempo reale
+      lng: lng, // Il PIN si accende in tempo reale
+      claimed: true,
+      stato_verifica: 'in_attesa' // 🟡 MODALITÀ SANDBOX DA VERIFICARE
+    }, { onConflict: 'id' })
     
     if (coreError) throw new Error(`Errore Anagrafica: ${coreError.message}`)
 
-    // B. Trasparenza (Con onConflict e Nomi Spaccati)
+    // B. Dati Sensibili e Trasparenza (Art. 494 CP accettato)
     const { error: traspError } = await supabase.from('associazioni_trasparenza').upsert({
       associazione_id: user.id,
-      // Dati Legale Rappresentante
-      legale_rappresentante_nome: formData.get('legale_rappresentante_nome'),
-      legale_rappresentante_cognome: formData.get('legale_rappresentante_cognome'),
-      // Dati Referente
       referente_progetto_nome: formData.get('referente_progetto_nome'),
       referente_progetto_cognome: formData.get('referente_progetto_cognome'),
       referente_progetto_ruolo: formData.get('referente_progetto_ruolo'),
-      // Consensi
-      dichiarazione_veridicita: formData.get('dichiarazione_veridicita') === 'true',
+      dichiarazione_veridicita: formData.get('dichiarazione_legale') === 'true', // Accettazione Disclaimer Penale
       consenso_privacy: formData.get('consenso_privacy') === 'true',
       consenso_newsletter: formData.get('consenso_newsletter') === 'true',
-    }, { onConflict: 'associazione_id' }) // 🛡️ PROTEZIONE UNIQUE
+    }, { onConflict: 'associazione_id' })
 
     if (traspError) throw new Error(`Errore Trasparenza: ${traspError.message}`)
 
-    // C. Sede (Con onConflict)
-    const { error: sedeError } = await supabase.from('associazioni_sedi').upsert({
-      associazione_id: user.id,
-      indirizzo: formData.get('indirizzo'),
-      cap: formData.get('cap'),
-      comune: formData.get('comune'),
-      provincia: formData.get('provincia'),
-      is_principale: true,
-      tipologia: 'legale_operativa'
-    }, { onConflict: 'associazione_id' }) // 🛡️ PROTEZIONE UNIQUE
+    // C. Sede Ufficiale
+    if (indirizzo) {
+      await supabase.from('associazioni_sedi').upsert({
+        associazione_id: user.id,
+        indirizzo: indirizzo,
+        cap: formData.get('cap') || '00000',
+        comune: comune || 'Modena',
+        provincia: provincia || 'MO',
+        is_principale: true,
+        tipologia: 'legale_operativa',
+        lat: lat,
+        lng: lng
+      }, { onConflict: 'associazione_id' })
+    }
 
-    if (sedeError) throw new Error(`Errore Sede: ${sedeError.message}`)
-
-    // D. Gestione Tag/Ambiti (Delete + Insert per pulizia reale)
+    // D. Tags / Ambiti d'azione
     const assTags = formData.getAll('tags') as string[]
     await supabase.from('associazione_tags').delete().eq('associazione_id', user.id)
-    
     if (assTags.length > 0) {
-      const assTagsToInsert = assTags.map(tagId => ({
-        associazione_id: user.id,
-        tag_id: tagId
-      }))
-      await supabase.from('associazione_tags').insert(assTagsToInsert)
+      await supabase.from('associazione_tags').insert(assTags.map(tagId => ({ associazione_id: user.id, tag_id: tagId })))
     }
+
+    // 🚀 NOTA PER IL FUTURO: Qui inserirai lo script per il webhook Telegram
+    // fetch('https://api.telegram.org/botTUO_TOKEN/sendMessage?chat_id=TUO_ID&text=Nuova associazione in attesa: ' + formData.get('denominazione'))
   }
 
-  // --- 3. LOGICA IMPRESA (Sincronizzata) ---
+  // =========================================================================
+  // 3. LOGICA IMPRESA (Sincronizzata)
+  // =========================================================================
   else if (role === 'impresa') {
     const { error: impError } = await supabase.from('imprese').upsert({
       id: user.id,
@@ -135,19 +179,14 @@ export async function completeOnboarding(formData: FormData) {
     if (impError) throw new Error(`Errore Impresa: ${impError.message}`)
   }
 
-  // HUB PROFILI
-  const { error: profiloError } = await supabase.from('profili').upsert({
-    id: user.id,
-    ruolo: role
-  })
-
+  // Creazione Profilo Hub
+  const { error: profiloError } = await supabase.from('profili').upsert({ id: user.id, ruolo: role })
   if (profiloError) throw new Error("Errore finalizzazione profilo.")
 
-  // CRITICAL: Aggressive cache invalidation after profile creation
-  // Invalidate layout to refresh Navbar with new role
-  // Invalidate specific role page for fresh dashboard
-  // This prevents navbar disappearing and ensures UI consistency
+  // Revalidate della cache: La mappa si aggiorna subito col nuovo PIN!
   revalidatePath('/', 'layout')
+  revalidatePath('/associazioni', 'page')
+  revalidatePath('/mappa', 'page')
   revalidatePath(`/app/${role}`, 'layout')
   revalidatePath(`/app/${role}`, 'page')
   
