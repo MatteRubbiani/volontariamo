@@ -2,22 +2,20 @@ import { createServerClient } from '@supabase/ssr'
 import { createClient } from '@supabase/supabase-js'
 import type { Metadata, ResolvingMetadata } from 'next'
 import Link from 'next/link'
-import { FileText, Link2, Quote, Settings2, Sparkles, Users, Heart, Briefcase, Video, Mail, Target, Eye } from 'lucide-react'
+import { FileText, Link2, Quote, Settings2, Sparkles, Users, Heart, Briefcase, Video, Mail, Target, Eye, MapPin } from 'lucide-react'
 import PosizioneCard from '@/components/PosizioneCard'
+import MappaVetrinaPubblica from './MappaVetrinaPubblica'
 
 export const revalidate = 3600 
 export const dynamicParams = true 
 
-// 🛡️ ESTRAZIONE ID CENTRALIZZATA CON DIAGNOSTICA
 function extractShortId(slugWithQueries: string): string {
   const cleanSlug = decodeURIComponent(slugWithQueries).split('?')[0].trim();
   const parts = cleanSlug.split('-');
   const id = parts[parts.length - 1] || cleanSlug;
-  console.log(`[DIAGNOSTICA] extractShortId (Associazione): Input "${slugWithQueries}" -> Output "${id}"`);
   return id;
 }
 
-// 🛡️ FUNZIONE AUSILIARIA PER FORZARE URL IMMAGINI ASSOLUTI (Richiesto da WhatsApp/Social)
 function getAbsoluteImageUrl(url: string | null | undefined): string {
   const fallbackImage = 'https://volontariando.work/opengraph-image.png';
   if (!url) return fallbackImage;
@@ -27,7 +25,6 @@ function getAbsoluteImageUrl(url: string | null | undefined): string {
     return cleanUrl;
   }
   
-  // Se l'URL è un path relativo di Supabase, ricostruiamo l'endpoint CDN pubblico assoluto
   return `https://kbgguubqwpthsbvnfdnq.supabase.co/storage/v1/object/public/${cleanUrl.replace(/^\//, '')}`;
 }
 
@@ -47,17 +44,12 @@ export async function generateStaticParams() {
   })) || []
 }
 
-// ==========================================
-// 🎯 GENERAZIONE METADATI SEO & SOCIAL DINAMICI (Fix Immagine WhatsApp + Isolamento ID)
-// ==========================================
 export async function generateMetadata(
   { params }: { params: Promise<{ slug: string }> },
   parent: ResolvingMetadata
 ): Promise<Metadata> {
   await parent
   const resolvedParams = await params
-
-  console.log(`[DIAGNOSTICA - METADATA ASSOCIAZIONE] Inizio per slug grezzo: "${resolvedParams.slug}"`);
   const shortId = extractShortId(resolvedParams.slug || '');
 
   const supabase = createClient(
@@ -65,22 +57,14 @@ export async function generateMetadata(
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
   )
 
-  // Utilizziamo l'ID parziale estratto per proteggere la query da modifiche client-side allo slug
-  const { data: associazione, error } = await supabase
+  const { data: associazione } = await supabase
     .from('associazioni')
     .select('denominazione, forma_giuridica, logo_url, grafica:associazioni_grafica(tagline, cover_url)')
     .ilike('slug', `%${shortId}%`)
     .maybeSingle()
 
-  if (error) {
-    console.error(`[DIAGNOSTICA - METADATA ASSOCIAZIONE] Errore Query Supabase:`, error);
-  }
-
   if (!associazione) {
-    console.warn(`[DIAGNOSTICA - METADATA ASSOCIAZIONE] Nessuna associazione trovata nel DB per l'ID: "${shortId}".`);
-    return {
-      title: 'Profilo Associazione', 
-    }
+    return { title: 'Profilo Associazione' }
   }
 
   const denominazione = associazione.denominazione || 'Associazione'
@@ -90,7 +74,6 @@ export async function generateMetadata(
   const tagline = (associazione.grafica as any)?.tagline || `Scopri i progetti di utilità sociale e i bandi di volontariato aperti di ${denominazione}.`
   const description = tagline.replace(/\s+/g, ' ').trim().slice(0, 155) + '...'
 
-  // 🟢 FORMATTAZIONE IMMAGINI CON PROTOCOLLO ASSOLUTO PER SOCIAL E WHATSAPP
   const rawLogoUrl = associazione.logo_url || 'https://volontariando.work/opengraph-image.png'
   const rawCoverUrl = (associazione.grafica as any)?.cover_url || rawLogoUrl
   
@@ -100,9 +83,7 @@ export async function generateMetadata(
   const cleanSlugWithoutQueries = (resolvedParams.slug || '').split('?')[0].trim()
 
   return {
-    title: {
-      absolute: `${title} | Volontariando`, // 🔒 Lock del titolo nell'head
-    },
+    title: { absolute: `${title} | Volontariando` },
     description,
     openGraph: {
       title: `${title} | Volontariando`, 
@@ -111,20 +92,8 @@ export async function generateMetadata(
       url: `https://volontariando.work/associazione/${cleanSlugWithoutQueries}`,
       siteName: 'Volontariando',
       images: [
-        { 
-          // 1. Immagine principale widescreen (1200x630) per Facebook/Linkedin
-          url: coverUrl, 
-          width: 1200, 
-          height: 630, 
-          alt: `Copertina di ${denominazione}` 
-        },
-        {
-          // 2. Immagine quadrata leggera (400x400) specifica per superare il blocco 300KB di WhatsApp mobile
-          url: logoUrl,
-          width: 400,
-          height: 400,
-          alt: `Logo di ${denominazione}`
-        }
+        { url: coverUrl, width: 1200, height: 630, alt: `Copertina di ${denominazione}` },
+        { url: logoUrl, width: 400, height: 400, alt: `Logo di ${denominazione}` }
       ]
     },
     twitter: {
@@ -184,6 +153,21 @@ const Blocks = {
       </div>
     )
   },
+
+  // 🟢 BLOCCO MAPPA
+  map: ({ content, assocInfo }: any) => (
+    <section className="space-y-3 px-2">
+      <h3 className="text-xl md:text-2xl font-extrabold tracking-tight text-slate-900">{content.title || 'La nostra Sede'}</h3>
+      <MappaVetrinaPubblica 
+        lat={assocInfo?.lat}
+        lng={assocInfo?.lng}
+        nome={assocInfo?.denominazione}
+        comune={assocInfo?.comune}
+        provincia={assocInfo?.provincia}
+        indirizzo={assocInfo?.indirizzo}
+      />
+    </section>
+  ),
 
   about: ({ content }: any) => (
     <section className="px-2">
@@ -473,19 +457,19 @@ const Blocks = {
   ),
 }
 
-// ==========================================
-// LOGICA DI FALLBACK
-// ==========================================
 function createFallbackLayout(associazione: any, grafica: any) {
   const blocks = []
   
   blocks.push({ id: 'f-hero', type: 'hero', content: { title: associazione.denominazione, eyebrow: associazione.forma_giuridica, subtitle: grafica.tagline, coverUrl: grafica.cover_url, logoUrl: associazione.logo_url, brandColor: grafica.colore_brand || '#111827' } })
   
-  if (grafica.statistiche?.length > 0) {
-    blocks.push({ id: 'f-stats', type: 'stats', content: { items: grafica.statistiche } })
-  }
   if (grafica.chi_siamo) {
     blocks.push({ id: 'f-about', type: 'about', content: { title: 'Chi Siamo', body: grafica.chi_siamo } })
+  }
+
+  blocks.push({ id: 'f-map', type: 'map', content: { title: 'La nostra Sede' } })
+
+  if (grafica.statistiche?.length > 0) {
+    blocks.push({ id: 'f-stats', type: 'stats', content: { items: grafica.statistiche } })
   }
   if (grafica.mission) {
     blocks.push({ id: 'f-mission', type: 'mission', content: { title: 'La nostra Mission', body: grafica.mission } })
@@ -513,13 +497,8 @@ function createFallbackLayout(associazione: any, grafica: any) {
   return blocks
 }
 
-// ==========================================
-// COMPONENTE PAGINA
-// ==========================================
 export default async function ProfiloAssociazione({ params }: { params: Promise<{ slug: string }> }) {
   const { slug } = await params
-  console.log(`[DIAGNOSTICA - PAGINA ASSOCIAZIONE] Caricamento pagina per slug grezzo: "${slug}"`);
-
   const shortId = extractShortId(slug);
 
   const supabase = createClient(
@@ -527,24 +506,33 @@ export default async function ProfiloAssociazione({ params }: { params: Promise<
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
   )
 
-  // 🟢 Allineamento perfetto con lo stesso ID corto usato da generateMetadata
   const { data: associazione } = await supabase
     .from('associazioni')
-    .select('*, grafica:associazioni_grafica(*)')
+    .select('*, grafica:associazioni_grafica(*), sedi:associazioni_sedi(*)')
     .ilike('slug', `%${shortId}%`)
     .maybeSingle()
 
   if (!associazione) {
-    console.warn(`[DIAGNOSTICA - PAGINA ASSOCIAZIONE] Nessun record trovato nel DB per: "${shortId}".`);
     return <div className="min-h-screen flex items-center justify-center font-sans text-slate-500">Associazione non trovata</div>
   }
-
-  console.log(`[DIAGNOSTICA - PAGINA ASSOCIAZIONE] Record caricato con successo: "${associazione.denominazione}"`);
 
   const associazioneId = associazione.id
   const grafica = associazione.grafica || {}
   const coloreBrand = grafica.colore_brand || '#111827'
   
+  const sedePrincipale = Array.isArray(associazione.sedi) 
+    ? associazione.sedi.find((s: any) => s.is_principale) || associazione.sedi[0]
+    : associazione.sedi
+
+  const assocInfo = {
+    denominazione: associazione.nome_breve || associazione.denominazione || 'Sede Associazione',
+    lat: associazione.lat ?? sedePrincipale?.lat ?? null,
+    lng: associazione.lng ?? sedePrincipale?.lng ?? null,
+    comune: associazione.comune || sedePrincipale?.comune || '',
+    provincia: associazione.provincia || sedePrincipale?.provincia || '',
+    indirizzo: sedePrincipale?.indirizzo || associazione.comune || ''
+  }
+
   const { data: posPositionsRaw } = await supabase
     .from('posizioni')
     .select('*, media_associazioni(url), tags:posizione_tags(tag:tags(id, name))')
@@ -566,9 +554,6 @@ export default async function ProfiloAssociazione({ params }: { params: Promise<
     ? parsedConfig 
     : createFallbackLayout(associazione, grafica)
 
-  // ========================================================
-  // ✨ GENERAZIONE DATI STRUTTURATI SCHEMA.ORG (JSON-LD)
-  // ========================================================
   const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://volontariando.work'
   
   const schemaNGO: any = {
@@ -645,6 +630,7 @@ export default async function ProfiloAssociazione({ params }: { params: Promise<
               <BlockComponent 
                 content={block.content} 
                 positions={posizioni} 
+                assocInfo={assocInfo}
                 brandColor={coloreBrand} 
               />
             </div>

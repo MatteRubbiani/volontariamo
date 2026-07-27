@@ -1,24 +1,33 @@
 'use client'
 
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, Suspense } from 'react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { createBrowserClient } from '@supabase/ssr'
 import { DndContext, PointerSensor, TouchSensor, MouseSensor, closestCenter, DragEndEvent, useSensor, useSensors } from '@dnd-kit/core'
 import { SortableContext, arrayMove, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import { FileText, GripVertical, Image as ImageIcon, LayoutGrid, Link2, Plus, Quote, Save, Settings2, Sparkles, Trash2, Users, Loader2, UploadCloud, Heart, Briefcase, MessageSquare, Video, Mail, Target, Eye, Move, ChevronUp, ChevronDown } from 'lucide-react'
+import { FileText, GripVertical, Image as ImageIcon, LayoutGrid, Link2, Plus, Quote, Save, Settings2, Sparkles, Trash2, Users, Loader2, UploadCloud, Heart, Briefcase, MessageSquare, Video, Mail, Target, Eye, Move, ChevronUp, ChevronDown, MapPin } from 'lucide-react'
 import PosizioneCard from '@/components/PosizioneCard'
 
 // ==========================================
 // 1. TIPI E COSTANTI
 // ==========================================
-type BlockType = 'hero' | 'stats' | 'about' | 'mission' | 'vision' | 'gallery' | 'links' | 'faq' | 'documents' | 'partners' | 'positions' | 'donations' | 'projects' | 'testimonials' | 'video' | 'contacts'
+type BlockType = 'hero' | 'stats' | 'about' | 'mission' | 'vision' | 'gallery' | 'links' | 'faq' | 'documents' | 'partners' | 'positions' | 'donations' | 'projects' | 'testimonials' | 'video' | 'contacts' | 'map'
 type LayoutBlock = { id: string; type: BlockType; content: any }
 type HeroContent = { 
   title: string; eyebrow: string; subtitle: string; coverUrl: string; logoUrl: string; brandColor: string;
   coverY?: number; coverZoom?: number;
   logoX?: number; logoY?: number; logoZoom?: number;
+}
+
+type AssocInfo = {
+  denominazione: string;
+  lat: number | null;
+  lng: number | null;
+  comune: string;
+  provincia: string;
+  indirizzo: string;
 }
 
 const supabase = createBrowserClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!)
@@ -27,6 +36,7 @@ const BUCKET_NAME = 'media_associazioni'
 
 const blockLibrary = [
   { type: 'about', label: 'Testo Libero / Chi siamo', icon: Quote, desc: 'Aggiungi paragrafi descrittivi o la vostra storia', isUnique: false },
+  { type: 'map', label: 'Mappa & Sede', icon: MapPin, desc: 'Visualizza la geolocalizzazione della tua sede sulla mappa', isUnique: true },
   { type: 'stats', label: 'Numeri chiave', icon: Users, desc: 'Mostra statistiche d’impatto della tua associazione', isUnique: true },
   { type: 'mission', label: 'La nostra Mission', icon: Target, desc: 'Il motivo per cui esistete e l’impatto generato', isUnique: true },
   { type: 'vision', label: 'La nostra Vision', icon: Eye, desc: 'La direzione futura che volete costruire', isUnique: true },
@@ -46,7 +56,117 @@ const blockLibrary = [
 function uid() { return Math.random().toString(36).slice(2, 10) }
 
 // ==========================================
-// 2. MOTORE DI UPLOAD
+// 2. COMPONENTE MAPPA LEAFLET VETRINA (CARTODB LIGHT)
+// ==========================================
+function MappaVetrinaComponent({ lat, lng, nome, comune, provincia, indirizzo }: { lat?: number | null; lng?: number | null; nome?: string; comune?: string; provincia?: string; indirizzo?: string }) {
+  const mapRef = useRef<HTMLDivElement>(null)
+  const mapInstanceRef = useRef<any>(null)
+
+  useEffect(() => {
+    if (!mapRef.current || !lat || !lng) return
+
+    let isMounted = true
+
+    import('leaflet').then((L) => {
+      if (!isMounted || !mapRef.current) return
+
+      if (mapInstanceRef.current) {
+        mapInstanceRef.current.remove()
+      }
+
+      const map = L.map(mapRef.current, {
+        center: [lat, lng],
+        zoom: 12,
+        zoomControl: false,
+        scrollWheelZoom: false,
+      })
+
+      mapInstanceRef.current = map
+
+      // 🗺️ MAPPA CARTODB LIGHT (STESSO TILE LAYER DI MAPPA ESPLORA)
+      L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
+        attribution: '&copy; OpenStreetMap &copy; CARTO',
+        maxZoom: 19,
+      }).addTo(map)
+
+      // Marker custom
+      const customIcon = L.divIcon({
+        className: 'custom-map-pin',
+        html: `
+          <div class="relative flex items-center justify-center">
+            <span class="absolute w-8 h-8 rounded-full bg-slate-900/20 animate-ping"></span>
+            <div class="w-10 h-10 rounded-2xl bg-slate-900 border-2 border-white shadow-xl flex items-center justify-center text-white transform hover:scale-110 transition-transform">
+              <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>
+            </div>
+          </div>
+        `,
+        iconSize: [40, 40],
+        iconAnchor: [20, 40],
+      })
+
+      const marker = L.marker([lat, lng], { icon: customIcon }).addTo(map)
+
+      if (nome) {
+        marker.bindPopup(`
+          <div class="p-1 font-sans text-center">
+            <p class="font-bold text-slate-900 text-xs">${nome}</p>
+            ${indirizzo ? `<p class="text-[11px] text-slate-500 mt-0.5">${indirizzo}</p>` : ''}
+          </div>
+        `, { closeButton: false })
+      }
+    })
+
+    return () => {
+      isMounted = false
+      if (mapInstanceRef.current) {
+        mapInstanceRef.current.remove()
+        mapInstanceRef.current = null
+      }
+    }
+  }, [lat, lng, nome, indirizzo])
+
+  if (!lat || !lng) {
+    return (
+      <div className="w-full h-48 md:h-64 rounded-3xl bg-slate-50 flex flex-col items-center justify-center text-slate-400 p-6 text-center border border-slate-200/60">
+        <MapPin className="w-8 h-8 mb-2 opacity-40" />
+        <p className="text-xs font-bold text-slate-700">Posizione non ancora geolocalizzata</p>
+        <p className="text-[11px] text-slate-400 mt-1 max-w-sm">Imposta l'indirizzo della sede nelle impostazioni per mostrare la posizione esatta della tua associazione.</p>
+      </div>
+    )
+  }
+
+  return (
+    <div className="relative w-full h-56 md:h-72 rounded-[2rem] overflow-hidden border border-slate-200/80 shadow-xs group/map">
+      <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+      <div ref={mapRef} className="w-full h-full z-0" />
+      
+      {/* Overlay info e tasto indicazioni */}
+      <div className="absolute bottom-3 left-3 right-3 z-10 flex items-center justify-between bg-white/95 backdrop-blur-md p-3 rounded-2xl border border-white/60 shadow-md">
+        <div className="flex items-center gap-2.5 min-w-0 pr-2">
+          <div className="w-8 h-8 rounded-xl bg-slate-900 text-white flex items-center justify-center shrink-0">
+            <MapPin className="w-4 h-4" />
+          </div>
+          <div className="min-w-0">
+            <p className="text-xs font-bold text-slate-900 truncate">{indirizzo || `${comune || ''} ${provincia ? `(${provincia})` : ''}`.trim() || 'Sede Ufficiale'}</p>
+            <p className="text-[10px] font-medium text-slate-500 truncate">{comune && provincia ? `${comune} (${provincia})` : 'Geolocalizzato sulla Mappa'}</p>
+          </div>
+        </div>
+        <a
+          href={`https://www.google.com/maps/search/?api=1&query=${lat},${lng}`}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="px-3 py-1.5 bg-slate-900 hover:bg-black text-white text-[11px] font-bold rounded-xl transition-all shrink-0 active:scale-95 shadow-xs flex items-center gap-1"
+        >
+          <span>Indicazioni</span>
+          <span className="text-xs">↗</span>
+        </a>
+      </div>
+    </div>
+  )
+}
+
+// ==========================================
+// 3. MOTORE DI UPLOAD
 // ==========================================
 async function uploadFileToSupabase(file: File, folder: 'images' | 'documents'): Promise<{ url: string, name: string } | null> {
   try {
@@ -66,13 +186,12 @@ async function uploadFileToSupabase(file: File, folder: 'images' | 'documents'):
 }
 
 // ==========================================
-// 3. COMPONENTI UI PREMIUM (CON FOCUS & KEYBOARD AUTO-SCROLL)
+// 4. COMPONENTI UI PREMIUM
 // ==========================================
 function EditableField({ value, placeholder, onChange, className = '', inputClassName = '', multiline = false, tag = 'div', disableWFull = false }: any) {
   const [isEditing, setIsEditing] = useState(false)
   const ref = useRef<any>(null)
 
-  // 🟢 AUTO-SCROLL SULLA TASTIERA MOBILE + FOCUS INTELLIGENTE
   useEffect(() => { 
     if (isEditing) {
       window.requestAnimationFrame(() => {
@@ -86,7 +205,6 @@ function EditableField({ value, placeholder, onChange, className = '', inputClas
 
   if (isEditing) {
     const widthClass = disableWFull ? '' : 'w-full'
-    // 🟢 text-base (16px) PREVIENE LO ZOOM AUTOMATICO SU SAFARI MOBILE
     const commonClasses = `${widthClass} bg-slate-50 outline-none ring-4 ring-slate-100/50 rounded-xl transition-all p-2 -ml-2 text-base md:text-inherit ${inputClassName} ${className}`
     if (multiline) {
       return <textarea ref={ref} value={value} onChange={e => onChange(e.target.value)} onBlur={() => setIsEditing(false)} 
@@ -194,11 +312,9 @@ function EditableDocumentItem({ doc, onFileUploaded, onRemove, onNameChange }: {
   )
 }
 
-// 🟢 WRAPPER BLOCCO CON TRANSIZIONI CSS E ID PER AUTO-SCROLL
 function SortableBlockShell({ block, onRemove, onMoveUp, onMoveDown, isFirst, isLast, children, locked = false }: any) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: block.id, disabled: locked })
   
-  // 🟢 TRANSIZIONE MORBIDA PER LO SPOSTAMENTO DEI BLOCCHI
   const style = { 
     transform: CSS.Translate.toString(transform), 
     transition: transition || 'transform 300ms cubic-bezier(0.2, 0, 0, 1)',
@@ -212,8 +328,6 @@ function SortableBlockShell({ block, onRemove, onMoveUp, onMoveDown, isFirst, is
       style={style} 
       className={`group flex flex-col relative w-full rounded-[2.5rem] transition-all duration-300 ${isDragging ? 'opacity-95 shadow-2xl bg-white ring-1 ring-slate-200' : ''}`}
     >
-      
-      {/* CONTROLLI MOBILE (Barra orizzontale in alto al blocco) */}
       {!locked && (
         <div className="md:hidden flex items-center justify-between px-3 py-1.5 bg-slate-100/90 backdrop-blur-md rounded-2xl mb-1 border border-slate-200/60 shadow-xs">
           <div className="flex items-center gap-1">
@@ -236,7 +350,6 @@ function SortableBlockShell({ block, onRemove, onMoveUp, onMoveDown, isFirst, is
         </div>
       )}
 
-      {/* CONTROLLI DESKTOP (Sidecar a sinistra) */}
       <div className={`hidden md:flex absolute -left-12 top-6 flex-col items-center gap-1 opacity-0 transition-opacity duration-200 ${!locked && 'group-hover:opacity-100'}`}>
         <button {...attributes} {...listeners} className="p-2 text-slate-400 hover:text-black hover:bg-slate-100 rounded-lg cursor-grab active:cursor-grabbing shadow-sm bg-white border border-slate-100"><GripVertical className="h-5 w-5" /></button>
         <button onClick={() => onRemove(block.id)} className="p-2 text-slate-400 hover:text-red-500 hover:bg-red-50 rounded-lg shadow-sm bg-white border border-slate-100"><Trash2 className="h-4 w-4" /></button>
@@ -250,7 +363,7 @@ function SortableBlockShell({ block, onRemove, onMoveUp, onMoveDown, isFirst, is
 }
 
 // ==========================================
-// 4. COMPONENTI BLOCCO CORE + NOTION/LINKEDIN CROP
+// 5. COMPONENTI BLOCCO CORE (INCLUSO MAPPA)
 // ==========================================
 const Blocks = {
   hero: ({ content, onChange }: any) => {
@@ -432,6 +545,28 @@ const Blocks = {
       </div>
     );
   },
+
+  map: ({ content, onChange, assocInfo }: any) => (
+    <section className="space-y-3">
+      <div className="flex items-center justify-between px-1">
+        <EditableField 
+          tag="h3" 
+          value={content.title || 'La nostra Sede'} 
+          placeholder="Titolo sezione..." 
+          onChange={(n: string) => onChange({...content, title: n})} 
+          className="text-xl md:text-2xl font-extrabold tracking-tight text-slate-900" 
+        />
+      </div>
+      <MappaVetrinaComponent 
+        lat={assocInfo?.lat}
+        lng={assocInfo?.lng}
+        nome={assocInfo?.denominazione}
+        comune={assocInfo?.comune}
+        provincia={assocInfo?.provincia}
+        indirizzo={assocInfo?.indirizzo}
+      />
+    </section>
+  ),
 
   about: ({ content, onChange }: any) => (
     <section>
@@ -883,45 +1018,53 @@ const Blocks = {
 }
 
 // ==========================================
-// 5. PAGINA PRINCIPALE CON SENSORI TOUCH & AUTO-SCROLL
+// 6. PAGINA PRINCIPALE CON EDITOR
 // ==========================================
-export default function PersonalizzaPagina() {
+function PersonalizzaPaginaForm() {
   const router = useRouter()
+
   const [layout, setLayout] = useState<LayoutBlock[]>([])
   const [positions, setPositions] = useState<any[]>([])
+  const [assocInfo, setAssocInfo] = useState<AssocInfo | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [isSaving, setIsSaving] = useState(false)
   const [autoSaveStatus, setAutoSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle')
   const [showAddMenu, setShowAddMenu] = useState(false)
   const [associazioneSlug, setAssociazioneSlug] = useState<string | null>(null)
 
-  // SENSORE TOUCH CALIBRATO
   const sensors = useSensors(
-    useSensor(MouseSensor, {
-      activationConstraint: { distance: 8 }
-    }),
-    useSensor(TouchSensor, {
-      activationConstraint: { delay: 250, tolerance: 5 }
-    })
+    useSensor(MouseSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 250, tolerance: 5 } })
   )
 
   const brandColor = (layout.find(b => b.type === 'hero')?.content as HeroContent)?.brandColor || DEFAULT_BRAND
 
-  // Caricamento Iniziale
+  // Caricamento Dati Iniziale
   useEffect(() => {
     const loadData = async () => {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return router.replace('/auth/login')
 
-      const [{ data: assoc }, { data: graph }, { data: pos }] = await Promise.all([
+      const [{ data: assoc }, { data: graph }, { data: pos }, { data: sedi }] = await Promise.all([
         supabase.from('associazioni').select('*').eq('id', user.id).single(),
-        supabase.from('associazioni_grafica').select('*').eq('associazione_id', user.id).single(),
-        supabase.from('posizioni').select('*, media_associazioni(url), tags:posizione_tags(tag:tags(id, name))').eq('associazione_id', user.id)
+        supabase.from('associazioni_grafica').select('*').eq('associazione_id', user.id).maybeSingle(),
+        supabase.from('posizioni').select('*, media_associazioni(url), tags:posizione_tags(tag:tags(id, name))').eq('associazione_id', user.id),
+        supabase.from('associazioni_sedi').select('*').eq('associazione_id', user.id).eq('is_principale', true).maybeSingle()
       ])
 
       if (assoc?.slug) {
         setAssociazioneSlug(assoc.slug)
       }
+
+      const infoData: AssocInfo = {
+        denominazione: assoc?.nome_breve || assoc?.denominazione || 'Sede Associazione',
+        lat: assoc?.lat ?? sedi?.lat ?? null,
+        lng: assoc?.lng ?? sedi?.lng ?? null,
+        comune: assoc?.comune || sedi?.comune || '',
+        provincia: assoc?.provincia || sedi?.provincia || '',
+        indirizzo: sedi?.indirizzo || assoc?.comune || ''
+      }
+      setAssocInfo(infoData)
 
       const rawDraft = graph?.layout_draft
       const rawConfig = graph?.layout_config
@@ -946,9 +1089,12 @@ export default function PersonalizzaPagina() {
           return block
         })
       } else {
+        // Fallback di sicurezza
         initialLayout = [
           { id: uid(), type: 'hero', content: { title: assoc?.denominazione || 'Associazione', coverUrl: graph?.cover_url, logoUrl: assoc?.logo_url, brandColor: graph?.colore_brand || DEFAULT_BRAND } },
-          { id: uid(), type: 'about', content: { title: 'Chi Siamo', body: graph?.chi_siamo || '' } }
+          { id: uid(), type: 'about', content: { title: 'Chi Siamo', body: graph?.chi_siamo || '' } },
+          { id: uid(), type: 'map', content: { title: 'La nostra Sede' } },
+          { id: uid(), type: 'positions', content: { title: 'Opportunità di Volontariato' } }
         ]
       }
 
@@ -1002,7 +1148,7 @@ export default function PersonalizzaPagina() {
           body: JSON.stringify({ path: `/associazione/${associazioneSlug}` })
         })
       } catch (err) {
-        console.error("Errore durante la revalidation on-demand:", err)
+        console.error("Errore revalidation:", err)
       }
     }
     
@@ -1022,15 +1168,13 @@ export default function PersonalizzaPagina() {
     })
   }
 
-  // 🟢 SPOSTAMENTO ESPLICITO A FRECCE CON AUTO-SCROLL FLUIDO
   const moveBlockUp = (index: number) => {
     if (index <= 1) return
     const targetBlockId = layout[index].id
     setLayout(current => arrayMove(current, index, index - 1))
     
     setTimeout(() => {
-      const element = document.getElementById(`block-${targetBlockId}`)
-      element?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      document.getElementById(`block-${targetBlockId}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' })
     }, 80)
   }
 
@@ -1040,8 +1184,7 @@ export default function PersonalizzaPagina() {
     setLayout(current => arrayMove(current, index, index + 1))
 
     setTimeout(() => {
-      const element = document.getElementById(`block-${targetBlockId}`)
-      element?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+      document.getElementById(`block-${targetBlockId}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' })
     }, 80)
   }
 
@@ -1105,6 +1248,7 @@ export default function PersonalizzaPagina() {
                       type={block.type} 
                       content={block.content} 
                       positions={positions} 
+                      assocInfo={assocInfo}
                       brandColor={brandColor} 
                       onChange={(next: any) => setLayout(l => l.map(b => b.id === block.id ? { ...b, content: next } : b))} 
                     />
@@ -1144,7 +1288,7 @@ export default function PersonalizzaPagina() {
                       }}
                         className="flex flex-col items-start gap-3 p-4 md:p-5 rounded-2xl bg-slate-50 hover:bg-slate-900 hover:text-white transition-all text-left group border border-transparent hover:border-slate-800 hover:shadow-xl"
                       >
-                        <div className="bg-white shadow-sm border border-slate-100 p-2.5 rounded-xl group-hover:bg-slate-800 group-hover:border-slate-700 transition-colors">
+                        <div className="bg-white shadow-xs border border-slate-100 p-2.5 rounded-xl group-hover:bg-slate-800 group-hover:border-slate-700 transition-colors">
                           <Icon className="w-5 h-5 text-slate-600 group-hover:text-white" />
                         </div>
                         <div>
@@ -1161,5 +1305,17 @@ export default function PersonalizzaPagina() {
         )}
       </main>
     </div>
+  )
+}
+
+export default function PersonalizzaPagina() {
+  return (
+    <Suspense fallback={
+      <div className="min-h-screen flex items-center justify-center font-sans text-slate-500 font-medium">
+        Caricamento Vetrina...
+      </div>
+    }>
+      <PersonalizzaPaginaForm />
+    </Suspense>
   )
 }

@@ -2,7 +2,7 @@
 
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { LayoutDashboard, MapPin, Building2, MessageSquare, User, Search, Heart } from 'lucide-react'
+import { LayoutDashboard, MapPin, Building2, MessageSquare, User, Search, Heart, Palette } from 'lucide-react'
 
 export default function BottomNavMobile({
   email,
@@ -40,20 +40,14 @@ export default function BottomNavMobile({
         
         {isLoggedIn ? (
           <>
-            {/* ASSOCIAZIONI: Mantengono la loro Bacheca */}
-            {isAssociazione && (
-              <Link 
-                href="/app/associazione/posizioni" 
-                className={itemClass('/app/associazione/posizioni')}
-              >
-                <LayoutDashboard className="w-4 h-4" />
-                <span>Bacheca</span>
-              </Link>
-            )}
-
-            {/* VOLONTARI: Mappa, Associazioni, Candidature (Senza Home vuota) */}
+            {/* 🟢 VOLONTARI: Bacheca/Dashboard, Mappa, Associazioni, Candidature */}
             {isVolontario && (
               <>
+                <Link href={dashboardLink} className={itemClass(dashboardLink)}>
+                  <LayoutDashboard className="w-4 h-4" />
+                  <span>Dashboard</span>
+                </Link>
+
                 <Link href="/mappa" className={itemClass('/mappa')}>
                   <MapPin className="w-4 h-4" />
                   <span>Mappa</span>
@@ -74,22 +68,32 @@ export default function BottomNavMobile({
               </>
             )}
 
-            {/* ASSOCIAZIONI: Cerca & Messaggi */}
+            {/* 🟢 ASSOCIAZIONI (ESATTAMENTE SPECULARE ALLA DESKTOP NAVBAR) */}
             {isAssociazione && (
               <>
-                <Link href="/associazioni" className={itemClass('/associazioni')}>
-                  <Search className="w-4 h-4" />
-                  <span>Cerca</span>
+                <Link href="/app/associazione/posizioni" className={itemClass('/app/associazione/posizioni')}>
+                  <LayoutDashboard className="w-4 h-4" />
+                  <span>Bacheca</span>
                 </Link>
 
                 <Link href="/app/associazione/messaggi" className={itemClass('/app/associazione/messaggi')}>
                   <MessageSquare className="w-4 h-4" />
                   <span>Messaggi</span>
                 </Link>
+
+                <Link href="/app/associazione/rete" className={itemClass('/app/associazione/rete')}>
+                  <Search className="w-4 h-4" />
+                  <span>Cerca</span>
+                </Link>
+
+                <Link href="/app/associazione/personalizza" className={itemClass('/app/associazione/personalizza')}>
+                  <Palette className="w-4 h-4" />
+                  <span>Vetrina</span>
+                </Link>
               </>
             )}
 
-            {/* PROFILO (Presente per tutti) */}
+            {/* PROFILO (Presente per tutti gli utenti loggati) */}
             <Link href="/app/profilo" className={itemClass('/app/profilo')}>
               <User className="w-4 h-4" />
               <span>Profilo</span>

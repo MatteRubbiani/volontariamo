@@ -24,7 +24,6 @@ export async function completeOnboarding(formData: FormData) {
   if (authError || !user) throw new Error('Utente non autenticato')
 
   const role = formData.get('role') as string
-  const redirectTo = getSafeRedirectTo(formData.get('redirectTo')) || `/app/${role}`
 
   // =========================================================================
   // 1. LOGICA VOLONTARIO
@@ -60,7 +59,7 @@ export async function completeOnboarding(formData: FormData) {
   } 
 
   // =========================================================================
-  // 🚀 2. LOGICA ASSOCIAZIONE (CLAIMING RUNTS & PROTEZIONE ANTI-TROLL)
+  // 🚀 2. LOGICA ASSOCIAZIONE (CLAIMING RUNTS & GENERAZIONE VETRINA DEFAULT)
   // =========================================================================
   else if (role === 'associazione') {
     
@@ -78,39 +77,41 @@ export async function completeOnboarding(formData: FormData) {
     if (existingEntity && existingEntity.id !== user.id) {
       if (!existingEntity.claimed) {
         // CLEANUP ARCHITETTURALE: Elimino la scheda importata fittizia
-        // per lasciare il posto all'ID reale dell'utente autenticato (user.id)
         await supabase.from('associazioni_sedi').delete().eq('associazione_id', existingEntity.id)
         await supabase.from('associazioni_trasparenza').delete().eq('associazione_id', existingEntity.id)
         await supabase.from('associazione_tags').delete().eq('associazione_id', existingEntity.id)
+        await supabase.from('associazioni_grafica').delete().eq('associazione_id', existingEntity.id)
         await supabase.from('associazioni').delete().eq('id', existingEntity.id)
       } else {
-        // L'Associazione è GIA' di qualcun altro che l'ha verificata.
         throw new Error('Questo Codice Fiscale è già stato rivendicato da un altro Referente. Contatta il supporto per contestazioni.')
       }
     }
 
-    // Estraggo Coordinate
+    // Estraggo Coordinate e Dati Sede
     const lat = parseCoordinate(formData.get('lat'))
     const lng = parseCoordinate(formData.get('lng'))
     const comune = formData.get('comune') ? String(formData.get('comune')) : null
     const provincia = formData.get('provincia') ? String(formData.get('provincia')) : null
     const indirizzo = formData.get('indirizzo') ? String(formData.get('indirizzo')) : null
+    const denominazione = String(formData.get('denominazione') || 'Associazione')
+    const formaGiuridica = String(formData.get('forma_giuridica') || 'APS')
 
-    // A. Crea la Scheda (Modalità Sandbox: in_attesa + PIN visibile subito)
+    // A. Anagrafica Core (Sandbox: in_attesa + PIN subito visibile sulla Mappa)
     const { error: coreError } = await supabase.from('associazioni').upsert({
       id: user.id,
-      denominazione: formData.get('denominazione'),
-      forma_giuridica: formData.get('forma_giuridica') || 'APS',
+      denominazione: denominazione,
+      nome_breve: formData.get('nome_breve') || null,
+      forma_giuridica: formaGiuridica,
       codice_fiscale: cf,
       email_associazione: formData.get('email_associazione'),
       telefono: formData.get('telefono') || null,
       descrizione: formData.get('descrizione') || null,
       comune: comune,
       provincia: provincia,
-      lat: lat, // Il PIN si accende in tempo reale
-      lng: lng, // Il PIN si accende in tempo reale
+      lat: lat,
+      lng: lng,
       claimed: true,
-      stato_verifica: 'in_attesa' // 🟡 MODALITÀ SANDBOX DA VERIFICARE
+      stato_verifica: 'in_attesa'
     }, { onConflict: 'id' })
     
     if (coreError) throw new Error(`Errore Anagrafica: ${coreError.message}`)
@@ -121,14 +122,14 @@ export async function completeOnboarding(formData: FormData) {
       referente_progetto_nome: formData.get('referente_progetto_nome'),
       referente_progetto_cognome: formData.get('referente_progetto_cognome'),
       referente_progetto_ruolo: formData.get('referente_progetto_ruolo'),
-      dichiarazione_veridicita: formData.get('dichiarazione_legale') === 'true', // Accettazione Disclaimer Penale
+      dichiarazione_veridicita: formData.get('dichiarazione_legale') === 'true',
       consenso_privacy: formData.get('consenso_privacy') === 'true',
       consenso_newsletter: formData.get('consenso_newsletter') === 'true',
     }, { onConflict: 'associazione_id' })
 
     if (traspError) throw new Error(`Errore Trasparenza: ${traspError.message}`)
 
-    // C. Sede Ufficiale
+    // C. Sede Ufficiale Operativa
     if (indirizzo) {
       await supabase.from('associazioni_sedi').upsert({
         associazione_id: user.id,
@@ -150,8 +151,56 @@ export async function completeOnboarding(formData: FormData) {
       await supabase.from('associazione_tags').insert(assTags.map(tagId => ({ associazione_id: user.id, tag_id: tagId })))
     }
 
-    // 🚀 NOTA PER IL FUTURO: Qui inserirai lo script per il webhook Telegram
-    // fetch('https://api.telegram.org/botTUO_TOKEN/sendMessage?chat_id=TUO_ID&text=Nuova associazione in attesa: ' + formData.get('denominazione'))
+    // 🎨 E. INIZIALIZZAZIONE VETRINA DEFAULT (LAYOUT STANDARD BACKEND)
+    const defaultLayout = [
+      {
+        id: 'hero-def',
+        type: 'hero',
+        content: {
+          title: denominazione,
+          eyebrow: formaGiuridica,
+          subtitle: comune ? `Sede operativa a ${comune}` : 'Benvenuti nella nostra pagina ufficiale',
+          coverUrl: '',
+          logoUrl: '',
+          brandColor: '#111827'
+        }
+      },
+      {
+        id: 'about-def',
+        type: 'about',
+        content: {
+          title: 'Chi Siamo',
+          body: `Benvenuti nella pagina ufficiale di ${denominazione}. Operiamo sul territorio per promuovere iniziative di impatto sociale e coinvolgere i cittadini in attività di volontariato.`
+        }
+      },
+      {
+        id: 'map-def',
+        type: 'map',
+        content: {
+          title: 'La nostra Sede'
+        }
+      },
+      {
+        id: 'pos-def',
+        type: 'positions',
+        content: {
+          title: 'Opportunità di Volontariato'
+        }
+      }
+    ]
+
+    const { error: graphError } = await supabase.from('associazioni_grafica').upsert({
+      associazione_id: user.id,
+      layout_config: defaultLayout, // 🟢 Vetrina Pubblica subito pronta e visibile ai volontari
+      layout_draft: defaultLayout,  // 🟢 Bozza dell'editor sincronizzata
+      colore_brand: '#111827',
+      chi_siamo: `Benvenuti nella pagina ufficiale di ${denominazione}.`,
+      updated_at: new Date().toISOString()
+    }, { onConflict: 'associazione_id' })
+
+    if (graphError) {
+      console.error("Errore inizializzazione Vetrina Default:", graphError)
+    }
   }
 
   // =========================================================================
@@ -179,16 +228,25 @@ export async function completeOnboarding(formData: FormData) {
     if (impError) throw new Error(`Errore Impresa: ${impError.message}`)
   }
 
-  // Creazione Profilo Hub
+  // Creazione/Aggiornamento Profilo Hub
   const { error: profiloError } = await supabase.from('profili').upsert({ id: user.id, ruolo: role })
   if (profiloError) throw new Error("Errore finalizzazione profilo.")
 
-  // Revalidate della cache: La mappa si aggiorna subito col nuovo PIN!
+  // Revalidate globale per aggiornamento navbar e mappe
   revalidatePath('/', 'layout')
   revalidatePath('/associazioni', 'page')
   revalidatePath('/mappa', 'page')
   revalidatePath(`/app/${role}`, 'layout')
   revalidatePath(`/app/${role}`, 'page')
+
+  // Calcolo URL di destinazione finale
+  let defaultTarget = `/app/${role}`
+  if (role === 'associazione') {
+    // 🎯 Se associazione, portala direttamente all'Editor della Vetrina col flag di primo login!
+    defaultTarget = '/app/associazione/personalizza?firstLogin=true'
+  }
+
+  const redirectTo = getSafeRedirectTo(formData.get('redirectTo')) || defaultTarget
   
   redirect(redirectTo)
 }
