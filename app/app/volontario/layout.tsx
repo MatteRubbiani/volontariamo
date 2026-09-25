@@ -15,24 +15,21 @@ export default async function VolontarioLayout({
     const supabase = await createClient()
     const { data, error } = await supabase
       .from('impresa_dipendenti')
-      .select('id')
+      .select('impresa_id') // 🛡️ FIX: 'impresa_id' esiste nella tabella, 'id' no
       .eq('volontario_id', user.id)
       .maybeSingle()
     
     hasAziendale = !!data
 
-    // 🚨 SPIA DI DEBUG SERVER
-    console.log("=== DEBUG SERVER ===")
-    console.log("Utente ID:", user.id)
-    console.log("Risposta DB:", data)
-    console.log("Errore DB:", error)
-    console.log("hasAziendale calcolato:", hasAziendale)
+    if (error) {
+      console.error("Errore verifica impresa_dipendenti:", error)
+    }
   }
 
   return (
     <VolontarioLayoutWrapper 
       hasAziendale={hasAziendale}
-      userEmail={user?.email} // 👈 ECCO L'AGGIUNTA FONDAMENTALE
+      userEmail={user?.email}
     >
       {children}
     </VolontarioLayoutWrapper>

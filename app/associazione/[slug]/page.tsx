@@ -1,19 +1,18 @@
-import { createServerClient } from '@supabase/ssr'
 import { createClient } from '@supabase/supabase-js'
 import type { Metadata, ResolvingMetadata } from 'next'
 import Link from 'next/link'
-import { FileText, Link2, Quote, Settings2, Sparkles, Users, Heart, Briefcase, Video, Mail, Target, Eye, MapPin } from 'lucide-react'
+import { FileText, Link2, Quote, MapPin } from 'lucide-react'
 import PosizioneCard from '@/components/PosizioneCard'
 import MappaVetrinaPubblica from './MappaVetrinaPubblica'
 
-export const revalidate = 3600 
-export const dynamicParams = true 
+// 🛡️ FIX CACHE: Forza il fetch dinamico per vedere subito i dati reali del DB
+export const dynamic = 'force-dynamic'
+export const revalidate = 0
 
 function extractShortId(slugWithQueries: string): string {
   const cleanSlug = decodeURIComponent(slugWithQueries).split('?')[0].trim();
   const parts = cleanSlug.split('-');
-  const id = parts[parts.length - 1] || cleanSlug;
-  return id;
+  return parts[parts.length - 1] || cleanSlug;
 }
 
 function getAbsoluteImageUrl(url: string | null | undefined): string {
@@ -154,7 +153,6 @@ const Blocks = {
     )
   },
 
-  // 🟢 BLOCCO MAPPA
   map: ({ content, assocInfo }: any) => (
     <section className="space-y-3 px-2">
       <h3 className="text-xl md:text-2xl font-extrabold tracking-tight text-slate-900">{content.title || 'La nostra Sede'}</h3>
@@ -438,13 +436,14 @@ const Blocks = {
     )
   },
 
-  positions: ({ positions, brandColor }: any) => (
-    <div className="pt-4 px-2">
-      <div className="flex items-center justify-between mb-6">
-        <h3 className="text-2xl md:text-3xl font-extrabold text-slate-900 tracking-tight">Posizioni aperte</h3>
-        <span className="bg-slate-100 text-slate-700 px-4 py-1.5 rounded-full font-bold text-base">{positions?.length || 0}</span>
-      </div>
-      {positions?.length > 0 ? (
+  positions: ({ positions, brandColor }: any) => {
+    if (!positions || positions.length === 0) return null
+    return (
+      <div className="pt-4 px-2">
+        <div className="flex items-center justify-between mb-6">
+          <h3 className="text-2xl md:text-3xl font-extrabold text-slate-900 tracking-tight">Posizioni aperte</h3>
+          <span className="bg-slate-100 text-slate-700 px-4 py-1.5 rounded-full font-bold text-base">{positions.length}</span>
+        </div>
         <div className="flex gap-4 overflow-x-auto pb-4 snap-x snap-mandatory scrollbar-hide" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
           {positions.map((p: any) => (
             <div key={p.id} className="snap-start shrink-0 w-[85%] md:w-[45%]">
@@ -452,9 +451,9 @@ const Blocks = {
             </div>
           ))}
         </div>
-      ) : null}
-    </div>
-  ),
+      </div>
+    )
+  },
 }
 
 function createFallbackLayout(associazione: any, grafica: any) {
@@ -533,26 +532,75 @@ export default async function ProfiloAssociazione({ params }: { params: Promise<
     indirizzo: sedePrincipale?.indirizzo || associazione.comune || ''
   }
 
-  const { data: posPositionsRaw } = await supabase
+  // 🛡️ QUERY BLINDATA: Estraiamo posizioni attive con solo i tag, senza dipendere da join instabili su media_associazioni
+  const todayStr = new Date().toISOString().split('T')[0]
+
+  const { data: rawPos, error: posError } = await supabase
     .from('posizioni')
-    .select('*, media_associazioni(url), tags:posizione_tags(tag:tags(id, name))')
+    .select('*, tags:posizione_tags(tag:tags(id, name))')
     .eq('associazione_id', associazioneId)
+    .in('stato', ['pubblicata', 'aperta'])
     .order('created_at', { ascending: false })
 
-  const posizioni = posPositionsRaw?.map(p => ({ 
-    ...p, 
-    slug: p.slug || null,
-    associazioni: {
-      denominazione: associazione.denominazione,
-      slug: associazione.slug
-    },
-    tags: p.tags?.map((t: any) => t.tag).filter(Boolean) 
-  })) || []
+  if (posError) {
+    console.error("Errore fetch posizioni vetrina:", posError)
+  }
 
+  // Risoluzione indipendente delle immagini da media_associazioni
+  const imageIds = (rawPos || []).map((p: any) => p.immagine_id).filter(Boolean)
+  let mediaMap = new Map<string, string>()
+
+  if (imageIds.length > 0) {
+    const { data: mediaItems } = await supabase
+      .from('media_associazioni')
+      .select('id, url')
+      .in('id', imageIds)
+
+    mediaMap = new Map((mediaItems || []).map(m => [m.id, m.url]))
+  }
+
+  // Filtriamo eventuali una_tantum scadute (le ricorrenti passano sempre)
+  const posizioniValide = (rawPos || []).filter((p: any) => {
+    if (p.tipo === 'una_tantum' && p.data_esatta && p.data_esatta < todayStr) {
+      return false
+    }
+    return true
+  })
+
+  // Normalizziamo i campi per PosizioneCard
+  const posizioni = posizioniValide.map((p: any) => {
+    const imgUrl = mediaMap.get(p.immagine_id) || null
+    return {
+      ...p,
+      slug: p.slug || null,
+      immagine_url: imgUrl,
+      media_associazioni: imgUrl ? { url: imgUrl } : null,
+      // Forniamo sia il formato singolare che plurale per sicurezza
+      associazione: {
+        id: associazione.id,
+        denominazione: associazione.denominazione,
+        nome_breve: associazione.nome_breve,
+        logo_url: associazione.logo_url,
+        slug: associazione.slug
+      },
+      associazioni: {
+        denominazione: associazione.denominazione,
+        slug: associazione.slug
+      },
+      tags: p.tags?.map((t: any) => t.tag).filter(Boolean) || []
+    }
+  })
+
+  // 🛡️ FIX LAYOUT: Se layout_config personalizzato non contiene il blocco 'positions', lo aggiungiamo in coda se ci sono annunci
   const parsedConfig = typeof grafica.layout_config === 'string' ? JSON.parse(grafica.layout_config) : grafica.layout_config
-  const layout = parsedConfig && Array.isArray(parsedConfig) && parsedConfig.length > 0 
-    ? parsedConfig 
+  let layout = parsedConfig && Array.isArray(parsedConfig) && parsedConfig.length > 0 
+    ? [...parsedConfig]
     : createFallbackLayout(associazione, grafica)
+
+  const hasPositionsBlock = layout.some((b: any) => b.type === 'positions')
+  if (!hasPositionsBlock && posizioni.length > 0) {
+    layout.push({ id: 'auto-positions', type: 'positions', content: {} })
+  }
 
   const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://volontariando.work'
   

@@ -43,9 +43,13 @@ export default function MappaVetrinaPubblica({
 
       mapInstanceRef.current = map
 
-      L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
-        attribution: '&copy; OpenStreetMap &copy; CARTO',
+      // 🔑 Chiave CARTO Basemaps per rimuovere il watermark "API KEY REQUIRED"
+      const cartoKey = process.env.NEXT_PUBLIC_CARTO_API_KEY || 'cb1_3xko_1_60f6ef2b400c66c45fc4a6fb'
+
+      L.tileLayer(`https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png?key=${cartoKey}`, {
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
         maxZoom: 19,
+        subdomains: 'abcd',
       }).addTo(map)
 
       // Marker Custom Nero con effetto Halo

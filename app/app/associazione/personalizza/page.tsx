@@ -56,7 +56,7 @@ const blockLibrary = [
 function uid() { return Math.random().toString(36).slice(2, 10) }
 
 // ==========================================
-// 2. COMPONENTE MAPPA LEAFLET VETRINA (CARTODB LIGHT)
+// 2. COMPONENTE MAPPA LEAFLET VETRINA (CARTODB LIGHT CON CHIAVE)
 // ==========================================
 function MappaVetrinaComponent({ lat, lng, nome, comune, provincia, indirizzo }: { lat?: number | null; lng?: number | null; nome?: string; comune?: string; provincia?: string; indirizzo?: string }) {
   const mapRef = useRef<HTMLDivElement>(null)
@@ -83,10 +83,13 @@ function MappaVetrinaComponent({ lat, lng, nome, comune, provincia, indirizzo }:
 
       mapInstanceRef.current = map
 
-      // 🗺️ MAPPA CARTODB LIGHT (STESSO TILE LAYER DI MAPPA ESPLORA)
-      L.tileLayer('https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png', {
-        attribution: '&copy; OpenStreetMap &copy; CARTO',
+      // 🔑 Chiave CARTO Basemaps per rimuovere il watermark "API KEY REQUIRED"
+      const cartoKey = process.env.NEXT_PUBLIC_CARTO_API_KEY || 'cb1_3xko_1_60f6ef2b400c66c45fc4a6fb'
+
+      L.tileLayer(`https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png?key=${cartoKey}`, {
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>',
         maxZoom: 19,
+        subdomains: 'abcd',
       }).addTo(map)
 
       // Marker custom
@@ -970,7 +973,7 @@ const Blocks = {
         <div className="flex items-center justify-between px-1">
           <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest">Partner e Sponsor</h3>
           <button onClick={() => onChange({...content, items: [...items, '']})} className="flex items-center gap-1 text-[11px] font-bold text-slate-400 hover:text-slate-900 transition-colors bg-slate-50 px-2.5 py-1 rounded-lg border border-slate-100 shadow-sm">
-            <Plus className="w-3 h-3" /> Aggiungi Partner
+            <Plus className="w-3.5 h-3.5" /> Aggiungi Partner
           </button>
         </div>
 
@@ -1285,7 +1288,7 @@ function PersonalizzaPaginaForm() {
                         setTimeout(() => {
                           document.getElementById(`block-${newId}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' })
                         }, 100)
-                      }}
+                      }} 
                         className="flex flex-col items-start gap-3 p-4 md:p-5 rounded-2xl bg-slate-50 hover:bg-slate-900 hover:text-white transition-all text-left group border border-transparent hover:border-slate-800 hover:shadow-xl"
                       >
                         <div className="bg-white shadow-xs border border-slate-100 p-2.5 rounded-xl group-hover:bg-slate-800 group-hover:border-slate-700 transition-colors">

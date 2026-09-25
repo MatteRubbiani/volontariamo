@@ -76,6 +76,10 @@ export default function MappaAssociazioni({
   const [isMounted, setIsMounted] = useState(false)
   const [mapInstance, setMapInstance] = useState<L.Map | null>(null)
 
+  // 🔑 Configurazione CARTO con API Key per eliminare il watermark
+  const cartoKey = process.env.NEXT_PUBLIC_CARTO_API_KEY || 'cb1_3xko_1_60f6ef2b400c66c45fc4a6fb'
+  const tileUrl = `https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png?key=${cartoKey}`
+
   useEffect(() => { setIsMounted(true) }, [])
 
   if (!isMounted) return <div className="w-full h-full bg-slate-100 animate-pulse"></div>
@@ -93,7 +97,12 @@ export default function MappaAssociazioni({
         zoomControl={false} 
         ref={setMapInstance}
       >
-        <TileLayer url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png" />
+        <TileLayer 
+          url={tileUrl}
+          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
+          maxZoom={19}
+          subdomains="abcd"
+        />
         <MapEvents onMapReady={onMapReady} onBoundsChange={onBoundsChange} forcedLat={forcedLat} forcedLng={forcedLng} forcedZoom={forcedZoom} />
 
         {/* PIN DELLE ASSOCIAZIONI (SOLO QUELLE CON LAT/LNG) */}

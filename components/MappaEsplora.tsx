@@ -89,6 +89,10 @@ export default function MappaEsplora({
   const searchParams = useSearchParams()
   const [locating, setLocating] = useState(false)
 
+  // 🔑 Configurazione CARTO con API Key per rimuovere il watermark "API KEY REQUIRED"
+  const cartoKey = process.env.NEXT_PUBLIC_CARTO_API_KEY || 'cb1_3xko_1_60f6ef2b400c66c45fc4a6fb'
+  const tileUrl = `https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png?key=${cartoKey}`
+
   useEffect(() => { setIsMounted(true) }, [])
 
   const handleLocate = (e: React.MouseEvent) => {
@@ -138,7 +142,12 @@ export default function MappaEsplora({
   return (
     <div className="relative h-full w-full bg-slate-100">
       <MapContainer center={[41.8719, 12.5674]} zoom={6} style={{ height: '100%', width: '100%' }} zoomControl={false} ref={setMapInstance}>
-        <TileLayer url="https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png" />
+        <TileLayer 
+          url={tileUrl} 
+          attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://carto.com/attributions">CARTO</a>'
+          maxZoom={19}
+          subdomains="abcd"
+        />
         <MapEvents onMapReady={onMapReady} onBoundsChange={onBoundsChange} forcedLat={forcedLat} forcedLng={forcedLng} forcedZoom={forcedZoom} />
         
         {/* PALLINO BLU POSIZIONE UTENTE */}
