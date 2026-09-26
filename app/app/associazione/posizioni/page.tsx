@@ -7,7 +7,10 @@ import { createBrowserClient } from '@supabase/ssr'
 import { Plus, Briefcase, EyeOff, Globe, Sparkles, Archive, Trash2, Loader2, FileEdit } from 'lucide-react'
 import PosizioneCard from '@/components/PosizioneCard'
 
-const supabase = createBrowserClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!)
+const supabase = createBrowserClient(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!, 
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+)
 
 export default function HubPosizioniUnificatoPage() {
   const router = useRouter()
@@ -15,37 +18,56 @@ export default function HubPosizioniUnificatoPage() {
   const [isLoading, setIsLoading] = useState(true)
   const [activeTab, setActiveTab] = useState<'attive' | 'bozze' | 'storico'>('attive')
 
-  const fetchPosizioniEDashboardData = async () => {
+const fetchPosizioniEDashboardData = async () => {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) return router.push('/auth/login')
 
-    const { data } = await supabase.from('posizioni')
+    // 🛡️ Relazione disambiguata con il nome esatto del vincolo
+    const { data, error } = await supabase
+      .from('posizioni')
       .select(`
         *, 
-        media_associazioni(url),
+        media_associazioni!posizioni_immagine_id_fkey(url),
         tags:posizione_tags(tag:tags(id, name)),
-        competenze:posizione_competenze(competenza:competenze(id, name)),
         candidature(id, stato)
       `)
       .eq('associazione_id', user.id)
       .order('created_at', { ascending: false })
 
+    if (error) {
+      console.error("Errore fetch posizioni associazione:", error)
+      // Fallback di resilienza in caso di anomalie relazionali
+      const { data: fallbackData } = await supabase
+        .from('posizioni')
+        .select('*, candidature(id, stato)')
+        .eq('associazione_id', user.id)
+        .order('created_at', { ascending: false })
+
+      setPosizioni(fallbackData || [])
+      setIsLoading(false)
+      return
+    }
+
     const parsedPosizioni = data?.map(p => ({
       ...p,
-      tags: p.tags?.map((t: any) => t.tag).filter(Boolean),
-      competenze: p.competenze?.map((c: any) => c.competenza).filter(Boolean)
+      immagine_url: p.media_associazioni?.url || null,
+      tags: p.tags?.map((t: any) => t.tag).filter(Boolean) || []
     }))
 
     setPosizioni(parsedPosizioni || [])
     setIsLoading(false)
   }
 
-  useEffect(() => { fetchPosizioniEDashboardData() }, [])
+  useEffect(() => { 
+    fetchPosizioniEDashboardData() 
+  }, [])
 
-  const handleCambiaStato = async (id: string, nuovoStato: 'pubblicata' | 'bozza' | 'archiviata') => {
+  const handleCambiaStato = async (id: string, nuovoStato: 'pubblicata' | 'bozza' | 'archiviata' | 'conclusa') => {
     const { error } = await supabase.from('posizioni').update({ stato: nuovoStato }).eq('id', id)
     if (!error) {
       setPosizioni(prev => prev.map(p => p.id === id ? { ...p, stato: nuovoStato } : p))
+    } else {
+      console.error("Errore cambio stato:", error)
     }
   }
 
@@ -59,16 +81,25 @@ export default function HubPosizioniUnificatoPage() {
 
   const odierna = new Date().toISOString().split('T')[0]
 
-  const attive = posizioni.filter(p => p.stato === 'pubblicata' && (p.tipo === 'ricorrente' || !p.data_esatta || p.data_esatta >= odierna))
+  // 🛡️ FILTRI TOTALI: Nessuna posizione finisce nel dimenticatoio
+  const attive = posizioni.filter(p => 
+    ['pubblicata', 'aperta'].includes(p.stato) && 
+    (p.tipo === 'ricorrente' || !p.data_esatta || p.data_esatta >= odierna)
+  )
+
   const bozze = posizioni.filter(p => p.stato === 'bozza')
-  const storico = posizioni.filter(p => p.stato === 'archiviata' || (p.stato === 'pubblicata' && p.tipo === 'una_tantum' && p.data_esatta && p.data_esatta < odierna))
+
+  const storico = posizioni.filter(p => 
+    ['archiviata', 'conclusa', 'chiusa'].includes(p.stato) || 
+    (['pubblicata', 'aperta'].includes(p.stato) && p.tipo === 'una_tantum' && p.data_esatta && p.data_esatta < odierna)
+  )
 
   const currentItems = activeTab === 'attive' ? attive : activeTab === 'bozze' ? bozze : storico
 
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center bg-white text-slate-400 text-sm font-medium">
-        <Loader2 className="w-5 h-5 animate-spin mr-2 text-slate-800" /> Allineamento in corso...
+        <Loader2 className="w-5 h-5 animate-spin mr-2 text-slate-800" /> Caricamento annunci...
       </div>
     )
   }
@@ -94,7 +125,7 @@ export default function HubPosizioniUnificatoPage() {
         </Link>
       </div>
 
-      {/* SOTTILI TAB DI FILTRO */}
+      {/* TASTI TAB */}
       <div className="flex border-b border-slate-100 gap-6 mb-8 overflow-x-auto scrollbar-hide">
         <button 
           onClick={() => setActiveTab('attive')} 
@@ -128,7 +159,7 @@ export default function HubPosizioniUnificatoPage() {
             return (
               <div key={p.id} className="flex flex-col bg-white border border-slate-100 rounded-3xl overflow-hidden transition-all duration-300 hover:border-slate-200">
                 
-                {/* 1. Anteprima Card Reale - ✨ FIX: Avvolta in Link Reattivo ed Elastico */}
+                {/* 1. Anteprima Card Reale */}
                 <Link 
                   href={`/app/associazione/messaggi?filterPosizione=${p.id}`}
                   className="flex-1 block group/card bg-white p-1 transition-all duration-200 active:scale-[0.99]"
@@ -137,11 +168,11 @@ export default function HubPosizioniUnificatoPage() {
                     posizione={p} 
                     ruolo="associazione" 
                     layout="horizontal"
-                    isHovered={false} // Lasciamo che gestisca Tailwind internamente l'effetto hover grazie al selettore del padre
+                    isHovered={false}
                   />
                 </Link>
 
-                {/* 2. PIPELINE DELLE CANDIDATURE (Mostrata solo se attiva/storico per evitare bozze vuote) */}
+                {/* 2. PIPELINE DELLE CANDIDATURE */}
                 {p.stato !== 'bozza' && (
                   <div className="bg-slate-50/40 border-t border-slate-100/80 p-1.5 sm:px-4">
                     <Link 
@@ -170,7 +201,7 @@ export default function HubPosizioniUnificatoPage() {
                   </div>
                 )}
                 
-                {/* 3. BARRA OPERATIVA CONTROLLI */}
+                {/* 3. BARRA CONTROLLI */}
                 <div className="bg-white px-5 py-3.5 border-t border-slate-100 flex items-center justify-between gap-3 flex-wrap">
                   <div className="flex items-center gap-4">
                     {activeTab === 'attive' && (
@@ -192,7 +223,7 @@ export default function HubPosizioniUnificatoPage() {
                     {activeTab === 'storico' && (
                       <button 
                         onClick={() => {
-                          if(isScadutaTemporale) {
+                          if (isScadutaTemporale) {
                             router.push(`/app/associazione/posizione/${p.id}/modifica?action=reproponi`)
                           } else {
                             handleCambiaStato(p.id, 'pubblicata')
@@ -242,7 +273,7 @@ export default function HubPosizioniUnificatoPage() {
           <Briefcase className="w-6 h-6 mx-auto mb-4 text-slate-300 stroke-[1.5]" />
           <h3 className="text-sm font-bold text-slate-900">Nessun annuncio trovato</h3>
           <p className="text-xs text-slate-400 mt-1 max-w-[240px] mx-auto leading-relaxed">
-            Non ci sono posizioni caricate o archiviate in questo tab al momento.
+            Non ci sono posizioni caricate o archiviate in questa sezione al momento.
           </p>
         </div>
       )}
