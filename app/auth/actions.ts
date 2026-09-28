@@ -34,7 +34,6 @@ export async function signIn(formData: FormData) {
   const password = String(formData.get('password') ?? '')
   const redirectTo = getSafeRedirectTo(formData.get('redirectTo'))
 
-  // 1. Validazione base immediata
   if (!email || !password) {
     return { error: 'Inserisci sia email che password.' }
   }
@@ -55,54 +54,39 @@ export async function signIn(formData: FormData) {
     }
   )
 
-  // 2. Chiamata ad Auth Supabase (~150ms)
+  // 1. Verifica credenziali Supabase (~150ms)
   const { data, error } = await supabase.auth.signInWithPassword({ email, password })
 
   if (error) {
-    // Utente esiste ma non ha confermato la mail -> Smista all'OTP
     if (error.message === 'Email not confirmed') {
-      return { 
-        success: true, 
-        destination: `/auth/verifica?email=${encodeURIComponent(email)}` 
-      }
+      redirect(`/auth/verifica?email=${encodeURIComponent(email)}`)
     }
-    
-    // Credenziali errate: risposta JSON immediata senza redirect a vuoto
-    console.error("❌ Errore Login:", error.message)
-    return { 
-      error: 'Credenziali non valide. Controlla email e password.' 
-    }
+    return { error: 'Credenziali non valide. Controlla email e password.' }
   }
 
-  // 3. Se c'è già un redirect richiesto dall'URL (es. tornava da una candidatura)
+  // 2. Controllo redirect prioritario
   if (redirectTo) {
-    return { success: true, destination: redirectTo }
+    redirect(redirectTo)
   }
 
-  // 4. Smistamento rapido per Ruolo
+  // 3. Query rapida per il ruolo
   const { data: profile } = await supabase
     .from('profili')
     .select('role')
     .eq('id', data.user.id)
     .maybeSingle()
 
-  let destination = '/app/volontario'
-
+  // 🚀 REDIRECT NATIVO HTTP: i cookie e la navigazione viaggiano insieme.
+  // Zero rimbalzi su Safari/iOS vecchio, e zero ritardi perché abbiamo tolto revalidatePath!
   switch (profile?.role) {
     case 'associazione':
-      destination = '/app/associazione'
-      break
+      redirect('/app/associazione')
     case 'impresa':
-      destination = '/app/impresa'
-      break
+      redirect('/app/impresa')
     case 'volontario':
     default:
-      destination = '/app/volontario'
-      break
+      redirect('/app/volontario')
   }
-
-  // 🚀 Restituisce 200 OK istantaneo al client: window.location.href farà scattare lo skeleton
-  return { success: true, destination }
 }
 
 /**

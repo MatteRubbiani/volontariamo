@@ -1,6 +1,7 @@
 'use client'
 
-import { useState } from "react";
+import { useActionState } from "react";
+import { useFormStatus } from "react-dom";
 import { cn } from "@/lib/utils";
 import { signIn } from "@/app/auth/actions";
 import { Button } from "@/components/ui/button";
@@ -16,6 +17,31 @@ import { Label } from "@/components/ui/label";
 import Link from "next/link";
 import { Loader2 } from "lucide-react";
 
+type ActionState = {
+  error?: string;
+} | null;
+
+function SubmitButton() {
+  const { pending } = useFormStatus();
+
+  return (
+    <Button 
+      type="submit" 
+      className="w-full font-bold flex items-center justify-center gap-2 transition-all py-3" 
+      disabled={pending}
+    >
+      {pending ? (
+        <>
+          <Loader2 className="w-4 h-4 animate-spin text-white" />
+          <span>Accesso in corso...</span>
+        </>
+      ) : (
+        <span>Accedi</span>
+      )}
+    </Button>
+  );
+}
+
 export function LoginForm({
   redirectTo,
   errorMessage: initialErrorMessage,
@@ -23,28 +49,15 @@ export function LoginForm({
   ...props
 }: React.ComponentPropsWithoutRef<"div"> & { redirectTo?: string; errorMessage?: string }) {
   
-  const [isLoading, setIsLoading] = useState(false);
-  const [error, setError] = useState<string | null>(initialErrorMessage || null);
+  const [state, formAction] = useActionState<ActionState, FormData>(
+    async (_prevState, formData: FormData) => {
+      const res = await signIn(formData);
+      return (res as ActionState) ?? null;
+    },
+    null
+  );
 
-  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    setIsLoading(true);
-    setError(null);
-
-    const formData = new FormData(e.currentTarget);
-    const result = await signIn(formData);
-
-    if (result?.error) {
-      setError(result.error);
-      setIsLoading(false);
-      return;
-    }
-
-    if (result?.success && result?.destination) {
-      // Navigazione immediata: passa la palla allo skeleton loader
-      window.location.href = result.destination;
-    }
-  };
+  const activeError = state?.error || initialErrorMessage;
 
   return (
     <div className={cn("flex flex-col gap-6", className)} {...props}>
@@ -56,7 +69,7 @@ export function LoginForm({
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <form onSubmit={handleSubmit}>
+          <form action={formAction}>
             <input type="hidden" name="redirectTo" value={redirectTo || ""} />
             
             <div className="flex flex-col gap-5">
@@ -68,7 +81,11 @@ export function LoginForm({
                   placeholder="nome@esempio.it"
                   required
                   name="email"
-                  className="rounded-xl border-slate-200 text-xs py-2.5"
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                  spellCheck={false}
+                  autoComplete="email"
+                  className="rounded-xl border-slate-200 text-base sm:text-xs py-2.5" 
                 />
               </div>
 
@@ -87,30 +104,21 @@ export function LoginForm({
                   type="password"
                   required
                   name="password"
-                  className="rounded-xl border-slate-200 text-xs py-2.5"
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                  spellCheck={false}
+                  autoComplete="current-password"
+                  className="rounded-xl border-slate-200 text-base sm:text-xs py-2.5"
                 />
               </div>
 
-              {error && (
+              {activeError && (
                 <div className="p-3 bg-red-50 border border-red-100 rounded-xl text-xs font-medium text-red-600">
-                  {error}
+                  {activeError}
                 </div>
               )}
 
-              <Button 
-                type="submit" 
-                className="w-full font-bold flex items-center justify-center gap-2 transition-all" 
-                disabled={isLoading}
-              >
-                {isLoading ? (
-                  <>
-                    <Loader2 className="w-4 h-4 animate-spin text-white" />
-                    <span>Accesso in corso...</span>
-                  </>
-                ) : (
-                  <span>Accedi</span>
-                )}
-              </Button>
+              <SubmitButton />
             </div>
 
             <div className="mt-5 text-center text-xs text-slate-500">
