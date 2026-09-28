@@ -164,19 +164,7 @@ export default function NavbarUI({
                   </div>
                 </Link>
 
-                <form action={logout} className="hidden md:block">
-                  <button 
-                    type="submit" 
-                    title="Disconnetti"
-                    className={`p-2 rounded-xl transition-all ${
-                      isAziendale 
-                        ? 'text-slate-400 hover:text-rose-400 hover:bg-rose-950/30' 
-                        : 'text-slate-400 hover:text-rose-600 hover:bg-rose-50'
-                    }`}
-                  >
-                    <LogOut className="w-4 h-4" />
-                  </button>
-                </form>
+            
               </div>
             ) : (
               <div className="flex items-center gap-2">

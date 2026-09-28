@@ -7,7 +7,7 @@ import { redirect } from 'next/navigation'
 /**
  * Utility per garantire che il redirect avvenga solo su path interni
  */
-function getSafeRedirectTo(value: FormDataEntryValue | null) {
+function getSafeRedirectTo(value: FormDataEntryValue | null): string | null {
   if (typeof value !== 'string') return null
   if (!value.startsWith('/')) return null
   if (value.startsWith('//')) return null
@@ -26,10 +26,18 @@ function buildErrorRedirect(basePath: string, message: string, redirectTo: strin
   return `${basePath}?${params.toString()}`
 }
 
+/**
+ * ⚡ SIGN IN ULTRA-RAPIDO (Zero blocchi di layout cache o SSR cascata)
+ */
 export async function signIn(formData: FormData) {
-  const email = String(formData.get('email') ?? '')
+  const email = String(formData.get('email') ?? '').trim()
   const password = String(formData.get('password') ?? '')
   const redirectTo = getSafeRedirectTo(formData.get('redirectTo'))
+
+  // 1. Validazione base immediata
+  if (!email || !password) {
+    return { error: 'Inserisci sia email che password.' }
+  }
 
   const cookieStore = await cookies()
   const supabase = createServerClient(
@@ -39,56 +47,67 @@ export async function signIn(formData: FormData) {
       cookies: {
         getAll() { return cookieStore.getAll() },
         setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value, options }) => cookieStore.set(name, value, options))
+          cookiesToSet.forEach(({ name, value, options }) => 
+            cookieStore.set(name, value, options)
+          )
         },
       },
     }
   )
 
+  // 2. Chiamata ad Auth Supabase (~150ms)
   const { data, error } = await supabase.auth.signInWithPassword({ email, password })
 
-  // Cache invalidation: Ensure fresh navbar data after login
-  // This is critical for users with existing profiles
-  if (!error) {
-    const { revalidatePath } = await import('next/cache')
-    revalidatePath('/', 'layout')
-  }
-
   if (error) {
-    // STATO: Utente esiste ma non ha confermato la mail (PROD)
+    // Utente esiste ma non ha confermato la mail -> Smista all'OTP
     if (error.message === 'Email not confirmed') {
-      // 🚨 AGGIORNATO: Mandiamo l'utente distratto alla nostra nuova pagina OTP!
-      redirect(`/auth/verifica?email=${encodeURIComponent(email)}`)
+      return { 
+        success: true, 
+        destination: `/auth/verifica?email=${encodeURIComponent(email)}` 
+      }
     }
-    // STATO: Credenziali errate o utente inesistente
+    
+    // Credenziali errate: risposta JSON immediata senza redirect a vuoto
     console.error("❌ Errore Login:", error.message)
-    redirect(buildErrorRedirect('/auth/login', error.message, redirectTo))
+    return { 
+      error: 'Credenziali non valide. Controlla email e password.' 
+    }
   }
 
-  // --- IL VIGILE URBANO: Smistamento per Ruolo ---
+  // 3. Se c'è già un redirect richiesto dall'URL (es. tornava da una candidatura)
+  if (redirectTo) {
+    return { success: true, destination: redirectTo }
+  }
+
+  // 4. Smistamento rapido per Ruolo
   const { data: profile } = await supabase
     .from('profili')
     .select('role')
     .eq('id', data.user.id)
-    .single()
+    .maybeSingle()
 
-  if (redirectTo) redirect(redirectTo)
+  let destination = '/app/volontario'
 
-  // STATI: Volontario, Associazione, Impresa
   switch (profile?.role) {
     case 'associazione':
-      redirect('/app/associazione')
+      destination = '/app/associazione'
       break
     case 'impresa':
-      redirect('/app/impresa')
+      destination = '/app/impresa'
       break
     case 'volontario':
     default:
-      redirect('/app/volontario')
+      destination = '/app/volontario'
       break
   }
+
+  // 🚀 Restituisce 200 OK istantaneo al client: window.location.href farà scattare lo skeleton
+  return { success: true, destination }
 }
 
+/**
+ * SIGN UP (Con anti-ghosting e redirect dinamico)
+ */
 export async function signUp(formData: FormData) {
   const email = String(formData.get('email') ?? '').trim()
   const password = String(formData.get('password') ?? '')
@@ -121,35 +140,35 @@ export async function signUp(formData: FormData) {
     }
   )
 
-  // 🚀 1. ESECUZIONE SIGN UP
+  // 1. Esecuzione registrazione
   const { data, error } = await supabase.auth.signUp({
     email,
     password,
     options: {
-      // Usiamo l'origin calcolato dinamicamente per supportare sia localhost che produzione
       emailRedirectTo: `${origin}/api/auth/callback`,
     },
   })
 
-  // Prepariamo la stringa di redirect in modo pulito
   const redirectParam = redirectTo ? `&redirectTo=${encodeURIComponent(redirectTo)}` : ''
 
-  // 🚨 2. GESTIONE ERRORI STANDARD (es. password debole, formati errati)
+  // 2. Errori standard (es. password corta)
   if (error) {
     redirect(`/auth/registrazione?error=${encodeURIComponent(error.message)}${redirectParam}`)
   }
 
-  // 🛡️ 3. SENIOR DEV FIX: CONTROLLO ANTI-GHOSTING
-  // Se Supabase non restituisce identità, l'account esiste già nel database Auth.
+  // 3. Controllo Anti-Ghosting (se identities è vuoto l'account esisteva già)
   if (data?.user && data.user.identities && data.user.identities.length === 0) {
     const userExistsMessage = "Questa email è già associata a un account. Effettua il login."
     redirect(`/auth/registrazione?error=${encodeURIComponent(userExistsMessage)}${redirectParam}`)
   }
 
-  // ✨ 4. SUCCESSO: Invio alla pagina di inserimento OTP
+  // 4. Redirect alla schermata OTP
   redirect(`/auth/verifica?email=${encodeURIComponent(email)}${redirectParam}`)
 }
 
+/**
+ * LOGOUT
+ */
 export async function logout() {
   const cookieStore = await cookies()
   const supabase = createServerClient(
@@ -171,9 +190,11 @@ export async function logout() {
   redirect('/')
 }
 
-
+/**
+ * RESET PASSWORD
+ */
 export async function resetPassword(formData: FormData) {
-  const email = String(formData.get('email') ?? '')
+  const email = String(formData.get('email') ?? '').trim()
   const cookieStore = await cookies()
   
   const supabase = createServerClient(
@@ -196,6 +217,5 @@ export async function resetPassword(formData: FormData) {
     return redirect(`/auth/forgot-password?error=${encodeURIComponent(error.message)}`)
   }
 
-  // Lo mandiamo a una pagina di verifica dedicata al recupero
   redirect(`/auth/forgot-password/verify?email=${encodeURIComponent(email)}`)
 }

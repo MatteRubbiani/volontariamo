@@ -1,3 +1,6 @@
+'use client'
+
+import { useState } from "react";
 import { cn } from "@/lib/utils";
 import { signIn } from "@/app/auth/actions";
 import { Button } from "@/components/ui/button";
@@ -11,44 +14,72 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import Link from "next/link";
+import { Loader2 } from "lucide-react";
 
 export function LoginForm({
   redirectTo,
-  errorMessage,
+  errorMessage: initialErrorMessage,
   className,
   ...props
 }: React.ComponentPropsWithoutRef<"div"> & { redirectTo?: string; errorMessage?: string }) {
+  
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(initialErrorMessage || null);
+
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault();
+    setIsLoading(true);
+    setError(null);
+
+    const formData = new FormData(e.currentTarget);
+    const result = await signIn(formData);
+
+    if (result?.error) {
+      setError(result.error);
+      setIsLoading(false);
+      return;
+    }
+
+    if (result?.success && result?.destination) {
+      // Navigazione immediata: passa la palla allo skeleton loader
+      window.location.href = result.destination;
+    }
+  };
+
   return (
     <div className={cn("flex flex-col gap-6", className)} {...props}>
-      <Card>
+      <Card className="rounded-[2rem] border-slate-200/80 shadow-xs">
         <CardHeader>
-          <CardTitle className="text-2xl">Login</CardTitle>
-          <CardDescription>
-            Enter your email below to login to your account
+          <CardTitle className="text-2xl font-black text-slate-900 tracking-tight">Accedi</CardTitle>
+          <CardDescription className="text-xs text-slate-500">
+            Inserisci le tue credenziali per accedere alla piattaforma
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <form action={signIn}>
+          <form onSubmit={handleSubmit}>
             <input type="hidden" name="redirectTo" value={redirectTo || ""} />
-            <div className="flex flex-col gap-6">
+            
+            <div className="flex flex-col gap-5">
               <div className="grid gap-2">
-                <Label htmlFor="email">Email</Label>
+                <Label htmlFor="email" className="text-xs font-bold text-slate-700">Email</Label>
                 <Input
                   id="email"
                   type="email"
-                  placeholder="m@example.com"
+                  placeholder="nome@esempio.it"
                   required
                   name="email"
+                  className="rounded-xl border-slate-200 text-xs py-2.5"
                 />
               </div>
+
               <div className="grid gap-2">
                 <div className="flex items-center">
-                  <Label htmlFor="password">Password</Label>
+                  <Label htmlFor="password" className="text-xs font-bold text-slate-700">Password</Label>
                   <Link
                     href="/auth/forgot-password"
-                    className="ml-auto inline-block text-sm underline-offset-4 hover:underline"
+                    className="ml-auto inline-block text-xs font-medium text-slate-400 underline-offset-4 hover:underline hover:text-slate-800"
                   >
-                    Forgot your password?
+                    Password dimenticata?
                   </Link>
                 </div>
                 <Input
@@ -56,20 +87,39 @@ export function LoginForm({
                   type="password"
                   required
                   name="password"
+                  className="rounded-xl border-slate-200 text-xs py-2.5"
                 />
               </div>
-              {errorMessage && <p className="text-sm text-red-500">{errorMessage}</p>}
-              <Button type="submit" className="w-full">
-                Login
+
+              {error && (
+                <div className="p-3 bg-red-50 border border-red-100 rounded-xl text-xs font-medium text-red-600">
+                  {error}
+                </div>
+              )}
+
+              <Button 
+                type="submit" 
+                className="w-full font-bold flex items-center justify-center gap-2 transition-all" 
+                disabled={isLoading}
+              >
+                {isLoading ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin text-white" />
+                    <span>Accesso in corso...</span>
+                  </>
+                ) : (
+                  <span>Accedi</span>
+                )}
               </Button>
             </div>
-            <div className="mt-4 text-center text-sm">
-              Don&apos;t have an account?{" "}
+
+            <div className="mt-5 text-center text-xs text-slate-500">
+              Non hai ancora un account?{" "}
               <Link
                 href={redirectTo ? `/auth/registrazione?redirectTo=${encodeURIComponent(redirectTo)}` : "/auth/registrazione"}
-                className="underline underline-offset-4"
+                className="font-bold text-slate-900 underline underline-offset-4 hover:text-black"
               >
-                Sign up
+                Registrati
               </Link>
             </div>
           </form>

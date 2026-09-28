@@ -12,7 +12,11 @@ type VolontarioFormState = {
   cittaResidenza: string;
   tags: string[];
   competenze: string[];
-  telefono: string; sesso: string; dataNascita: string; gradoIstruzione: string; bio: string;
+  telefono: string; 
+  sesso: string; 
+  dataNascita: string; 
+  gradoIstruzione: string; 
+  bio: string;
 }
 
 function VolontarioWizardForm() {
@@ -24,6 +28,7 @@ function VolontarioWizardForm() {
   const [step, setStep] = useState<1 | 2>(1)
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [isFetchingCity, setIsFetchingCity] = useState(false)
+  const [errorMessage, setErrorMessage] = useState<string | null>(null)
   
   const [tagsCatalog, setTagsCatalog] = useState<{id: string, name: string}[]>([])
   const [competenzeCatalog, setCompetenzeCatalog] = useState<{id: string, name: string}[]>([])
@@ -112,8 +117,48 @@ function VolontarioWizardForm() {
   const canGoNext = formData.nome.trim().length > 1 && formData.cognome.trim().length > 1 && formData.cap.length === 5 && formData.cittaResidenza.length > 0;
   const progress = (step / 2) * 100
 
+  // 🚀 GESTORE SUBMIT OTTIMIZZATO (Cattura il risultato e reindirizza subito)
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    e.preventDefault()
+    if (isSubmitting) return
+
+    setIsSubmitting(true)
+    setErrorMessage(null)
+
+    try {
+      const payload = new FormData()
+      payload.append('role', 'volontario')
+      if (redirectTo) payload.append('redirectTo', redirectTo)
+      
+      Object.entries(formData).forEach(([key, value]) => {
+        if (Array.isArray(value)) {
+          value.forEach(v => payload.append(key, v))
+        } else {
+          payload.append(key, value as string)
+        }
+      })
+
+      // Chiamata alla Server Action snella
+      const res = await completeOnboarding(payload)
+
+      if (res?.error) {
+        setErrorMessage(res.error)
+        setIsSubmitting(false)
+        return
+      }
+
+      if (res?.success && res?.destination) {
+        // ⚡ Salto immediato: fa scattare subito il loading.tsx senza freeze
+        window.location.href = res.destination
+      }
+    } catch (err: any) {
+      console.error("Errore submit onboarding:", err)
+      setErrorMessage(err.message || 'Si è verificato un errore imprevisto.')
+      setIsSubmitting(false)
+    }
+  }
+
   return (
-    // 🟢 'min-h' flessibile e 'pb-28' da mobile per evitare il blocco sotto la BottomNav
     <main className="min-h-[calc(100dvh-3.5rem)] w-full bg-slate-50/50 flex flex-col justify-start pt-6 md:pt-12 pb-28 md:pb-12 items-center overflow-y-auto font-sans antialiased selection:bg-slate-100">
       <div className="max-w-[480px] w-full flex flex-col px-4 sm:px-6">
         
@@ -128,17 +173,14 @@ function VolontarioWizardForm() {
           </div>
         </div>
 
-        <form declare-action="true" action={async () => {
-            setIsSubmitting(true)
-            const payload = new FormData()
-            payload.append('role', 'volontario')
-            payload.append('redirectTo', redirectTo)
-            Object.entries(formData).forEach(([key, value]) => {
-              if (Array.isArray(value)) value.forEach(v => payload.append(key, v))
-              else payload.append(key, value as string)
-            })
-            await completeOnboarding(payload)
-        }} className="flex flex-col gap-6 w-full">
+        {errorMessage && (
+          <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-2xl text-xs font-medium text-red-600 animate-in fade-in">
+            {errorMessage}
+          </div>
+        )}
+
+        {/* 🟢 Form collegato a onSubmit invece che ad action anonima */}
+        <form onSubmit={handleSubmit} className="flex flex-col gap-6 w-full">
           
           {/* ==========================================
               STEP 1: ANAGRAFICA CORE
@@ -152,7 +194,6 @@ function VolontarioWizardForm() {
 
               <div className="flex flex-col gap-3.5 mt-1">
                 <div className="grid grid-cols-2 gap-3 sm:gap-4">
-                  {/* ⚡ 'text-base sm:text-sm' previene l'auto-zoom di iOS/Safari */}
                   <input 
                     type="text" 
                     placeholder="Nome *" 
@@ -238,7 +279,6 @@ function VolontarioWizardForm() {
                   {activeSection === 'cause' ? (
                     <div className="space-y-3 mt-3 animate-in fade-in duration-300">
                       <div className="relative">
-                        {/* ⚡ 'text-base sm:text-xs' evita lo zoom su Safari */}
                         <input 
                           type="text" 
                           placeholder="Cerca causa..." 
@@ -296,7 +336,6 @@ function VolontarioWizardForm() {
                   {activeSection === 'competenze' ? (
                     <div className="space-y-3 mt-3 animate-in fade-in duration-300">
                       <div className="relative">
-                        {/* ⚡ 'text-base sm:text-xs' evita lo zoom su Safari */}
                         <input 
                           type="text" 
                           placeholder="Cerca competenza..." 
