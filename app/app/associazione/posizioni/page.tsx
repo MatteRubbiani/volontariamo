@@ -107,23 +107,6 @@ const fetchPosizioniEDashboardData = async () => {
   return (
     <div className="max-w-[1040px] mx-auto py-12 px-4 sm:px-6 pb-32 font-sans bg-white text-slate-900 antialiased">
       
-      {/* HEADER PROFESSIONALE AIRBNB-STYLE */}
-      <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-6 mb-12 pb-8 border-b border-slate-100">
-        <div className="space-y-1.5">
-          <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-slate-900">
-            Control Center Ricerche
-          </h1>
-          <p className="text-sm text-slate-500 font-normal leading-relaxed max-w-2xl">
-            Gestisci in un unico posto la visibilità degli annunci sul territorio e monitora all'istante l'afflusso dei nuovi candidati.
-          </p>
-        </div>
-        <Link 
-          href="/app/associazione/posizione/nuova" 
-          className="inline-flex items-center justify-center gap-2 px-5 py-2.5 bg-slate-900 hover:bg-black text-white rounded-xl text-xs font-bold transition-all hover:scale-[1.02] active:scale-[0.98] w-full sm:w-auto shrink-0 shadow-sm"
-        >
-          <Plus className="w-3.5 h-3.5" /> Nuovo annuncio
-        </Link>
-      </div>
 
       {/* TASTI TAB */}
       <div className="flex border-b border-slate-100 gap-6 mb-8 overflow-x-auto scrollbar-hide">

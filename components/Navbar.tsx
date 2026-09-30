@@ -1,104 +1,94 @@
-'use client' // 🚨 Trasformiamo il contenitore in Client-Side per sbloccare l'ISR su tutto il sito
+'use client'
 
 import { useEffect, useState } from 'react'
+import { usePathname } from 'next/navigation'
 import { createBrowserClient } from '@supabase/ssr'
-import NavbarUI from '@/components/NavbarUI'
+import { useWorkspace } from '@/lib/context/WorkspaceContext'
+import NavbarUI from './NavbarUI'
 
 export default function Navbar() {
-  const [authData, setAuthData] = useState({
-    email: undefined as string | undefined,
-    isVolontario: false,
-    isAssociazione: false,
-    isImpresa: false,
-    dashboardLink: '/'
-  })
-  const [loading, setLoading] = useState(true)
+  const pathname = usePathname()
+  const { workspace, hasAziendale } = useWorkspace()
 
-  // Inizializziamo il client Supabase specifico per il Browser (Zero chiamate a cookies() server-side)
+  const [authData, setAuthData] = useState<{
+    email?: string
+    role?: string
+  }>({
+    email: undefined,
+    role: undefined,
+  })
+
   const supabase = createBrowserClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
   )
 
   useEffect(() => {
-    async function fetchUserAndRole() {
+    async function fetchSessionAndRole() {
       try {
         const { data: { session } } = await supabase.auth.getSession()
-        const user = session?.user || null
-
-        if (!user) {
-          setAuthData({
-            email: undefined,
-            isVolontario: false,
-            isAssociazione: false,
-            isImpresa: false,
-            dashboardLink: '/auth/login' // Fallback sicuro per utenti non loggati
-          })
-          setLoading(false)
+        if (!session?.user) {
+          setAuthData({ email: undefined, role: undefined })
           return
         }
 
-        // Recuperiamo il ruolo dal client del browser
-        const { data: profilo, error } = await supabase
+        const { data: profile } = await supabase
           .from('profili')
-          .select('ruolo')
-          .eq('id', user.id)
+          .select('role, ruolo')
+          .eq('id', session.user.id)
           .maybeSingle()
 
-        if (error) throw error
-
-        const ruolo = profilo?.ruolo || null
-        const dashboardLink = ruolo ? `/app/${ruolo}` : "/app/onboarding"
+        const userRole = profile?.role || profile?.ruolo || 'volontario'
 
         setAuthData({
-          email: user.email,
-          isVolontario: ruolo === 'volontario',
-          isAssociazione: ruolo === 'associazione',
-          isImpresa: ruolo === 'impresa',
-          dashboardLink: dashboardLink
+          email: session.user.email,
+          role: userRole,
         })
-      } catch (error) {
-        console.error('[Navbar Client] Error fetching profile:', error)
-      } finally {
-        setLoading(false)
+      } catch (err) {
+        console.error('[Navbar Controller] Errore recupero sessione:', err)
       }
     }
 
-    fetchUserAndRole()
+    fetchSessionAndRole()
 
-    // ✨ Ascoltiamo i cambi di stato (Login/Logout) in tempo reale per aggiornare la Navbar all'istante
     const { data: authListener } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === 'SIGNED_OUT') {
-        setAuthData({ email: undefined, isVolontario: false, isAssociazione: false, isImpresa: false, dashboardLink: '/auth/login' })
+        setAuthData({ email: undefined, role: undefined })
       } else if (event === 'SIGNED_IN' && session) {
-        fetchUserAndRole()
+        fetchSessionAndRole()
       }
     })
 
     return () => authListener.subscription.unsubscribe()
   }, [supabase])
 
-  // Durante il primissimo rendering server o finché carica, mostriamo la Navbar con i dati vuoti (Skeleton state)
-  // Questo permette a Next.js di pre-compilare la pagina come statica all'istante!
-  if (loading) {
-    return (
-      <NavbarUI 
-        email={undefined} 
-        isVolontario={false} 
-        isAssociazione={false} 
-        isImpresa={false} 
-        dashboardLink="/" 
-      />
-    )
-  }
+  // ⚡ PATH-SNIFFING SINCRONO: Se l'URL è /app/associazione/*,
+  // sappiamo all'istante che siamo in modalità Ente senza attendere Supabase
+  const isAssociazioneRoute = pathname?.startsWith('/app/associazione')
+  const isVolontarioRoute = pathname?.startsWith('/app/volontario')
+
+  const isAssociazione = isAssociazioneRoute || authData.role === 'associazione'
+  const isVolontario = !isAssociazione && (isVolontarioRoute || authData.role === 'volontario')
+  const isImpresa = !isAssociazione && !isVolontario && authData.role === 'impresa'
+  
+  const isLoggedIn = !!authData.email || isAssociazioneRoute || isVolontarioRoute
+  const isAziendale = isVolontario && workspace === 'aziendale'
+
+  let dashboardLink = '/app/volontario'
+  if (isAssociazione) dashboardLink = '/app/associazione/oggi'
+  if (isImpresa) dashboardLink = '/app/impresa'
 
   return (
-    <NavbarUI 
+    <NavbarUI
       email={authData.email}
-      isVolontario={authData.isVolontario}
-      isAssociazione={authData.isAssociazione}
-      isImpresa={authData.isImpresa}
-      dashboardLink={authData.dashboardLink}
+      isLoggedIn={isLoggedIn}
+      isVolontario={isVolontario}
+      isAssociazione={isAssociazione}
+      isImpresa={isImpresa}
+      isAziendale={isAziendale}
+      hasAziendale={hasAziendale}
+      dashboardLink={dashboardLink}
+      currentPath={pathname}
     />
   )
 }

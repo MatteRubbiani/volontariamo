@@ -1,41 +1,80 @@
 'use client'
 
 import Link from 'next/link'
-import { usePathname } from 'next/navigation'
-import { HeartHandshake, LogOut, MapPin, LayoutDashboard, MessageSquare, Search, Palette, Heart, Building2 } from 'lucide-react'
-import { logout } from '@/app/auth/actions'
-import { useWorkspace } from '@/lib/context/WorkspaceContext'
+import { 
+  HeartHandshake, 
+  MapPin, 
+  LayoutDashboard, 
+  MessageSquare, 
+  Heart, 
+  Building2,
+  CalendarDays,
+  Users,
+  Clock,
+  Briefcase,
+  Store,
+  User
+} from 'lucide-react'
 import { WorkspaceSwitcher } from '@/components/WorkspaceSwitcher'
-import BottomNavMobile from '@/components/BottomNavMobile'
+
+interface NavbarUIProps {
+  email?: string
+  isLoggedIn?: boolean       // 👈 Ora opzionale
+  isVolontario?: boolean
+  isAssociazione?: boolean
+  isImpresa?: boolean
+  isAziendale?: boolean      // 👈 Ora opzionale
+  hasAziendale?: boolean     // 👈 Ora opzionale
+  dashboardLink?: string
+  currentPath?: string
+}
 
 export default function NavbarUI({
   email,
-  isVolontario,
-  isAssociazione,
-  isImpresa,
-  dashboardLink
-}: {
-  email?: string
-  isVolontario: boolean
-  isAssociazione: boolean
-  isImpresa: boolean
-  dashboardLink: string
-}) {
-  const pathname = usePathname()
-  const { workspace, hasAziendale } = useWorkspace()
-  
-  const isAziendale = isVolontario && workspace === 'aziendale'
-  const isLoggedIn = !!email
-  const needsOnboarding = isLoggedIn && !isVolontario && !isAssociazione && !isImpresa
-  const userInitial = email ? email.charAt(0).toUpperCase() : 'U'
+  isLoggedIn = !!email,      // 👈 Fallback automatico: se c'è l'email è loggato
+  isVolontario = false,
+  isAssociazione = false,
+  isImpresa = false,
+  isAziendale = false,       // 👈 Fallback a false
+  hasAziendale = false,      // 👈 Fallback a false
+  dashboardLink = '/',
+  currentPath = '',
+}: NavbarUIProps) {
+  const userInitial = email ? email.charAt(0).toUpperCase() : 'A'
 
   const navBg = isAziendale 
     ? 'bg-slate-950/80 border-slate-800 text-slate-100' 
     : 'bg-white/80 border-slate-100 text-slate-900'
 
-  const isActive = (path: string) => pathname === path
+  const isActive = (path: string) => {
+    if (!currentPath) return false
+    if (path === '/') return currentPath === '/'
+    return currentPath.startsWith(path)
+  }
 
-  const linkClass = (path: string) => `
+  // 🎯 I 5 TAB OPERATIVI ENTE (Unica sorgente di verità per Desktop e Mobile)
+  const associazioneTabs = [
+    { id: 'oggi', label: 'oggi', href: '/app/associazione/oggi', icon: CalendarDays },
+    { id: 'posizioni', label: 'posizioni', href: '/app/associazione/posizioni', icon: Briefcase },
+    { id: 'messaggi', label: 'messaggi', href: '/app/associazione/messaggi', icon: MessageSquare },
+    { id: 'squadra', label: 'squadra', href: '/app/associazione/squadra', icon: Users },
+    { id: 'turni', label: 'turni', href: '/app/associazione/turni', icon: Clock },
+  ]
+
+  // TAB PER IL VOLONTARIO MOBILE
+  const volontarioTabs = [
+    { id: 'dashboard', label: 'Dashboard', href: dashboardLink, icon: LayoutDashboard },
+    { id: 'mappa', label: 'Mappa', href: '/mappa', icon: MapPin },
+    { id: 'associazioni', label: 'Associazioni', href: '/associazioni', icon: Building2 },
+    { 
+      id: 'candidature', 
+      label: isAziendale ? 'Iniziative' : 'Candidature', 
+      href: isAziendale ? '/app/volontario/iniziative-team' : '/app/volontario/candidature', 
+      icon: Heart 
+    },
+  ]
+
+  const desktopLinkClass = (path: string) => `
     text-xs font-semibold px-3 py-2 rounded-xl transition-all duration-200 flex items-center gap-1.5 select-none
     ${isActive(path) 
       ? (isAziendale ? 'bg-slate-800 text-white font-bold' : 'bg-slate-100 text-slate-950 font-bold') 
@@ -44,12 +83,18 @@ export default function NavbarUI({
 
   return (
     <>
+      {/* =========================================================
+          1. TOP BAR (Sempre presente su Desktop e Mobile)
+         ========================================================= */}
       <nav className={`border-b backdrop-blur-xl sticky top-0 z-[9999] transition-all duration-300 ${navBg}`}>
         <div className="py-2.5 px-4 md:px-8 flex justify-between items-center max-w-7xl mx-auto">
           
           {/* LOGO BRAND */}
           <div className="flex items-center gap-3">
-            <Link href="/" className="group flex items-center gap-2.5 transition-transform active:scale-95">
+            <Link 
+              href={isAssociazione ? '/app/associazione/oggi' : '/'} 
+              className="group flex items-center gap-2.5 transition-transform active:scale-95"
+            >
               <div className={`p-1.5 rounded-xl transition-colors ${isAziendale ? 'bg-violet-500/10 text-violet-400' : 'bg-slate-950 text-white'}`}>
                 <HeartHandshake className="h-5 w-5" />
               </div>
@@ -58,6 +103,12 @@ export default function NavbarUI({
               </span>
             </Link>
             
+            {isAssociazione && (
+              <span className="hidden sm:inline-flex px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 border border-slate-200 text-[10px] font-extrabold uppercase tracking-wider">
+                Ente
+              </span>
+            )}
+
             {isAziendale && (
               <span className="hidden lg:inline-flex px-2 py-0.5 rounded-md bg-violet-500/10 text-violet-300 border border-violet-500/20 text-[9px] font-bold uppercase tracking-wider">
                 Corporate ESG
@@ -65,64 +116,48 @@ export default function NavbarUI({
             )}
           </div>
           
-          {/* NAVIGAZIONE CENTRALE (DESKTOP) */}
+          {/* NAVIGAZIONE CENTRALE DESKTOP (Nascosta su Mobile) */}
           <div className="hidden md:flex gap-1 items-center bg-slate-50/50 p-1 rounded-2xl border border-slate-100/60 dark:bg-slate-900/40 dark:border-slate-800">
             {isLoggedIn ? (
-              !needsOnboarding && (
-                <>
-                  <Link 
-                    href={isAssociazione ? '/app/associazione/posizioni' : dashboardLink} 
-                    className={linkClass(isAssociazione ? '/app/associazione/posizioni' : dashboardLink)}
-                  >
-                    <LayoutDashboard className="w-3.5 h-3.5 opacity-70" />
-                    {isAssociazione ? 'Bacheca' : 'Dashboard'}
-                  </Link>
-                  
-                  {isVolontario && (
-                    <>
-                      <Link href="/mappa" className={linkClass('/mappa')}>
-                        <MapPin className="w-3.5 h-3.5 opacity-70" />
-                        Mappa
-                      </Link>
-                      <Link href="/associazioni" className={linkClass('/associazioni')}>
-                        <Building2 className="w-3.5 h-3.5 opacity-70" />
-                        Associazioni
-                      </Link>
-                      <Link 
-                        href={isAziendale ? "/app/volontario/iniziative-team" : "/app/volontario/candidature"} 
-                        className={linkClass(isAziendale ? "/app/volontario/iniziative-team" : "/app/volontario/candidature")}
-                      >
-                        <Heart className="w-3.5 h-3.5 opacity-70" />
-                        {isAziendale ? 'Iniziative Team' : 'Le mie Candidature'}
-                      </Link>
-                    </>
-                  )}
-
-                  {isAssociazione && (
-                    <>
-                      <Link href="/app/associazione/messaggi" className={linkClass('/app/associazione/messaggi')}>
-                        <MessageSquare className="w-3.5 h-3.5 opacity-70" />
-                        Messaggi
-                      </Link>
-                      <Link href="/app/associazione/rete" className={linkClass('/app/associazione/rete')}>
-                        <Search className="w-3.5 h-3.5 opacity-70" />
-                        Cerca Volontari
-                      </Link>
-                      <Link href="/app/associazione/personalizza" className={linkClass('/app/associazione/personalizza')}>
-                        <Palette className="w-3.5 h-3.5 opacity-70" />
-                        Vetrina
-                      </Link>
-                    </>
-                  )}
-                </>
-              )
-            ) : (
               <>
-                <Link href="/mappa" className={linkClass('/mappa')}>
+                {/* ENTE: I 5 TAB */}
+                {isAssociazione && (
+                  <>
+                    {associazioneTabs.map((tab) => {
+                      const Icon = tab.icon
+                      return (
+                        <Link key={tab.id} href={tab.href} className={desktopLinkClass(tab.href)}>
+                          <Icon className="w-3.5 h-3.5 opacity-70" />
+                          <span>{tab.label}</span>
+                        </Link>
+                      )
+                    })}
+                  </>
+                )}
+
+                {/* VOLONTARIO */}
+                {isVolontario && (
+                  <>
+                    {volontarioTabs.map((tab) => {
+                      const Icon = tab.icon
+                      return (
+                        <Link key={tab.id} href={tab.href} className={desktopLinkClass(tab.href)}>
+                          <Icon className="w-3.5 h-3.5 opacity-70" />
+                          <span>{tab.label}</span>
+                        </Link>
+                      )
+                    })}
+                  </>
+                )}
+              </>
+            ) : (
+              /* ANONIMO */
+              <>
+                <Link href="/mappa" className={desktopLinkClass('/mappa')}>
                   <MapPin className="w-3.5 h-3.5 opacity-70" />
                   Esplora Mappa
                 </Link>
-                <Link href="/associazioni" className={linkClass('/associazioni')}>
+                <Link href="/associazioni" className={desktopLinkClass('/associazioni')}>
                   <Building2 className="w-3.5 h-3.5 opacity-70" />
                   Directory Associazioni
                 </Link>
@@ -130,9 +165,21 @@ export default function NavbarUI({
             )}
           </div>
 
-          {/* AREA DESTRA (UTENTE & WORKSPACE) */}
+          {/* AREA DESTRA (Vetrina & Profilo) */}
           <div className="flex items-center gap-2">
             
+            {/* TASTO VETRINA ENTE (Visibile anche su Mobile con icona) */}
+            {isAssociazione && (
+              <Link
+                href="/app/associazione/personalizza"
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 text-slate-800 text-xs font-bold transition-all shadow-2xs hover:border-slate-300"
+              >
+                <Store className="w-3.5 h-3.5 text-blue-600" />
+                <span className="hidden sm:inline">Modifica vetrina</span>
+                <span className="sm:hidden text-[11px]">Vetrina</span>
+              </Link>
+            )}
+
             {hasAziendale && isVolontario && (
               <div className="flex items-center">
                 <WorkspaceSwitcher />
@@ -140,32 +187,29 @@ export default function NavbarUI({
             )}
 
             {isLoggedIn ? (
-              <div className="flex items-center gap-1.5 md:pl-2 md:border-l border-slate-100 dark:border-slate-800">
-                <Link 
-                  href="/app/profilo" 
-                  className={`flex items-center gap-2 p-1 md:pr-3 rounded-full border transition-all ${
-                    isAziendale 
-                      ? 'bg-slate-900 border-slate-800 hover:border-violet-500/40' 
-                      : 'bg-slate-50 border-slate-200/60 hover:bg-slate-100'
-                  }`}
-                >
-                  <div className={`w-7 h-7 rounded-full flex items-center justify-center font-extrabold text-xs shadow-xs ${
-                    isAziendale ? 'bg-violet-600 text-white' : 'bg-slate-950 text-white'
-                  }`}>
-                    {userInitial}
-                  </div>
-                  <div className="hidden md:flex flex-col text-left">
-                    <span className="text-[11px] font-semibold text-slate-800 dark:text-slate-200 max-w-[110px] truncate leading-tight">
-                      {email?.split('@')[0]}
-                    </span>
-                    <span className="text-[9px] font-bold text-slate-400 uppercase tracking-tight leading-none">
-                      {isAssociazione ? 'Associazione' : isVolontario ? (isAziendale ? 'Team ESG' : 'Volontario') : 'Profilo'}
-                    </span>
-                  </div>
-                </Link>
-
-            
-              </div>
+              <Link 
+                href={isAssociazione ? "/app/associazione/profilo" : "/app/profilo"} 
+                className={`flex items-center gap-2 p-1 md:pr-3 rounded-full border transition-all ${
+                  isAziendale 
+                    ? 'bg-slate-900 border-slate-800 hover:border-violet-500/40' 
+                    : 'bg-slate-50 border-slate-200/60 hover:bg-slate-100'
+                }`}
+                title="Modifica informazioni profilo"
+              >
+                <div className={`w-7 h-7 rounded-full flex items-center justify-center font-extrabold text-xs shadow-xs ${
+                  isAziendale ? 'bg-violet-600 text-white' : 'bg-slate-950 text-white'
+                }`}>
+                  {userInitial}
+                </div>
+                <div className="hidden md:flex flex-col text-left">
+                  <span className="text-[11px] font-semibold text-slate-800 dark:text-slate-200 max-w-[110px] truncate leading-tight">
+                    {email ? email.split('@')[0] : 'Ente'}
+                  </span>
+                  <span className="text-[9px] font-bold text-slate-400 uppercase tracking-tight leading-none">
+                    {isAssociazione ? 'Associazione' : isVolontario ? (isAziendale ? 'Team ESG' : 'Volontario') : 'Profilo'}
+                  </span>
+                </div>
+              </Link>
             ) : (
               <div className="flex items-center gap-2">
                 <Link href="/auth/login" className="text-xs font-semibold text-slate-600 px-3 py-1.5 hover:text-slate-950 transition-colors">
@@ -181,15 +225,50 @@ export default function NavbarUI({
         </div>
       </nav>
 
-      {/* 🟢 BARRA FLUTTUANTE IN BASSO DA MOBILE */}
-      <BottomNavMobile 
-        email={email}
-        isVolontario={isVolontario}
-        isAssociazione={isAssociazione}
-        isImpresa={isImpresa}
-        isAziendale={isAziendale}
-        dashboardLink={dashboardLink}
-      />
+      {/* =========================================================
+          2. DOCK BAR MOBILE (Attiva SOLO su schermi piccoli md:hidden)
+         ========================================================= */}
+      {isLoggedIn && (
+        <nav className="md:hidden fixed bottom-0 left-0 right-0 z-[9999] bg-white/95 backdrop-blur-md border-t border-slate-200/80 px-2 py-1 flex items-center justify-around font-sans pb-[calc(0.25rem+env(safe-area-inset-bottom))] shadow-lg">
+          
+          {/* SE ASSOCIAZIONE: Disegna direttamente i 5 TAB operativi */}
+          {isAssociazione && associazioneTabs.map((tab) => {
+            const Icon = tab.icon
+            const active = isActive(tab.href)
+            return (
+              <Link
+                key={tab.id}
+                href={tab.href}
+                className={`flex flex-col items-center justify-center py-1.5 px-2 rounded-xl transition-all ${
+                  active ? 'text-slate-950 font-black' : 'text-slate-400 font-medium'
+                }`}
+              >
+                <Icon className={`w-5 h-5 mb-0.5 ${active ? 'text-slate-950 stroke-[2.5]' : 'text-slate-400 stroke-[1.8]'}`} />
+                <span className="text-[10px] tracking-tight">{tab.label}</span>
+              </Link>
+            )
+          })}
+
+          {/* SE VOLONTARIO: Disegna i 4 TAB del volontario */}
+          {isVolontario && volontarioTabs.map((tab) => {
+            const Icon = tab.icon
+            const active = isActive(tab.href)
+            return (
+              <Link
+                key={tab.id}
+                href={tab.href}
+                className={`flex flex-col items-center justify-center py-1.5 px-3 rounded-xl transition-all ${
+                  active ? 'text-slate-950 font-black' : 'text-slate-400 font-medium'
+                }`}
+              >
+                <Icon className={`w-5 h-5 mb-0.5 ${active ? 'text-slate-950 stroke-[2.5]' : 'text-slate-400 stroke-[1.8]'}`} />
+                <span className="text-[10px] tracking-tight">{tab.label}</span>
+              </Link>
+            )
+          })}
+
+        </nav>
+      )}
     </>
   )
 }

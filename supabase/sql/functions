@@ -1,0 +1,764 @@
+nome_funzione,codice_sorgente
+accetta_invito_sicuro,"CREATE OR REPLACE FUNCTION public.accetta_invito_sicuro(token_invito text)
+ RETURNS boolean
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+DECLARE
+  v_user_id UUID;
+  v_invito_id UUID;
+  v_impresa_id UUID;
+BEGIN
+  v_user_id := auth.uid();
+  IF v_user_id IS NULL THEN
+    RAISE EXCEPTION 'Devi essere loggato per accettare un invito.';
+  END IF;
+
+  -- AGGIUNTO IL CAST ::uuid QUI SOTTO
+  SELECT id, impresa_id INTO v_invito_id, v_impresa_id
+  FROM inviti_impresa
+  WHERE token = token_invito::uuid AND stato = 'in_attesa'
+  FOR UPDATE; 
+
+  IF v_invito_id IS NULL THEN
+    RAISE EXCEPTION 'Link non valido o già utilizzato.';
+  END IF;
+
+  -- Inserimento del dipendente
+  INSERT INTO impresa_dipendenti (impresa_id, volontario_id, stato, ruolo_aziendale)
+  VALUES (v_impresa_id, v_user_id, 'attivo', 'dipendente');
+
+  -- Brucia il token
+  UPDATE inviti_impresa SET stato = 'accettato' WHERE id = v_invito_id;
+
+  RETURN TRUE;
+END;
+$function$
+;"
+cerca_directory_unificata,"CREATE OR REPLACE FUNCTION public.cerca_directory_unificata(search_query text DEFAULT NULL::text)
+ RETURNS TABLE(id uuid, denominazione text, codice_fiscale character varying, sezione_runts character varying, comune character varying, is_claimed boolean, stato_verifica character varying, logo_url text, slug character varying, lat double precision, lng double precision, is_registrata boolean, rank real)
+ LANGUAGE plpgsql
+AS $function$
+DECLARE
+  q_clean TEXT;
+  tokens TEXT[];
+BEGIN
+  q_clean := LOWER(TRIM(COALESCE(search_query, '')));
+
+  -- 1. SE LA RICERCA È VUOTA: Mostriamo solo gli enti registrati sulla piattaforma
+  IF q_clean = '' THEN
+    RETURN QUERY
+    SELECT 
+      a.id::UUID, a.denominazione::TEXT, a.codice_fiscale::VARCHAR(16),
+      COALESCE(a.sezione_runts, 'Ente Registrato')::VARCHAR(100),
+      COALESCE(a.comune, 'Modena')::VARCHAR(100),
+      COALESCE(a.claimed, true)::BOOLEAN, COALESCE(a.stato_verifica, 'verificato')::VARCHAR(20),
+      a.logo_url::TEXT, a.slug::VARCHAR(255), a.lat::DOUBLE PRECISION, a.lng::DOUBLE PRECISION,
+      true::BOOLEAN as is_registrata, 1.0::REAL as score
+    FROM associazioni a
+    ORDER BY a.denominazione ASC
+    LIMIT 30;
+    RETURN;
+  END IF;
+
+  tokens := string_to_array(q_clean, ' ');
+
+  RETURN QUERY
+  WITH risultati_grezzi AS (
+    -- A. MATCH SU ASSOCIAZIONI REGISTRATE (Con boost visibilità)
+    SELECT 
+      a.id::UUID, a.denominazione::TEXT, a.codice_fiscale::VARCHAR(16),
+      COALESCE(a.sezione_runts, 'Ente Registrato')::VARCHAR(100) as sezione_runts,
+      COALESCE(a.comune, 'Modena')::VARCHAR(100) as comune,
+      COALESCE(a.claimed, true)::BOOLEAN as is_claimed,
+      COALESCE(a.stato_verifica, 'verificato')::VARCHAR(20) as stato_verifica,
+      a.logo_url::TEXT, a.slug::VARCHAR(255), a.lat::DOUBLE PRECISION, a.lng::DOUBLE PRECISION,
+      true::BOOLEAN as is_registrata,
+      (
+        CASE 
+          WHEN LOWER(a.codice_fiscale) = q_clean THEN 200.0
+          WHEN LOWER(a.denominazione) = q_clean THEN 150.0
+          WHEN LOWER(a.denominazione) LIKE q_clean || '%' THEN 120.0
+          WHEN LOWER(a.denominazione) LIKE '% ' || q_clean || ' %' THEN 100.0
+          ELSE 80.0
+        END
+      )::REAL as score
+    FROM associazioni a
+    WHERE LOWER(a.denominazione) LIKE '%' || q_clean || '%'
+       OR LOWER(COALESCE(a.comune, '')) LIKE '%' || q_clean || '%'
+       OR LOWER(COALESCE(a.codice_fiscale, '')) LIKE '%' || q_clean || '%'
+
+    UNION ALL
+
+    -- B. MATCH SU RUNTS IMPORT (Calcolo dello Score Chirurgico)
+    SELECT 
+      r.id::UUID, r.denominazione::TEXT, r.codice_fiscale::VARCHAR(16),
+      COALESCE(r.sezione_runts, 'Iscritto al RUNTS')::VARCHAR(100) as sezione_runts,
+      COALESCE(r.comune, 'Sede da definire')::VARCHAR(100) as comune, 
+      false::BOOLEAN as is_claimed, 'unclaimed'::VARCHAR(20) as stato_verifica,
+      NULL::TEXT as logo_url, NULL::VARCHAR(255) as slug,
+      NULL::DOUBLE PRECISION as lat, NULL::DOUBLE PRECISION as lng,
+      false::BOOLEAN as is_registrata,
+      (
+        CASE 
+          -- Match Esatto Codice Fiscale
+          WHEN LOWER(r.codice_fiscale) = q_clean THEN 100.0
+          
+          -- Match Esatto Nome (""gruppo bip"")
+          WHEN LOWER(r.denominazione) = q_clean THEN 95.0
+          
+          -- Inizia esattamente con le parole cercate (""gruppo bip ..."")
+          WHEN LOWER(r.denominazione) LIKE q_clean || '%' THEN 85.0 - (LENGTH(r.denominazione) * 0.1)
+          
+          -- Contiene la frase intera nel nome (""... gruppo bip ..."")
+          WHEN LOWER(r.denominazione) LIKE '% ' || q_clean || ' %' 
+            OR LOWER(r.denominazione) LIKE '% ' || q_clean THEN 75.0 - (LENGTH(r.denominazione) * 0.1)
+          
+          -- Contiene TUTTI i token/parole individuali cercati (es: sia ""GRUPPO"" che ""BIP"")
+          WHEN NOT EXISTS (
+            SELECT 1 FROM unnest(tokens) tok 
+            WHERE tok <> '' AND LOWER(r.denominazione) NOT LIKE '%' || tok || '%'
+          ) THEN 50.0 - (LENGTH(r.denominazione) * 0.1)
+          
+          -- Match generico / debole
+          ELSE 10.0
+        END
+      )::REAL as score
+    FROM runts_import r
+    WHERE NOT EXISTS (
+      SELECT 1 FROM associazioni a WHERE a.codice_fiscale IS NOT NULL AND a.codice_fiscale = r.codice_fiscale AND a.claimed = true
+    )
+    AND (
+      -- Filtro di sicurezza: Deve contenere almeno TUTTI i token cercati
+      NOT EXISTS (
+        SELECT 1 FROM unnest(tokens) tok 
+        WHERE tok <> '' 
+          AND LOWER(r.denominazione) NOT LIKE '%' || tok || '%'
+          AND LOWER(COALESCE(r.comune, '')) NOT LIKE '%' || tok || '%'
+          AND LOWER(COALESCE(r.codice_fiscale, '')) NOT LIKE '%' || tok || '%'
+      )
+    )
+  )
+  SELECT 
+    res.id, res.denominazione, res.codice_fiscale, res.sezione_runts, res.comune, 
+    res.is_claimed, res.stato_verifica, res.logo_url, res.slug, res.lat, res.lng, 
+    res.is_registrata, res.score
+  FROM risultati_grezzi res
+  -- L'ordinamento d'ora in poi si basa RIGOROSAMENTE sul Punteggio di Rilevanza
+  ORDER BY res.score DESC, res.is_registrata DESC, LENGTH(res.denominazione) ASC
+  LIMIT 15;
+END;
+$function$
+;"
+cerca_posizioni_vicine,"CREATE OR REPLACE FUNCTION public.cerca_posizioni_vicine(user_lat double precision, user_lng double precision, raggio_km double precision)
+ RETURNS TABLE(id uuid, associazione_id uuid, titolo text, descrizione text, tipo text, quando text, dove text, created_at timestamp with time zone, data_esatta date, ora_inizio time without time zone, ora_fine time without time zone, giorni_settimana text[], coords text)
+ LANGUAGE plpgsql
+AS $function$
+BEGIN
+  RETURN QUERY
+  SELECT 
+    p.id, p.associazione_id, p.titolo, p.descrizione, p.tipo, p.quando, p.dove, 
+    p.created_at, p.data_esatta, p.ora_inizio, p.ora_fine, p.giorni_settimana,
+    ST_AsText(p.coords) as coords
+  FROM posizioni p
+  WHERE p.coords IS NOT NULL
+    -- 🛡️ Solo attive e non scadute
+    AND (p.stato IS NULL OR p.stato NOT IN ('bozza', 'conclusa', 'archiviata'))
+    AND (p.tipo <> 'una_tantum' OR p.data_esatta IS NULL OR p.data_esatta >= CURRENT_DATE)
+    AND ST_DWithin(
+      p.coords, 
+      ST_SetSRID(ST_MakePoint(user_lng, user_lat), 4326), 
+      raggio_km * 1000
+    );
+END;
+$function$
+;"
+chiudi_posizioni_scadute,"CREATE OR REPLACE FUNCTION public.chiudi_posizioni_scadute()
+ RETURNS void
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+AS $function$
+BEGIN
+  UPDATE public.posizioni
+  SET stato = 'conclusa'
+  WHERE tipo = 'una_tantum'
+    AND data_esatta < CURRENT_DATE
+    AND stato IN ('pubblicata', 'aperta');
+END;
+$function$
+;"
+crea_messaggio_sistema_candidatura,"CREATE OR REPLACE FUNCTION public.crea_messaggio_sistema_candidatura()
+ RETURNS trigger
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+AS $function$
+DECLARE
+    v_associazione_id uuid;
+    v_titolo_posizione text;
+BEGIN
+    -- Recuperiamo l'ID dell'associazione e il titolo dell'annuncio
+    SELECT associazione_id, titolo INTO v_associazione_id, v_titolo_posizione
+    FROM public.posizioni
+    WHERE id = NEW.posizione_id;
+
+    -- Iniettiamo il messaggio nella chat unificata a nome del volontario
+    INSERT INTO public.messaggi (
+        volontario_id,
+        associazione_id,
+        mittente_id,
+        testo,
+        is_system
+    ) VALUES (
+        NEW.volontario_id,
+        v_associazione_id,
+        NEW.volontario_id,
+        '📌 Mi sono appena candidato all''annuncio: ""' || v_titolo_posizione || '""',
+        TRUE
+    );
+
+    RETURN NEW;
+END;
+$function$
+;"
+get_dashboard_volontario_feed,"CREATE OR REPLACE FUNCTION public.get_dashboard_volontario_feed(p_volontario_id uuid)
+ RETURNS jsonb
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+ SET search_path TO 'public'
+AS $function$
+DECLARE
+    v_citta text;
+    v_tags uuid[];
+    v_comp uuid[];
+    v_consigliate jsonb;
+    v_vicine jsonb;
+    v_ultime jsonb;
+    v_una_tantum jsonb;
+BEGIN
+    -- A. Recupero città e preferenze volontario
+    SELECT citta_residenza INTO v_citta FROM volontari WHERE id = p_volontario_id;
+    SELECT COALESCE(array_agg(tag_id), '{}') INTO v_tags FROM volontario_tags WHERE volontario_id = p_volontario_id;
+    SELECT COALESCE(array_agg(competenza_id), '{}') INTO v_comp FROM volontario_competenze WHERE volontario_id = p_volontario_id;
+
+    -- B. Query Base con FILTRO WHITELIST RIGIDO
+    WITH posizioni_base AS (
+        SELECT 
+            p.id,
+            p.titolo,
+            p.descrizione,
+            p.tipo,
+            p.quando,
+            p.data_esatta,
+            p.ora_inizio,
+            p.ora_fine,
+            p.dove,
+            p.slug,
+            p.created_at,
+            ma.url AS img_url,
+            jsonb_build_object(
+                'id', a.id,
+                'denominazione', COALESCE(a.nome_breve, a.denominazione, 'Associazione'),
+                'logo_url', a.logo_url,
+                'slug', a.slug
+            ) AS associazione,
+            COALESCE((
+                SELECT jsonb_agg(jsonb_build_object('id', t.id, 'name', t.name))
+                FROM posizione_tags pt
+                JOIN tags t ON t.id = pt.tag_id
+                WHERE pt.posizione_id = p.id
+            ), '[]'::jsonb) AS tags,
+            COALESCE((
+                SELECT jsonb_agg(jsonb_build_object('id', c.id, 'name', c.name))
+                FROM posizione_competenze pc
+                JOIN competenze c ON c.id = pc.competenza_id
+                WHERE pc.posizione_id = p.id
+            ), '[]'::jsonb) AS competenze,
+            -- Calcolo Score
+            (
+                (COALESCE((SELECT COUNT(*) FROM posizione_tags pt WHERE pt.posizione_id = p.id AND pt.tag_id = ANY(v_tags)), 0) * 35) +
+                (COALESCE((SELECT COUNT(*) FROM posizione_competenze pc WHERE pc.posizione_id = p.id AND pc.competenza_id = ANY(v_comp)), 0) * 25) +
+                (CASE WHEN v_citta IS NOT NULL AND v_citta <> '' AND p.dove ILIKE '%' || v_citta || '%' THEN 20 ELSE 0 END)
+            ) AS match_score
+        FROM posizioni p
+        LEFT JOIN associazioni a ON a.id = p.associazione_id
+        LEFT JOIN media_associazioni ma ON p.immagine_id = ma.id
+        WHERE 
+            -- 🛡️ REGOLA 1: SOLO posizioni esplicitamente aperte/pubblicate
+            p.stato IN ('pubblicata', 'aperta')
+            -- 🛡️ REGOLA 2: Se evento singolo, la data DEVE essere oggi o futura
+            AND (p.tipo <> 'una_tantum' OR (p.data_esatta IS NOT NULL AND p.data_esatta >= CURRENT_DATE))
+    ),
+    consigliate_query AS (
+        SELECT jsonb_build_object(
+            'id', id, 'titolo', titolo, 'descrizione', descrizione, 'tipo', tipo,
+            'quando', quando, 'data_esatta', data_esatta, 'ora_inizio', ora_inizio, 'ora_fine', ora_fine,
+            'dove', dove, 'slug', slug, 'created_at', created_at, 'associazione', associazione,
+            'tags', tags, 'competenze', competenze, 'match_score', match_score,
+            'immagine_url', img_url,
+            'media_associazioni', CASE WHEN img_url IS NOT NULL THEN jsonb_build_object('url', img_url) ELSE NULL END
+        ) AS item
+        FROM posizioni_base
+        ORDER BY match_score DESC, created_at DESC
+        LIMIT 10
+    ),
+    vicine_query AS (
+        SELECT jsonb_build_object(
+            'id', id, 'titolo', titolo, 'descrizione', descrizione, 'tipo', tipo,
+            'quando', quando, 'data_esatta', data_esatta, 'ora_inizio', ora_inizio, 'ora_fine', ora_fine,
+            'dove', dove, 'slug', slug, 'created_at', created_at, 'associazione', associazione,
+            'tags', tags, 'competenze', competenze, 'match_score', match_score,
+            'immagine_url', img_url,
+            'media_associazioni', CASE WHEN img_url IS NOT NULL THEN jsonb_build_object('url', img_url) ELSE NULL END
+        ) AS item
+        FROM posizioni_base
+        WHERE v_citta IS NOT NULL AND v_citta <> '' AND dove ILIKE '%' || v_citta || '%'
+        ORDER BY created_at DESC
+        LIMIT 10
+    ),
+    ultime_query AS (
+        SELECT jsonb_build_object(
+            'id', id, 'titolo', titolo, 'descrizione', descrizione, 'tipo', tipo,
+            'quando', quando, 'data_esatta', data_esatta, 'ora_inizio', ora_inizio, 'ora_fine', ora_fine,
+            'dove', dove, 'slug', slug, 'created_at', created_at, 'associazione', associazione,
+            'tags', tags, 'competenze', competenze, 'match_score', match_score,
+            'immagine_url', img_url,
+            'media_associazioni', CASE WHEN img_url IS NOT NULL THEN jsonb_build_object('url', img_url) ELSE NULL END
+        ) AS item
+        FROM posizioni_base
+        ORDER BY created_at DESC
+        LIMIT 10
+    ),
+    una_tantum_query AS (
+        SELECT jsonb_build_object(
+            'id', id, 'titolo', titolo, 'descrizione', descrizione, 'tipo', tipo,
+            'quando', quando, 'data_esatta', data_esatta, 'ora_inizio', ora_inizio, 'ora_fine', ora_fine,
+            'dove', dove, 'slug', slug, 'created_at', created_at, 'associazione', associazione,
+            'tags', tags, 'competenze', competenze, 'match_score', match_score,
+            'immagine_url', img_url,
+            'media_associazioni', CASE WHEN img_url IS NOT NULL THEN jsonb_build_object('url', img_url) ELSE NULL END
+        ) AS item
+        FROM posizioni_base
+        WHERE tipo = 'una_tantum'
+        ORDER BY data_esatta ASC, created_at DESC
+        LIMIT 10
+    )
+    SELECT 
+        COALESCE((SELECT jsonb_agg(item) FROM consigliate_query), '[]'::jsonb),
+        COALESCE((SELECT jsonb_agg(item) FROM vicine_query), '[]'::jsonb),
+        COALESCE((SELECT jsonb_agg(item) FROM ultime_query), '[]'::jsonb),
+        COALESCE((SELECT jsonb_agg(item) FROM una_tantum_query), '[]'::jsonb)
+    INTO v_consigliate, v_vicine, v_ultime, v_una_tantum;
+
+    RETURN jsonb_build_object(
+        'consigliate', v_consigliate,
+        'vicine', v_vicine,
+        'ultime', v_ultime,
+        'una_tantum', v_una_tantum
+    );
+END;
+$function$
+;"
+get_profili_candidati,"CREATE OR REPLACE FUNCTION public.get_profili_candidati(p_posizione_id uuid)
+ RETURNS SETOF volontari
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+AS $function$
+begin
+  -- Controllo di Sicurezza Invalicabile: l'utente loggato è il creatore dell'annuncio?
+  if not exists (
+    select 1 from posizioni 
+    where id = p_posizione_id and associazione_id = auth.uid()
+  ) then
+    raise exception 'Non autorizzato a visualizzare questi profili';
+  end if;
+
+  -- Se è il proprietario, restituiamo i profili dei candidati a quella posizione
+  return query
+  select pv.*
+  from volontari pv
+  join candidature c on c.volontario_id = pv.id
+  where c.posizione_id = p_posizione_id;
+end;
+$function$
+;"
+get_ultime_posizioni,"CREATE OR REPLACE FUNCTION public.get_ultime_posizioni(limite integer DEFAULT 50)
+ RETURNS TABLE(id uuid, associazione_id uuid, titolo text, descrizione text, tipo text, quando text, dove text, created_at timestamp with time zone, data_esatta date, ora_inizio time without time zone, ora_fine time without time zone, giorni_settimana text[], coords text)
+ LANGUAGE plpgsql
+AS $function$
+BEGIN
+  RETURN QUERY
+  SELECT 
+    p.id, p.associazione_id, p.titolo, p.descrizione, p.tipo, p.quando, p.dove, 
+    p.created_at, p.data_esatta, p.ora_inizio, p.ora_fine, p.giorni_settimana,
+    ST_AsText(p.coords) as coords
+  FROM posizioni p
+  WHERE p.coords IS NOT NULL
+    AND p.stato IN ('pubblicata', 'aperta')
+    AND (p.tipo <> 'una_tantum' OR (p.data_esatta IS NOT NULL AND p.data_esatta >= CURRENT_DATE))
+  ORDER BY p.created_at DESC
+  LIMIT limite;
+END;
+$function$
+;"
+gin_extract_query_trgm,"CREATE OR REPLACE FUNCTION public.gin_extract_query_trgm(text, internal, smallint, internal, internal, internal, internal)
+ RETURNS internal
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/pg_trgm', $function$gin_extract_query_trgm$function$
+;"
+gin_extract_value_trgm,"CREATE OR REPLACE FUNCTION public.gin_extract_value_trgm(text, internal)
+ RETURNS internal
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/pg_trgm', $function$gin_extract_value_trgm$function$
+;"
+gin_trgm_consistent,"CREATE OR REPLACE FUNCTION public.gin_trgm_consistent(internal, smallint, text, integer, internal, internal, internal, internal)
+ RETURNS boolean
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/pg_trgm', $function$gin_trgm_consistent$function$
+;"
+gin_trgm_triconsistent,"CREATE OR REPLACE FUNCTION public.gin_trgm_triconsistent(internal, smallint, text, integer, internal, internal, internal)
+ RETURNS ""char""
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/pg_trgm', $function$gin_trgm_triconsistent$function$
+;"
+gtrgm_compress,"CREATE OR REPLACE FUNCTION public.gtrgm_compress(internal)
+ RETURNS internal
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/pg_trgm', $function$gtrgm_compress$function$
+;"
+gtrgm_consistent,"CREATE OR REPLACE FUNCTION public.gtrgm_consistent(internal, text, smallint, oid, internal)
+ RETURNS boolean
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/pg_trgm', $function$gtrgm_consistent$function$
+;"
+gtrgm_decompress,"CREATE OR REPLACE FUNCTION public.gtrgm_decompress(internal)
+ RETURNS internal
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/pg_trgm', $function$gtrgm_decompress$function$
+;"
+gtrgm_distance,"CREATE OR REPLACE FUNCTION public.gtrgm_distance(internal, text, smallint, oid, internal)
+ RETURNS double precision
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/pg_trgm', $function$gtrgm_distance$function$
+;"
+gtrgm_in,"CREATE OR REPLACE FUNCTION public.gtrgm_in(cstring)
+ RETURNS gtrgm
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/pg_trgm', $function$gtrgm_in$function$
+;"
+gtrgm_options,"CREATE OR REPLACE FUNCTION public.gtrgm_options(internal)
+ RETURNS void
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE
+AS '$libdir/pg_trgm', $function$gtrgm_options$function$
+;"
+gtrgm_out,"CREATE OR REPLACE FUNCTION public.gtrgm_out(gtrgm)
+ RETURNS cstring
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/pg_trgm', $function$gtrgm_out$function$
+;"
+gtrgm_penalty,"CREATE OR REPLACE FUNCTION public.gtrgm_penalty(internal, internal, internal)
+ RETURNS internal
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/pg_trgm', $function$gtrgm_penalty$function$
+;"
+gtrgm_picksplit,"CREATE OR REPLACE FUNCTION public.gtrgm_picksplit(internal, internal)
+ RETURNS internal
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/pg_trgm', $function$gtrgm_picksplit$function$
+;"
+gtrgm_same,"CREATE OR REPLACE FUNCTION public.gtrgm_same(gtrgm, gtrgm, internal)
+ RETURNS internal
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/pg_trgm', $function$gtrgm_same$function$
+;"
+gtrgm_union,"CREATE OR REPLACE FUNCTION public.gtrgm_union(internal, internal)
+ RETURNS gtrgm
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/pg_trgm', $function$gtrgm_union$function$
+;"
+ricerca_avanzata_posizioni,"CREATE OR REPLACE FUNCTION public.ricerca_avanzata_posizioni(min_lat double precision, min_lng double precision, max_lat double precision, max_lng double precision, search_q text DEFAULT NULL::text, filter_tipo text DEFAULT NULL::text, filter_tags text[] DEFAULT NULL::text[], filter_competenze text[] DEFAULT NULL::text[], filter_data date DEFAULT NULL::date, filter_giorni text[] DEFAULT NULL::text[])
+ RETURNS TABLE(id uuid, associazione_id uuid, titolo text, descrizione text, tipo text, dove text, ora_inizio time without time zone, ora_fine time without time zone, quando text, data_esatta date, giorni_settimana text[], created_at timestamp with time zone, lat double precision, lng double precision, tags text[], competenze text[], immagine_url text, slug text, associazione_denominazione text, associazione_slug text)
+ LANGUAGE plpgsql
+ STABLE
+AS $function$
+BEGIN
+    RETURN QUERY
+    WITH pos_base AS (
+        SELECT 
+            p.id, p.associazione_id, p.titolo, p.descrizione, p.tipo,
+            p.dove, p.ora_inizio, p.ora_fine, p.quando, p.data_esatta,
+            p.giorni_settimana, p.created_at,
+            ST_Y(p.coords::geometry) as lat, 
+            ST_X(p.coords::geometry) as lng, 
+            p.immagine_id,
+            p.slug
+        FROM public.posizioni p
+        WHERE p.coords IS NOT NULL 
+          AND p.coords::geometry && ST_MakeEnvelope(min_lng, min_lat, max_lng, max_lat, 4326)
+    ),
+    filtered_by_text AS (
+        SELECT pb.* FROM pos_base pb
+        WHERE search_q IS NULL 
+           OR pb.titolo ILIKE '%' || search_q || '%' 
+           OR pb.descrizione ILIKE '%' || search_q || '%'
+    ),
+    filtered_by_type AS (
+        SELECT ft.* FROM filtered_by_text ft
+        WHERE filter_tipo IS NULL OR ft.tipo = filter_tipo
+    ),
+    filtered_by_date_and_days AS (
+        SELECT ftd.* FROM filtered_by_type ftd
+        WHERE 
+            (filter_data IS NULL OR ftd.data_esatta = filter_data)
+            AND
+            (
+                filter_giorni IS NULL 
+                OR 
+                EXISTS (
+                    -- ✨ CORREZIONE QUI: unnest senza public. davanti
+                    SELECT 1 
+                    FROM unnest(filter_giorni) AS giorno_scelto
+                    WHERE ftd.quando ILIKE '%' || giorno_scelto || '%'
+                )
+            )
+    )
+    SELECT 
+        f.id, f.associazione_id, f.titolo, f.descrizione, f.tipo,
+        f.dove, f.ora_inizio, f.ora_fine, f.quando, f.data_esatta,
+        f.giorni_settimana, f.created_at, f.lat, f.lng,
+        ARRAY(
+            SELECT t.name FROM public.posizione_tags pt 
+            JOIN public.tags t ON pt.tag_id = t.id WHERE pt.posizione_id = f.id
+        ) as tags,
+        ARRAY(
+            SELECT c.name FROM public.posizione_competenze pc 
+            JOIN public.competenze c ON pc.competenza_id = c.id WHERE pc.posizione_id = f.id
+        ) as competenze,
+        ma.url as immagine_url,
+        f.slug,                               
+        a.denominazione as associazione_denominazione, 
+        a.slug as associazione_slug          
+    FROM filtered_by_date_and_days f
+    LEFT JOIN public.media_associazioni ma ON f.immagine_id = ma.id
+    LEFT JOIN public.associazioni a ON f.associazione_id = a.id 
+    WHERE 
+        (filter_tags IS NULL OR EXISTS (
+            SELECT 1 FROM public.posizione_tags pt
+            JOIN public.tags t ON pt.tag_id = t.id
+            WHERE pt.posizione_id = f.id AND t.name = ANY(filter_tags)
+        ))
+        AND
+        (filter_competenze IS NULL OR EXISTS (
+            SELECT 1 FROM public.posizione_competenze pc
+            JOIN public.competenze c ON pc.competenza_id = c.id
+            WHERE pc.posizione_id = f.id AND c.name = ANY(filter_competenze)
+        ));
+END;
+$function$
+;"
+set_associazione_slug,"CREATE OR REPLACE FUNCTION public.set_associazione_slug()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+BEGIN
+  -- Genera lo slug se è un nuovo record o se la denominazione è cambiata
+  IF TG_OP = 'INSERT' OR NEW.denominazione <> OLD.denominazione THEN
+    NEW.slug := public.slugify(NEW.denominazione) || '-' || substr(NEW.id::text, 1, 6);
+  END IF;
+  RETURN NEW;
+END;
+$function$
+;"
+set_limit,"CREATE OR REPLACE FUNCTION public.set_limit(real)
+ RETURNS real
+ LANGUAGE c
+ STRICT
+AS '$libdir/pg_trgm', $function$set_limit$function$
+;"
+set_posizione_slug,"CREATE OR REPLACE FUNCTION public.set_posizione_slug()
+ RETURNS trigger
+ LANGUAGE plpgsql
+AS $function$
+BEGIN
+  -- Genera lo slug se è un nuovo record o se il titolo è cambiato
+  IF TG_OP = 'INSERT' OR NEW.titolo <> OLD.titolo THEN
+    NEW.slug := public.slugify(NEW.titolo) || '-' || substr(NEW.id::text, 1, 6);
+  END IF;
+  RETURN NEW;
+END;
+$function$
+;"
+show_limit,"CREATE OR REPLACE FUNCTION public.show_limit()
+ RETURNS real
+ LANGUAGE c
+ STABLE PARALLEL SAFE STRICT
+AS '$libdir/pg_trgm', $function$show_limit$function$
+;"
+show_trgm,"CREATE OR REPLACE FUNCTION public.show_trgm(text)
+ RETURNS text[]
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/pg_trgm', $function$show_trgm$function$
+;"
+similarity,"CREATE OR REPLACE FUNCTION public.similarity(text, text)
+ RETURNS real
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/pg_trgm', $function$similarity$function$
+;"
+similarity_dist,"CREATE OR REPLACE FUNCTION public.similarity_dist(text, text)
+ RETURNS real
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/pg_trgm', $function$similarity_dist$function$
+;"
+similarity_op,"CREATE OR REPLACE FUNCTION public.similarity_op(text, text)
+ RETURNS boolean
+ LANGUAGE c
+ STABLE PARALLEL SAFE STRICT
+AS '$libdir/pg_trgm', $function$similarity_op$function$
+;"
+slugify,"CREATE OR REPLACE FUNCTION public.slugify(v text)
+ RETURNS text
+ LANGUAGE plpgsql
+ IMMUTABLE STRICT
+AS $function$
+DECLARE
+  res TEXT := lower(v);
+BEGIN
+  -- Sostituiamo le vocali accentate italiane (e altre più comuni)
+  res := translate(res, 'àáâãäåèéêëìíîïòóôõöùúûüñç', 'aaaaaaeeeeiiiiooooouuuunc');
+  -- Sostituiamo tutto ciò che non è lettera o numero con un trattino
+  res := regexp_replace(res, '[^a-z0-9]+', '-', 'g');
+  -- Rimuoviamo eventuali trattini all'inizio o alla fine
+  res := trim(BOTH '-' FROM res);
+  RETURN res;
+END;
+$function$
+;"
+strict_word_similarity,"CREATE OR REPLACE FUNCTION public.strict_word_similarity(text, text)
+ RETURNS real
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/pg_trgm', $function$strict_word_similarity$function$
+;"
+strict_word_similarity_commutator_op,"CREATE OR REPLACE FUNCTION public.strict_word_similarity_commutator_op(text, text)
+ RETURNS boolean
+ LANGUAGE c
+ STABLE PARALLEL SAFE STRICT
+AS '$libdir/pg_trgm', $function$strict_word_similarity_commutator_op$function$
+;"
+strict_word_similarity_dist_commutator_op,"CREATE OR REPLACE FUNCTION public.strict_word_similarity_dist_commutator_op(text, text)
+ RETURNS real
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/pg_trgm', $function$strict_word_similarity_dist_commutator_op$function$
+;"
+strict_word_similarity_dist_op,"CREATE OR REPLACE FUNCTION public.strict_word_similarity_dist_op(text, text)
+ RETURNS real
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/pg_trgm', $function$strict_word_similarity_dist_op$function$
+;"
+strict_word_similarity_op,"CREATE OR REPLACE FUNCTION public.strict_word_similarity_op(text, text)
+ RETURNS boolean
+ LANGUAGE c
+ STABLE PARALLEL SAFE STRICT
+AS '$libdir/pg_trgm', $function$strict_word_similarity_op$function$
+;"
+verifica_codice_fiscale_runts,"CREATE OR REPLACE FUNCTION public.verifica_codice_fiscale_runts(cf_input text)
+ RETURNS TABLE(trovato boolean, gia_rivendicato boolean, denominazione text, comune text, provincia text, sezione_runts text)
+ LANGUAGE plpgsql
+ SECURITY DEFINER
+AS $function$
+DECLARE
+  clean_cf TEXT := UPPER(TRIM(cf_input));
+  assoc_rec RECORD;
+  runts_rec RECORD;
+BEGIN
+  -- A. Controlla prima se è già attiva tra le associazioni registrate
+  SELECT a.denominazione, a.comune, a.provincia, a.sezione_runts, a.claimed 
+  INTO assoc_rec
+  FROM public.associazioni a
+  WHERE UPPER(a.codice_fiscale) = clean_cf
+  LIMIT 1;
+
+  IF FOUND THEN
+    RETURN QUERY SELECT 
+      TRUE, 
+      COALESCE(assoc_rec.claimed, FALSE), 
+      assoc_rec.denominazione, 
+      assoc_rec.comune::TEXT, 
+      assoc_rec.provincia::TEXT, 
+      assoc_rec.sezione_runts::TEXT;
+    RETURN;
+  END IF;
+
+  -- B. Se non presente, cerca nell'importazione RUNTS
+  SELECT r.denominazione, r.comune, r.provincia, r.sezione_runts
+  INTO runts_rec
+  FROM public.runts_import r
+  WHERE UPPER(r.codice_fiscale) = clean_cf
+  LIMIT 1;
+
+  IF FOUND THEN
+    RETURN QUERY SELECT 
+      TRUE, 
+      FALSE, -- Scheda non ancora rivendicata
+      runts_rec.denominazione, 
+      runts_rec.comune, 
+      runts_rec.provincia, 
+      runts_rec.sezione_runts;
+    RETURN;
+  END IF;
+
+  -- C. Nessun riscontro
+  RETURN QUERY SELECT FALSE, FALSE, NULL::TEXT, NULL::TEXT, NULL::TEXT, NULL::TEXT;
+END;
+$function$
+;"
+word_similarity,"CREATE OR REPLACE FUNCTION public.word_similarity(text, text)
+ RETURNS real
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/pg_trgm', $function$word_similarity$function$
+;"
+word_similarity_commutator_op,"CREATE OR REPLACE FUNCTION public.word_similarity_commutator_op(text, text)
+ RETURNS boolean
+ LANGUAGE c
+ STABLE PARALLEL SAFE STRICT
+AS '$libdir/pg_trgm', $function$word_similarity_commutator_op$function$
+;"
+word_similarity_dist_commutator_op,"CREATE OR REPLACE FUNCTION public.word_similarity_dist_commutator_op(text, text)
+ RETURNS real
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/pg_trgm', $function$word_similarity_dist_commutator_op$function$
+;"
+word_similarity_dist_op,"CREATE OR REPLACE FUNCTION public.word_similarity_dist_op(text, text)
+ RETURNS real
+ LANGUAGE c
+ IMMUTABLE PARALLEL SAFE STRICT
+AS '$libdir/pg_trgm', $function$word_similarity_dist_op$function$
+;"
+word_similarity_op,"CREATE OR REPLACE FUNCTION public.word_similarity_op(text, text)
+ RETURNS boolean
+ LANGUAGE c
+ STABLE PARALLEL SAFE STRICT
+AS '$libdir/pg_trgm', $function$word_similarity_op$function$
+;"

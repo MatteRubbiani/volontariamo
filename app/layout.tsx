@@ -5,106 +5,101 @@ import { Analytics } from "@vercel/analytics/next";
 import Script from "next/script";
 import "./globals.css";
 import Navbar from "@/components/Navbar";
-import FeedbackButton from "@/components/FeedbackButton";
-import { NavbarWrapper } from "@/components/NavbarWrapper";
 
-// 1. Configurazione dell'URL di base (priorità alla variabile d'ambiente di produzione)
+// 1. Configurazione dell'URL di base
 const defaultUrl = process.env.NEXT_PUBLIC_SITE_URL
-? `https://${process.env.NEXT_PUBLIC_SITE_URL}`
-: process.env.VERCEL_URL
-? `https://${process.env.VERCEL_URL}`
-: "http://localhost:3000";
+  ? `https://${process.env.NEXT_PUBLIC_SITE_URL}`
+  : process.env.VERCEL_URL
+  ? `https://${process.env.VERCEL_URL}`
+  : "http://localhost:3000";
 
 // 2. Controllo granulare per l'indicizzazione
 let isProduction = false;
 try {
-const hostname = new URL(defaultUrl).hostname;
-isProduction = hostname === 'app.volontariando.it' || hostname === 'volontariando.it';
+  const hostname = new URL(defaultUrl).hostname;
+  isProduction = hostname === 'app.volontariando.it' || hostname === 'volontariando.it';
 } catch (e) {
-isProduction = false;
+  isProduction = false;
 }
 
 export const metadata: Metadata = {
-metadataBase: new URL(defaultUrl),
-title: {
-default: "Volontariando | L'impatto sociale a portata di tap",
-template: "%s | Volontariando"
-},
-description: "La piattaforma innovativa che connette volontari appassionati, associazioni del territorio e imprese orientate all'ESG.",
-icons: {
-icon: '/icon',
-},
-robots: {
-index: isProduction,
-follow: isProduction,
-},
-verification: {
-google: "4M7SfimwwLv-f_B58F-qbJVWbwgQzootomRGMjQlhNU",
-},
-openGraph: {
-type: "website",
-locale: "it_IT",
-url: defaultUrl,
-title: "Volontariando - Trova la tua causa",
-description: "Connettiamo chi vuole aiutare con chi ha bisogno di aiuto. Unisciti alla community oggi stesso.",
-siteName: "Volontariando",
-images: [
-{
-url: "/opengraph-image.png",
-width: 1200,
-height: 630,
-alt: "Anteprima piattaforma Volontariando",
-},
-],
-},
-twitter: {
-card: "summary_large_image",
-title: "Volontariando | L'impatto sociale a portata di tap",
-description: "La piattaforma per volontari, associazioni e imprese sostenibili.",
-images: ["/opengraph-image.png"],
-},
+  metadataBase: new URL(defaultUrl),
+  title: {
+    default: "Volontariando | L'impatto sociale a portata di tap",
+    template: "%s | Volontariando",
+  },
+  description: "La piattaforma innovativa che connette volontari appassionati, associazioni del territorio e imprese orientate all'ESG.",
+  icons: {
+    icon: '/icon',
+  },
+  robots: {
+    index: isProduction,
+    follow: isProduction,
+  },
+  verification: {
+    google: "4M7SfimwwLv-f_B58F-qbJVWbwgQzootomRGMjQlhNU",
+  },
+  openGraph: {
+    type: "website",
+    locale: "it_IT",
+    url: defaultUrl,
+    title: "Volontariando - Trova la tua causa",
+    description: "Connettiamo chi vuole aiutare con chi ha bisogno di aiuto. Unisciti alla community oggi stesso.",
+    siteName: "Volontariando",
+    images: [
+      {
+        url: "/opengraph-image.png",
+        width: 1200,
+        height: 630,
+        alt: "Anteprima piattaforma Volontariando",
+      },
+    ],
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Volontariando | L'impatto sociale a portata di tap",
+    description: "La piattaforma per volontari, associazioni e imprese sostenibili.",
+    images: ["/opengraph-image.png"],
+  },
 };
 
 const geistSans = Geist({
-variable: "--font-geist-sans",
-display: "swap",
-subsets: ["latin"],
+  variable: "--font-geist-sans",
+  display: "swap",
+  subsets: ["latin"],
 });
 
 export default function RootLayout({
-children,
+  children,
 }: Readonly<{
-children: React.ReactNode;
+  children: React.ReactNode;
 }>) {
-return (
-<html lang="it" suppressHydrationWarning>
+  return (
+    <html lang="it" suppressHydrationWarning>
+      <body className={`${geistSans.className} antialiased`}>
+        <ThemeProvider
+          attribute="class"
+          defaultTheme="light"
+          enableSystem
+          disableTransitionOnChange
+        >
+          <div className="min-h-screen flex flex-col">
+            {/* 🚀 Navbar unica e reattiva a 0ms: gestisce pubblico, volontari ed enti */}
+            <Navbar />
 
-<body className={`${geistSans.className} antialiased`}>
+            <main className="flex-1">
+              {children}
+            </main>
+          </div>
+        </ThemeProvider>
 
-
-<ThemeProvider
-attribute="class"
-defaultTheme="light"
-enableSystem
-disableTransitionOnChange
->
-<div className="min-h-screen flex flex-col">
-<NavbarWrapper>
-<Navbar />
-</NavbarWrapper>
-
-<main className="flex-1">
-{children}
-</main>
-</div>
-</ThemeProvider>
-{/* Script Google Maps */}
-<Script
-src={`https://maps.googleapis.com/maps/api/js?key=${process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}&libraries=places`}
-strategy="afterInteractive"
-/>
-<Analytics />
-</body>
-</html>
-);
+        {/* Script Google Maps */}
+        <Script
+          src={`https://maps.googleapis.com/maps/api/js?key=${process.env.NEXT_PUBLIC_GOOGLE_MAPS_API_KEY}&libraries=places`}
+          strategy="afterInteractive"
+        />
+        <Analytics />
+      </body>
+    </html>
+  );
 }
