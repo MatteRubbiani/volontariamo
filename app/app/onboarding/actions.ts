@@ -1,224 +1,194 @@
 'use server'
 
 import { createClient } from '@/lib/supabase/server'
+import { redirect } from 'next/navigation'
 
-function getSafeRedirectTo(value: FormDataEntryValue | null) {
+/**
+ * Utility per redirect sicuri interni
+ */
+function getSafeRedirectTo(value: FormDataEntryValue | null): string | null {
   if (typeof value !== 'string') return null
   if (!value.startsWith('/')) return null
   if (value.startsWith('//')) return null
   return value
 }
 
+/**
+ * Utility per coordinate geografiche
+ */
 function parseCoordinate(val: FormDataEntryValue | null): number | null {
   if (typeof val !== 'string' || !val.trim()) return null
   const num = parseFloat(val)
   return isNaN(num) ? null : num
 }
 
+/**
+ * Generazione slug pulito
+ */
+function generaSlug(testo: string): string {
+  return testo
+    .toLowerCase()
+    .trim()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9\s-]/g, '')
+    .replace(/\s+/g, '-')
+    .replace(/-+/g, '-')
+}
+
+/**
+ * 1. ASSEGNA RUOLO (/app/onboarding)
+ */
+export async function impostaRuoloEProcedi(
+  ruoloScelto: 'volontario' | 'associazione',
+  redirectTo?: string | null,
+  claimId?: string | null
+) {
+  const supabase = await createClient()
+  const { data: { user }, error: authError } = await supabase.auth.getUser()
+
+  if (authError || !user) {
+    redirect('/auth/login')
+  }
+
+  // Scrittura ruolo su profili
+  const { error } = await supabase
+    .from('profili')
+    .update({ ruolo: ruoloScelto })
+    .eq('id', user.id)
+
+  if (error) {
+    console.error('Errore assegnazione ruolo:', error.message)
+    throw new Error('Impossibile assegnare il ruolo al profilo')
+  }
+
+  const params = new URLSearchParams()
+  if (redirectTo) params.set('redirectTo', redirectTo)
+  if (ruoloScelto === 'associazione' && claimId) params.set('claim_id', claimId)
+
+  const query = params.toString() ? `?${params.toString()}` : ''
+  redirect(`/app/onboarding/${ruoloScelto}${query}`)
+}
+
+/**
+ * 2. COMPLETA WIZARD ONBOARDING
+ */
 export async function completeOnboarding(formData: FormData) {
   try {
     const supabase = await createClient()
-    
     const { data: { user }, error: authError } = await supabase.auth.getUser()
     if (authError || !user) return { error: 'Utente non autenticato' }
 
     const role = formData.get('role') as string
 
     // =========================================================================
-    // 1. LOGICA VOLONTARIO (Esecuzione Parallela Ottimizzata)
+    // 1. ANAGRAFICA VOLONTARIO (Allineata a public.volontari)
     // =========================================================================
     if (role === 'volontario') {
-      const tagsIds = formData.getAll('tags') as string[]
-      const compIds = formData.getAll('competenze') as string[]
+      const nome = String(formData.get('nome') || '').trim()
+      const cognome = String(formData.get('cognome') || '').trim()
 
-      // Eseguiamo l'anagrafica e il profilo in parallelo
+      if (!nome || !cognome) {
+        return { error: 'Nome e Cognome sono obbligatori' }
+      }
+
       const [volRes, profRes] = await Promise.all([
         supabase.from('volontari').upsert({
           id: user.id,
-          nome: formData.get('nome'),
-          cognome: formData.get('cognome'),
-          telefono: formData.get('telefono') || null,
-          bio: formData.get('bio') || null,
-          data_nascita: formData.get('dataNascita') || null,
-          sesso: formData.get('sesso') || null,
-          citta_residenza: formData.get('cittaResidenza') || null,
-          cap: formData.get('cap') || null,
-          grado_istruzione: formData.get('gradoIstruzione') || null,
+          nome,
+          cognome,
+          citta_residenza: formData.get('cittaResidenza') ? String(formData.get('cittaResidenza')).trim() : null,
+          cap: formData.get('cap') ? String(formData.get('cap')).trim() : null,
+          telefono: formData.get('telefono') ? String(formData.get('telefono')).trim() : null,
+          bio: formData.get('bio') ? String(formData.get('bio')).trim() : null,
+          data_nascita: formData.get('dataNascita') ? String(formData.get('dataNascita')).trim() : null,
+          codice_fiscale: formData.get('codice_fiscale') ? String(formData.get('codice_fiscale')).trim().toUpperCase() : null,
         }),
-        supabase.from('profili').upsert({ id: user.id, ruolo: role })
+        supabase.from('profili').update({ ruolo: 'volontario' }).eq('id', user.id)
       ])
 
       if (volRes.error) return { error: `Errore Volontario: ${volRes.error.message}` }
       if (profRes.error) return { error: `Errore Profilo: ${profRes.error.message}` }
-
-      // Pulizia e salvataggio tags e competenze in parallelo
-      await Promise.all([
-        (async () => {
-          await supabase.from('volontario_tags').delete().eq('volontario_id', user.id)
-          if (tagsIds.length > 0) {
-            await supabase.from('volontario_tags').insert(tagsIds.map(id => ({ volontario_id: user.id, tag_id: id })))
-          }
-        })(),
-        (async () => {
-          await supabase.from('volontario_competenze').delete().eq('volontario_id', user.id)
-          if (compIds.length > 0) {
-            await supabase.from('volontario_competenze').insert(compIds.map(id => ({ volontario_id: user.id, competenza_id: id })))
-          }
-        })()
-      ])
-    } 
+    }
 
     // =========================================================================
-    // 2. LOGICA ASSOCIAZIONE
+    // 2. ANAGRAFICA ASSOCIAZIONE (Allineata a public.associazioni)
     // =========================================================================
     else if (role === 'associazione') {
       const rawCF = formData.get('codice_fiscale')
       const cf = rawCF ? String(rawCF).toUpperCase().replace(/\s/g, '') : ''
       if (!cf) return { error: 'Codice Fiscale obbligatorio' }
 
+      // Verifica unicità Codice Fiscale
       const { data: existingEntity } = await supabase
         .from('associazioni')
-        .select('id, claimed')
+        .select('id')
         .eq('codice_fiscale', cf)
         .maybeSingle()
 
       if (existingEntity && existingEntity.id !== user.id) {
-        if (!existingEntity.claimed) {
-          await Promise.all([
-            supabase.from('associazioni_sedi').delete().eq('associazione_id', existingEntity.id),
-            supabase.from('associazioni_trasparenza').delete().eq('associazione_id', existingEntity.id),
-            supabase.from('associazione_tags').delete().eq('associazione_id', existingEntity.id),
-            supabase.from('associazioni_grafica').delete().eq('associazione_id', existingEntity.id),
-          ])
-          await supabase.from('associazioni').delete().eq('id', existingEntity.id)
-        } else {
-          return { error: 'Questo Codice Fiscale è già stato rivendicato da un altro referente.' }
-        }
+        return { error: 'Questo Codice Fiscale è già registrato da un altro account.' }
       }
 
-      const lat = parseCoordinate(formData.get('lat'))
-      const lng = parseCoordinate(formData.get('lng'))
-      const comune = formData.get('comune') ? String(formData.get('comune')) : null
-      const provincia = formData.get('provincia') ? String(formData.get('provincia')) : null
-      const indirizzo = formData.get('indirizzo') ? String(formData.get('indirizzo')) : null
-      const denominazione = String(formData.get('denominazione') || 'Associazione')
-      const formaGiuridica = String(formData.get('forma_giuridica') || 'APS')
+      const denominazione = String(formData.get('denominazione') || 'Associazione').trim()
+      const formaGiuridica = String(formData.get('forma_giuridica') || 'APS').trim()
+      const emailIstituzionale = String(
+        formData.get('email_istituzionale') || formData.get('email') || user.email || ''
+      ).trim()
 
-      const { error: coreError } = await supabase.from('associazioni').upsert({
+      const indirizzoLegale = String(formData.get('indirizzo_legale') || formData.get('indirizzo') || '').trim()
+      const comuneLegale = String(formData.get('comune_legale') || formData.get('comune') || '').trim()
+      const provinciaLegale = String(formData.get('provincia_legale') || formData.get('provincia') || '').trim()
+      const capLegale = String(formData.get('cap_legale') || formData.get('cap') || '').trim()
+
+      if (!indirizzoLegale || !comuneLegale || !provinciaLegale || !capLegale) {
+        return { error: 'Tutti i campi della sede legale (indirizzo, comune, provincia, CAP) sono obbligatori.' }
+      }
+
+      const baseSlug = generaSlug(denominazione) || 'ente'
+      const slug = `${baseSlug}-${user.id.substring(0, 5)}`
+
+      const { error: assError } = await supabase.from('associazioni').upsert({
         id: user.id,
+        slug,
         denominazione,
-        nome_breve: formData.get('nome_breve') || null,
-        forma_giuridica: formaGiuridica,
         codice_fiscale: cf,
-        email_associazione: formData.get('email_associazione'),
-        telefono: formData.get('telefono') || null,
-        descrizione: formData.get('descrizione') || null,
-        comune,
-        provincia,
-        lat,
-        lng,
-        claimed: true,
-        stato_verifica: 'in_attesa'
+        partita_iva: formData.get('partita_iva') ? String(formData.get('partita_iva')).trim() : null,
+        forma_giuridica: formaGiuridica,
+        email_istituzionale: emailIstituzionale,
+        telefono: formData.get('telefono') ? String(formData.get('telefono')).trim() : null,
+        sito_web: formData.get('sito_web') ? String(formData.get('sito_web')).trim() : null,
+        descrizione: formData.get('descrizione') ? String(formData.get('descrizione')).trim() : null,
+        indirizzo_legale: indirizzoLegale,
+        comune_legale: comuneLegale,
+        provincia_legale: provinciaLegale,
+        cap_legale: capLegale,
+        lat_legale: parseCoordinate(formData.get('lat_legale') || formData.get('lat')),
+        lng_legale: parseCoordinate(formData.get('lng_legale') || formData.get('lng')),
+        sezione_runts: formData.get('sezione_runts') ? String(formData.get('sezione_runts')).trim() : null,
+        numero_runts: formData.get('numero_runts') ? String(formData.get('numero_runts')).trim() : null,
+        referente_nome: formData.get('referente_nome') ? String(formData.get('referente_nome')).trim() : null,
+        referente_cognome: formData.get('referente_cognome') ? String(formData.get('referente_cognome')).trim() : null,
+        referente_ruolo: formData.get('referente_ruolo') ? String(formData.get('referente_ruolo')).trim() : null,
       }, { onConflict: 'id' })
-      
-      if (coreError) return { error: `Errore Anagrafica: ${coreError.message}` }
 
-      const defaultLayout = [
-        {
-          id: 'hero-def',
-          type: 'hero',
-          content: {
-            title: denominazione,
-            eyebrow: formaGiuridica,
-            subtitle: comune ? `Sede operativa a ${comune}` : 'Benvenuti nella nostra pagina ufficiale',
-            coverUrl: '',
-            logoUrl: '',
-            brandColor: '#111827'
-          }
-        },
-        {
-          id: 'about-def',
-          type: 'about',
-          content: {
-            title: 'Chi Siamo',
-            body: `Benvenuti nella pagina ufficiale di ${denominazione}.`
-          }
-        },
-        { id: 'map-def', type: 'map', content: { title: 'La nostra Sede' } },
-        { id: 'pos-def', type: 'positions', content: { title: 'Opportunità di Volontariato' } }
-      ]
+      if (assError) return { error: `Errore Associazione: ${assError.message}` }
 
-      await Promise.all([
-        supabase.from('associazioni_trasparenza').upsert({
-          associazione_id: user.id,
-          referente_progetto_nome: formData.get('referente_progetto_nome'),
-          referente_progetto_cognome: formData.get('referente_progetto_cognome'),
-          referente_progetto_ruolo: formData.get('referente_progetto_ruolo'),
-          dichiarazione_veridicita: formData.get('dichiarazione_legale') === 'true',
-          consenso_privacy: formData.get('consenso_privacy') === 'true',
-          consenso_newsletter: formData.get('consenso_newsletter') === 'true',
-        }, { onConflict: 'associazione_id' }),
-        indirizzo ? supabase.from('associazioni_sedi').upsert({
-          associazione_id: user.id,
-          indirizzo,
-          cap: formData.get('cap') || '00000',
-          comune: comune || 'Modena',
-          provincia: provincia || 'MO',
-          is_principale: true,
-          tipologia: 'legale_operativa',
-          lat,
-          lng
-        }, { onConflict: 'associazione_id' }) : Promise.resolve(),
-        supabase.from('associazioni_grafica').upsert({
-          associazione_id: user.id,
-          layout_config: defaultLayout,
-          layout_draft: defaultLayout,
-          colore_brand: '#111827',
-          chi_siamo: `Benvenuti nella pagina ufficiale di ${denominazione}.`,
-          updated_at: new Date().toISOString()
-        }, { onConflict: 'associazione_id' }),
-        supabase.from('profili').upsert({ id: user.id, ruolo: role })
-      ])
+      await supabase.from('profili').update({ ruolo: 'associazione' }).eq('id', user.id)
     }
 
     // =========================================================================
-    // 3. LOGICA IMPRESA
+    // 3. TARGET REDIRECT POST-ONBOARDING
     // =========================================================================
-    else if (role === 'impresa') {
-      const { error: impError } = await supabase.from('imprese').upsert({
-        id: user.id,
-        ragione_sociale: formData.get('nome'),
-        forma_giuridica: formData.get('formaGiuridica') || null,
-        partita_iva: formData.get('partitaIva') || null,
-        codice_fiscale: formData.get('codiceFiscale') || null,
-        indirizzo_sede: formData.get('indirizzoSede') || null,
-        cap: formData.get('cap') || null,
-        sito_web: formData.get('sitoWeb') || null,
-        profili_social: formData.get('profiliSocial') || null,
-        nome_referente: formData.get('nomeReferente') || null,
-        settore_attivita: formData.get('settoreAttivita') || null,
-        fascia_dipendenti: formData.get('fasciaDipendenti') || null,
-        area_operativa: formData.get('areaOperativa') || null,
-        valori_cause: formData.get('valoriCause') || null,
-        obiettivi_esg: formData.get('obiettiviEsg') || null,
-        tipologia_impatto: formData.get('tipologiaImpatto') || null,
-      })
-      if (impError) return { error: `Errore Impresa: ${impError.message}` }
-      await supabase.from('profili').upsert({ id: user.id, ruolo: role })
-    }
-
-    // Calcolo destinazione
     let defaultTarget = `/app/${role}`
     if (role === 'associazione') {
-      defaultTarget = '/app/associazione/personalizza?firstLogin=true'
+      defaultTarget = '/app/associazione/oggi'
     }
 
     const destination = getSafeRedirectTo(formData.get('redirectTo')) || defaultTarget
-    
-    // 🚀 Risposta 200 OK istantanea al client
     return { success: true, destination }
-  } catch (err: any) {
-    console.error("Errore onboarding:", err)
-    return { error: err.message || 'Errore durante il salvataggio' }
+  } catch (err: unknown) {
+    console.error('Errore onboarding:', err)
+    return { error: err instanceof Error ? err.message : 'Errore durante il salvataggio' }
   }
 }

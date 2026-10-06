@@ -1,77 +1,112 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useMemo, useState, useCallback } from 'react'
 import { usePathname } from 'next/navigation'
 import { createBrowserClient } from '@supabase/ssr'
 import { useWorkspace } from '@/lib/context/WorkspaceContext'
+import { Database } from '@/types/supabase'
 import NavbarUI from './NavbarUI'
+
+type RuoloUtente = Database['public']['Enums']['ruolo_utente']
+
+interface AuthState {
+  email?: string
+  ruolo: RuoloUtente | null
+  isLoading: boolean
+}
 
 export default function Navbar() {
   const pathname = usePathname()
   const { workspace, hasAziendale } = useWorkspace()
 
-  const [authData, setAuthData] = useState<{
-    email?: string
-    role?: string
-  }>({
+  const [authState, setAuthState] = useState<AuthState>({
     email: undefined,
-    role: undefined,
+    ruolo: null,
+    isLoading: true,
   })
 
-  const supabase = createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  const supabase = useMemo(
+    () =>
+      createBrowserClient<Database>(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+      ),
+    []
   )
 
-  useEffect(() => {
-    async function fetchSessionAndRole() {
-      try {
-        const { data: { session } } = await supabase.auth.getSession()
-        if (!session?.user) {
-          setAuthData({ email: undefined, role: undefined })
-          return
-        }
-
-        const { data: profile } = await supabase
-          .from('profili')
-          .select('role, ruolo')
-          .eq('id', session.user.id)
-          .maybeSingle()
-
-        const userRole = profile?.role || profile?.ruolo || 'volontario'
-
-        setAuthData({
-          email: session.user.email,
-          role: userRole,
-        })
-      } catch (err) {
-        console.error('[Navbar Controller] Errore recupero sessione:', err)
-      }
+  // Funzione atomica per sincronizzare utente e profilo
+  const syncUserAndProfile = useCallback(async (user: any) => {
+    if (!user) {
+      setAuthState({ email: undefined, ruolo: null, isLoading: false })
+      return
     }
 
-    fetchSessionAndRole()
+    try {
+      const { data: profilo } = await supabase
+        .from('profili')
+        .select('ruolo')
+        .eq('id', user.id)
+        .maybeSingle()
 
-    const { data: authListener } = supabase.auth.onAuthStateChange((event, session) => {
-      if (event === 'SIGNED_OUT') {
-        setAuthData({ email: undefined, role: undefined })
-      } else if (event === 'SIGNED_IN' && session) {
-        fetchSessionAndRole()
+      setAuthState({
+        email: user.email,
+        ruolo: profilo?.ruolo ?? null,
+        isLoading: false,
+      })
+    } catch (err) {
+      console.error('[Navbar Controller] Errore fetch profilo:', err)
+      setAuthState({
+        email: user.email,
+        ruolo: null,
+        isLoading: false,
+      })
+    }
+  }, [supabase])
+
+  useEffect(() => {
+    let isMounted = true
+
+    // 1. Lettura iniziale diretta
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      if (isMounted) {
+        syncUserAndProfile(user)
       }
     })
 
-    return () => authListener.subscription.unsubscribe()
-  }, [supabase])
+    // 2. Listener completo: copre login, refresh del token e sessione iniziale
+    const { data: authListener } = supabase.auth.onAuthStateChange((event, session) => {
+      if (!isMounted) return
 
-  // ⚡ PATH-SNIFFING SINCRONO: Se l'URL è /app/associazione/*,
-  // sappiamo all'istante che siamo in modalità Ente senza attendere Supabase
-  const isAssociazioneRoute = pathname?.startsWith('/app/associazione')
-  const isVolontarioRoute = pathname?.startsWith('/app/volontario')
+      if (event === 'SIGNED_OUT' || !session?.user) {
+        setAuthState({ email: undefined, ruolo: null, isLoading: false })
+      } else if (
+        event === 'SIGNED_IN' || 
+        event === 'TOKEN_REFRESHED' || 
+        event === 'INITIAL_SESSION' || 
+        event === 'USER_UPDATED'
+      ) {
+        syncUserAndProfile(session.user)
+      }
+    })
 
-  const isAssociazione = isAssociazioneRoute || authData.role === 'associazione'
-  const isVolontario = !isAssociazione && (isVolontarioRoute || authData.role === 'volontario')
-  const isImpresa = !isAssociazione && !isVolontario && authData.role === 'impresa'
+    return () => {
+      isMounted = false
+      authListener.subscription.unsubscribe()
+    }
+  }, [supabase, syncUserAndProfile])
+
+  // Se siamo dentro /app, l'accesso è già garantito dal middleware
+  const isAppRoute = pathname.startsWith('/app')
+  const isLoggedIn = !!authState.email || (authState.isLoading && isAppRoute)
+
+  const isAssociazioneRoute = pathname.startsWith('/app/associazione')
+  const isVolontarioRoute = pathname.startsWith('/app/volontario')
+
+  // Derivazione del ruolo: se siamo nella rotta dedicata o il ruolo è caricato
+  const isAssociazione = authState.ruolo === 'associazione' || isAssociazioneRoute
+  const isVolontario = authState.ruolo === 'volontario' || (isVolontarioRoute && !isAssociazioneRoute)
+  const isImpresa = authState.ruolo === 'impresa'
   
-  const isLoggedIn = !!authData.email || isAssociazioneRoute || isVolontarioRoute
   const isAziendale = isVolontario && workspace === 'aziendale'
 
   let dashboardLink = '/app/volontario'
@@ -80,7 +115,7 @@ export default function Navbar() {
 
   return (
     <NavbarUI
-      email={authData.email}
+      email={authState.email}
       isLoggedIn={isLoggedIn}
       isVolontario={isVolontario}
       isAssociazione={isAssociazione}

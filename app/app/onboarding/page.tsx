@@ -1,30 +1,29 @@
 'use client'
 
-import { Suspense } from 'react'
-import Link from 'next/link'
+import { Suspense, useState, useTransition } from 'react'
 import { useSearchParams } from 'next/navigation'
-import { User, Building2, Briefcase, ArrowRight, Sparkles } from 'lucide-react'
+import { User, Building2, Briefcase, ArrowRight, Sparkles, Loader2 } from 'lucide-react'
+import { impostaRuoloEProcedi } from './actions'
 
 function RoleSelectionContent() {
   const searchParams = useSearchParams()
   const redirectTo = searchParams.get('redirectTo')
   const claimId = searchParams.get('claim_id')
 
-  // Costruisce l'URL di destinazione preservando parametri critici come claim_id
-  const getHref = (role: string) => {
-    const base = `/app/onboarding/${role}`
-    if (redirectTo) {
-      return `${base}?redirectTo=${encodeURIComponent(redirectTo)}`
-    }
-    if (role === 'associazione' && claimId) {
-      return `${base}?claim_id=${encodeURIComponent(claimId)}`
-    }
-    return base
+  const [isPending, startTransition] = useTransition()
+  const [ruoloSelezionato, setRuoloSelezionato] = useState<string | null>(null)
+
+  const handleSelectRole = (ruoloId: 'volontario' | 'associazione') => {
+    if (isPending) return
+    setRuoloSelezionato(ruoloId)
+    startTransition(async () => {
+      await impostaRuoloEProcedi(ruoloId, redirectTo, claimId)
+    })
   }
 
   const ruoli = [
     {
-      id: 'volontario',
+      id: 'volontario' as const,
       titolo: 'Voglio fare volontariato',
       sottotitolo: 'Per i Cittadini',
       descrizione: 'Esplora le opportunità vicino a te, metti in gioco le tue competenze e sostieni le cause che ami.',
@@ -33,7 +32,7 @@ function RoleSelectionContent() {
       badge: null
     },
     {
-      id: 'associazione',
+      id: 'associazione' as const,
       titolo: 'Siamo un ente o associazione',
       sottotitolo: 'Terzo Settore',
       descrizione: 'Pubblica opportunità, gestisci i volontari con un pannello dedicato e fai crescere il tuo impatto.',
@@ -42,7 +41,7 @@ function RoleSelectionContent() {
       badge: claimId ? 'Scheda da rivendicare' : null
     },
     {
-      id: 'impresa',
+      id: 'impresa' as const,
       titolo: 'Siamo un’azienda (ESG)',
       sottotitolo: 'Disponibile a breve',
       descrizione: 'Coinvolgi i dipendenti in attività di volontariato aziendale e traccia l’impatto per i bilanci di sostenibilità.',
@@ -95,19 +94,23 @@ function RoleSelectionContent() {
               )
             }
 
+            const isCardLoading = isPending && ruoloSelezionato === r.id
+
             return (
-              <Link 
+              <button
                 key={r.id} 
-                href={getHref(r.id)}
-                className={`group relative flex flex-col justify-between p-6 sm:p-8 rounded-[2rem] border transition-all duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] active:scale-[0.98] ${
+                type="button"
+                disabled={isPending}
+                onClick={() => handleSelectRole(r.id as 'volontario' | 'associazione')}
+                className={`group relative flex flex-col justify-between p-6 sm:p-8 rounded-[2rem] border text-left transition-all duration-300 ease-[cubic-bezier(0.32,0.72,0,1)] active:scale-[0.98] disabled:cursor-wait ${
                   r.badge 
                     ? 'bg-white border-emerald-500/80 shadow-[0_8px_30px_rgba(16,185,129,0.12)] hover:shadow-[0_20px_40px_rgba(16,185,129,0.18)] hover:border-emerald-600'
                     : 'bg-white border-slate-200/80 shadow-[0_8px_30px_rgba(0,0,0,0.03)] hover:shadow-[0_20px_40px_rgba(0,0,0,0.08)] hover:border-slate-300'
-                }`}
+                } ${isCardLoading ? 'ring-2 ring-emerald-500 bg-emerald-50/20' : ''}`}
               >
                 <div className="space-y-5">
                   <div className="w-12 h-12 rounded-2xl bg-slate-100 flex items-center justify-center text-slate-900 group-hover:bg-slate-950 group-hover:text-white transition-all duration-300">
-                    {r.icona}
+                    {isCardLoading ? <Loader2 className="w-6 h-6 animate-spin text-emerald-600" /> : r.icona}
                   </div>
                   
                   <div className="space-y-1.5">
@@ -128,19 +131,23 @@ function RoleSelectionContent() {
                   </div>
                 </div>
 
-                <div className="mt-8 pt-4 border-t border-slate-100 flex items-center justify-between text-xs font-bold text-slate-900">
+                <div className="mt-8 pt-4 border-t border-slate-100 flex items-center justify-between text-xs font-bold text-slate-900 w-full">
                   <span className={r.badge ? 'text-emerald-700 font-bold' : 'group-hover:text-emerald-700 transition-colors'}>
-                    {r.badge ? 'Rivendica ora' : 'Scegli questo ruolo'}
+                    {isCardLoading ? 'Configurazione in corso...' : (r.badge ? 'Rivendica ora' : 'Scegli questo ruolo')}
                   </span>
                   <div className={`w-7 h-7 rounded-full flex items-center justify-center transition-all duration-300 ${
                     r.badge 
                       ? 'bg-emerald-50 text-emerald-700' 
                       : 'bg-slate-50 group-hover:bg-emerald-50 group-hover:text-emerald-700'
                   }`}>
-                    <ArrowRight className="w-3.5 h-3.5 transition-transform duration-300 group-hover:translate-x-0.5" />
+                    {isCardLoading ? (
+                      <Loader2 className="w-3.5 h-3.5 animate-spin text-emerald-600" />
+                    ) : (
+                      <ArrowRight className="w-3.5 h-3.5 transition-transform duration-300 group-hover:translate-x-0.5" />
+                    )}
                   </div>
                 </div>
-              </Link>
+              </button>
             )
           })}
         </div>

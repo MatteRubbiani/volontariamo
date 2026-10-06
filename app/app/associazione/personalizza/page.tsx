@@ -7,8 +7,9 @@ import { createBrowserClient } from '@supabase/ssr'
 import { DndContext, PointerSensor, TouchSensor, MouseSensor, closestCenter, DragEndEvent, useSensor, useSensors } from '@dnd-kit/core'
 import { SortableContext, arrayMove, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
-import { FileText, GripVertical, Image as ImageIcon, LayoutGrid, Link2, Plus, Quote, Save, Settings2, Sparkles, Trash2, Users, Loader2, UploadCloud, Heart, Briefcase, MessageSquare, Video, Mail, Target, Eye, Move, ChevronUp, ChevronDown, MapPin } from 'lucide-react'
+import { FileText, GripVertical, Image as ImageIcon, LayoutGrid, Link2, Plus, Quote, Settings2, Trash2, Users, Loader2, UploadCloud, Heart, Briefcase, MessageSquare, Video, Mail, Target, Eye, ChevronUp, ChevronDown, MapPin } from 'lucide-react'
 import PosizioneCard from '@/components/PosizioneCard'
+import { Database } from '@/types/supabase'
 
 // ==========================================
 // 1. TIPI E COSTANTI
@@ -30,9 +31,13 @@ type AssocInfo = {
   indirizzo: string;
 }
 
-const supabase = createBrowserClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!)
+const supabase = createBrowserClient<Database>(
+  process.env.NEXT_PUBLIC_SUPABASE_URL!, 
+  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+)
+
 const DEFAULT_BRAND = '#111827'
-const BUCKET_NAME = 'media_associazioni'
+const BUCKET_NAME = 'posizioni' // Utilizziamo il bucket unificato per le immagini
 
 const blockLibrary = [
   { type: 'about', label: 'Testo Libero / Chi siamo', icon: Quote, desc: 'Aggiungi paragrafi descrittivi o la vostra storia', isUnique: false },
@@ -56,7 +61,7 @@ const blockLibrary = [
 function uid() { return Math.random().toString(36).slice(2, 10) }
 
 // ==========================================
-// 2. COMPONENTE MAPPA LEAFLET VETRINA (CARTODB LIGHT CON CHIAVE)
+// 2. COMPONENTE MAPPA LEAFLET VETRINA
 // ==========================================
 function MappaVetrinaComponent({ lat, lng, nome, comune, provincia, indirizzo }: { lat?: number | null; lng?: number | null; nome?: string; comune?: string; provincia?: string; indirizzo?: string }) {
   const mapRef = useRef<HTMLDivElement>(null)
@@ -83,7 +88,6 @@ function MappaVetrinaComponent({ lat, lng, nome, comune, provincia, indirizzo }:
 
       mapInstanceRef.current = map
 
-      // 🔑 Chiave CARTO Basemaps per rimuovere il watermark "API KEY REQUIRED"
       const cartoKey = process.env.NEXT_PUBLIC_CARTO_API_KEY || 'cb1_3xko_1_60f6ef2b400c66c45fc4a6fb'
 
       L.tileLayer(`https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png?key=${cartoKey}`, {
@@ -92,7 +96,6 @@ function MappaVetrinaComponent({ lat, lng, nome, comune, provincia, indirizzo }:
         subdomains: 'abcd',
       }).addTo(map)
 
-      // Marker custom
       const customIcon = L.divIcon({
         className: 'custom-map-pin',
         html: `
@@ -133,7 +136,7 @@ function MappaVetrinaComponent({ lat, lng, nome, comune, provincia, indirizzo }:
       <div className="w-full h-48 md:h-64 rounded-3xl bg-slate-50 flex flex-col items-center justify-center text-slate-400 p-6 text-center border border-slate-200/60">
         <MapPin className="w-8 h-8 mb-2 opacity-40" />
         <p className="text-xs font-bold text-slate-700">Posizione non ancora geolocalizzata</p>
-        <p className="text-[11px] text-slate-400 mt-1 max-w-sm">Imposta l'indirizzo della sede nelle impostazioni per mostrare la posizione esatta della tua associazione.</p>
+        <p className="text-[11px] text-slate-400 mt-1 max-w-sm">Imposta l'indirizzo della sede legale nelle impostazioni dell'associazione per mostrare la posizione esatta.</p>
       </div>
     )
   }
@@ -143,7 +146,6 @@ function MappaVetrinaComponent({ lat, lng, nome, comune, provincia, indirizzo }:
       <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
       <div ref={mapRef} className="w-full h-full z-0" />
       
-      {/* Overlay info e tasto indicazioni */}
       <div className="absolute bottom-3 left-3 right-3 z-10 flex items-center justify-between bg-white/95 backdrop-blur-md p-3 rounded-2xl border border-white/60 shadow-md">
         <div className="flex items-center gap-2.5 min-w-0 pr-2">
           <div className="w-8 h-8 rounded-xl bg-slate-900 text-white flex items-center justify-center shrink-0">
@@ -173,9 +175,13 @@ function MappaVetrinaComponent({ lat, lng, nome, comune, provincia, indirizzo }:
 // ==========================================
 async function uploadFileToSupabase(file: File, folder: 'images' | 'documents'): Promise<{ url: string, name: string } | null> {
   try {
+    const { data: { user } } = await supabase.auth.getUser()
+    if (!user) return null
+
     const fileExt = file.name.split('.').pop()
     const fileName = `${uid()}.${fileExt}`
-    const filePath = `${folder}/${fileName}`
+    // Organizziamo i file per utente/folder all'interno del bucket
+    const filePath = `${user.id}/${folder}/${fileName}`
 
     const { error: uploadError } = await supabase.storage.from(BUCKET_NAME).upload(filePath, file, { cacheControl: '3600', upsert: false })
     if (uploadError) throw uploadError
@@ -1001,7 +1007,7 @@ const Blocks = {
         <div className="flex gap-4 overflow-x-auto pb-4 snap-x snap-mandatory scrollbar-hide" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
           {positions.map((p: any) => (
             <div key={p.id} className="snap-start shrink-0 w-[88%] md:w-[45%]">
-              <PosizioneCard posizione={p} ruolo="volontario" coloreBrand={brandColor} />
+              <PosizioneCard posizione={p} ruolo="volontario" coloreBrand={brandColor} layout="vertical" />
             </div>
           ))}
         </div>
@@ -1042,35 +1048,40 @@ function PersonalizzaPaginaForm() {
 
   const brandColor = (layout.find(b => b.type === 'hero')?.content as HeroContent)?.brandColor || DEFAULT_BRAND
 
-  // Caricamento Dati Iniziale
+  // Caricamento Dati Iniziale (ALLINEATO AL NUOVO DB)
   useEffect(() => {
     const loadData = async () => {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return router.replace('/auth/login')
 
-      const [{ data: assoc }, { data: graph }, { data: pos }, { data: sedi }] = await Promise.all([
+      const [
+        { data: assoc }, 
+        { data: vetrina }, 
+        { data: pos }
+      ] = await Promise.all([
         supabase.from('associazioni').select('*').eq('id', user.id).single(),
-        supabase.from('associazioni_grafica').select('*').eq('associazione_id', user.id).maybeSingle(),
-        supabase.from('posizioni').select('*, media_associazioni(url), tags:posizione_tags(tag:tags(id, name))').eq('associazione_id', user.id),
-        supabase.from('associazioni_sedi').select('*').eq('associazione_id', user.id).eq('is_principale', true).maybeSingle()
+        supabase.from('associazioni_vetrina').select('*').eq('associazione_id', user.id).maybeSingle(),
+        supabase.from('posizioni').select('*, tags:posizione_tags(tag:tags(id, nome))').eq('associazione_id', user.id)
       ])
 
       if (assoc?.slug) {
         setAssociazioneSlug(assoc.slug)
       }
 
+      // Imposta Info Sede Legale
       const infoData: AssocInfo = {
-        denominazione: assoc?.nome_breve || assoc?.denominazione || 'Sede Associazione',
-        lat: assoc?.lat ?? sedi?.lat ?? null,
-        lng: assoc?.lng ?? sedi?.lng ?? null,
-        comune: assoc?.comune || sedi?.comune || '',
-        provincia: assoc?.provincia || sedi?.provincia || '',
-        indirizzo: sedi?.indirizzo || assoc?.comune || ''
+        denominazione: assoc?.denominazione || 'Associazione',
+        lat: assoc?.lat_legale ?? null,
+        lng: assoc?.lng_legale ?? null,
+        comune: assoc?.comune_legale || '',
+        provincia: assoc?.provincia_legale || '',
+        indirizzo: assoc?.indirizzo_legale || ''
       }
       setAssocInfo(infoData)
 
-      const rawDraft = graph?.layout_draft
-      const rawConfig = graph?.layout_config
+      // Parsing del Layout da JSONB
+      const rawDraft = vetrina?.layout_draft
+      const rawConfig = vetrina?.layout_config
       
       let parsedLayout = null
       if (rawDraft) {
@@ -1092,23 +1103,30 @@ function PersonalizzaPaginaForm() {
           return block
         })
       } else {
-        // Fallback di sicurezza
+        // Fallback Layout Base
         initialLayout = [
-          { id: uid(), type: 'hero', content: { title: assoc?.denominazione || 'Associazione', coverUrl: graph?.cover_url, logoUrl: assoc?.logo_url, brandColor: graph?.colore_brand || DEFAULT_BRAND } },
-          { id: uid(), type: 'about', content: { title: 'Chi Siamo', body: graph?.chi_siamo || '' } },
+          { id: uid(), type: 'hero', content: { title: assoc?.denominazione || 'Associazione', coverUrl: assoc?.cover_path, logoUrl: assoc?.logo_path, brandColor: vetrina?.colore_brand || DEFAULT_BRAND } },
+          { id: uid(), type: 'about', content: { title: 'Chi Siamo', body: assoc?.descrizione || '' } },
           { id: uid(), type: 'map', content: { title: 'La nostra Sede' } },
           { id: uid(), type: 'positions', content: { title: 'Opportunità di Volontariato' } }
         ]
       }
 
       setLayout(initialLayout)
-      setPositions(pos || [])
+      
+      // Fix nome tags per compatibilità con PosizioneCard
+      const parsedPosizioni = pos?.map((p: any) => ({
+        ...p,
+        tags: p.tags?.map((t: any) => ({ ...t.tag, name: t.tag.nome })) || []
+      })) || []
+      
+      setPositions(parsedPosizioni)
       setIsLoading(false)
     }
     loadData()
   }, [router])
 
-  // AUTO-SAVE BOZZA
+  // AUTO-SAVE BOZZA (ALLINEATO A associazioni_vetrina)
   useEffect(() => {
     if (isLoading || layout.length === 0) return
 
@@ -1117,7 +1135,7 @@ function PersonalizzaPaginaForm() {
       const { data: { user } } = await supabase.auth.getUser()
       if (!user) return
 
-      const { error } = await supabase.from('associazioni_grafica').upsert({
+      const { error } = await supabase.from('associazioni_vetrina').upsert({
         associazione_id: user.id,
         layout_draft: layout,
         updated_at: new Date().toISOString()
@@ -1129,19 +1147,27 @@ function PersonalizzaPaginaForm() {
     return () => clearTimeout(timer)
   }, [layout, isLoading])
 
+  // PUBBLICAZIONE (ALLINEATO A associazioni_vetrina)
   const handlePublish = async () => {
     setIsSaving(true)
     const { data: { user } } = await supabase.auth.getUser()
     const hero = layout.find(b => b.type === 'hero')?.content
     
-    const { error } = await supabase.from('associazioni_grafica').upsert({
-      associazione_id: user?.id,
+    const { error } = await supabase.from('associazioni_vetrina').upsert({
+      associazione_id: user?.id as any,
       layout_config: layout,
       layout_draft: layout,
       colore_brand: hero?.brandColor || DEFAULT_BRAND,
-      cover_url: hero?.coverUrl,
       updated_at: new Date().toISOString()
     }, { onConflict: 'associazione_id' })
+
+    // Se l'utente ha caricato logo o cover dall'editor, aggiorniamo anche la tabella anagrafica
+    if (hero?.logoUrl || hero?.coverUrl) {
+      await supabase.from('associazioni').update({
+        logo_path: hero.logoUrl || null,
+        cover_path: hero.coverUrl || null
+      }).eq('id', user?.id as any)
+    }
     
     if (!error && associazioneSlug) {
       try {

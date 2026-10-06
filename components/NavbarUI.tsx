@@ -13,34 +13,37 @@ import {
   Clock,
   Briefcase,
   Store,
-  User
+  Sparkles
 } from 'lucide-react'
 import { WorkspaceSwitcher } from '@/components/WorkspaceSwitcher'
 
 interface NavbarUIProps {
   email?: string
-  isLoggedIn?: boolean       // 👈 Ora opzionale
+  isLoggedIn?: boolean
   isVolontario?: boolean
   isAssociazione?: boolean
   isImpresa?: boolean
-  isAziendale?: boolean      // 👈 Ora opzionale
-  hasAziendale?: boolean     // 👈 Ora opzionale
+  isAziendale?: boolean
+  hasAziendale?: boolean
   dashboardLink?: string
   currentPath?: string
 }
 
 export default function NavbarUI({
   email,
-  isLoggedIn = !!email,      // 👈 Fallback automatico: se c'è l'email è loggato
+  isLoggedIn = !!email,
   isVolontario = false,
   isAssociazione = false,
   isImpresa = false,
-  isAziendale = false,       // 👈 Fallback a false
-  hasAziendale = false,      // 👈 Fallback a false
-  dashboardLink = '/',
+  isAziendale = false,
+  hasAziendale = false,
+  dashboardLink = '/app/volontario',
   currentPath = '',
 }: NavbarUIProps) {
-  const userInitial = email ? email.charAt(0).toUpperCase() : 'A'
+  const userInitial = email ? email.charAt(0).toUpperCase() : '?'
+
+  // L'utente è loggato ma non ha ancora un ruolo (in fase di onboarding)
+  const isPendingRole = isLoggedIn && !isVolontario && !isAssociazione && !isImpresa
 
   const navBg = isAziendale 
     ? 'bg-slate-950/80 border-slate-800 text-slate-100' 
@@ -52,7 +55,7 @@ export default function NavbarUI({
     return currentPath.startsWith(path)
   }
 
-  // 🎯 I 5 TAB OPERATIVI ENTE (Unica sorgente di verità per Desktop e Mobile)
+  // 🎯 TAB OPERATIVI ENTE
   const associazioneTabs = [
     { id: 'oggi', label: 'oggi', href: '/app/associazione/oggi', icon: CalendarDays },
     { id: 'posizioni', label: 'posizioni', href: '/app/associazione/posizioni', icon: Briefcase },
@@ -61,7 +64,7 @@ export default function NavbarUI({
     { id: 'turni', label: 'turni', href: '/app/associazione/turni', icon: Clock },
   ]
 
-  // TAB PER IL VOLONTARIO MOBILE
+  // 🎯 TAB VOLONTARIO
   const volontarioTabs = [
     { id: 'dashboard', label: 'Dashboard', href: dashboardLink, icon: LayoutDashboard },
     { id: 'mappa', label: 'Mappa', href: '/mappa', icon: MapPin },
@@ -81,10 +84,19 @@ export default function NavbarUI({
       : (isAziendale ? 'text-slate-400 hover:text-white hover:bg-slate-900' : 'text-slate-500 hover:text-slate-900 hover:bg-slate-50/80')}
   `
 
+  // Destinazione del logo
+  const logoHref = isAssociazione 
+    ? '/app/associazione/oggi' 
+    : isVolontario 
+      ? dashboardLink 
+      : isPendingRole 
+        ? '/app/onboarding' 
+        : '/'
+
   return (
     <>
       {/* =========================================================
-          1. TOP BAR (Sempre presente su Desktop e Mobile)
+          1. TOP BAR
          ========================================================= */}
       <nav className={`border-b backdrop-blur-xl sticky top-0 z-[9999] transition-all duration-300 ${navBg}`}>
         <div className="py-2.5 px-4 md:px-8 flex justify-between items-center max-w-7xl mx-auto">
@@ -92,7 +104,7 @@ export default function NavbarUI({
           {/* LOGO BRAND */}
           <div className="flex items-center gap-3">
             <Link 
-              href={isAssociazione ? '/app/associazione/oggi' : '/'} 
+              href={logoHref} 
               className="group flex items-center gap-2.5 transition-transform active:scale-95"
             >
               <div className={`p-1.5 rounded-xl transition-colors ${isAziendale ? 'bg-violet-500/10 text-violet-400' : 'bg-slate-950 text-white'}`}>
@@ -109,6 +121,8 @@ export default function NavbarUI({
               </span>
             )}
 
+    
+
             {isAziendale && (
               <span className="hidden lg:inline-flex px-2 py-0.5 rounded-md bg-violet-500/10 text-violet-300 border border-violet-500/20 text-[9px] font-bold uppercase tracking-wider">
                 Corporate ESG
@@ -116,42 +130,34 @@ export default function NavbarUI({
             )}
           </div>
           
-          {/* NAVIGAZIONE CENTRALE DESKTOP (Nascosta su Mobile) */}
+          {/* NAVIGAZIONE CENTRALE DESKTOP */}
           <div className="hidden md:flex gap-1 items-center bg-slate-50/50 p-1 rounded-2xl border border-slate-100/60 dark:bg-slate-900/40 dark:border-slate-800">
-            {isLoggedIn ? (
-              <>
-                {/* ENTE: I 5 TAB */}
-                {isAssociazione && (
-                  <>
-                    {associazioneTabs.map((tab) => {
-                      const Icon = tab.icon
-                      return (
-                        <Link key={tab.id} href={tab.href} className={desktopLinkClass(tab.href)}>
-                          <Icon className="w-3.5 h-3.5 opacity-70" />
-                          <span>{tab.label}</span>
-                        </Link>
-                      )
-                    })}
-                  </>
-                )}
+            {isAssociazione && (
+              associazioneTabs.map((tab) => {
+                const Icon = tab.icon
+                return (
+                  <Link key={tab.id} href={tab.href} className={desktopLinkClass(tab.href)}>
+                    <Icon className="w-3.5 h-3.5 opacity-70" />
+                    <span>{tab.label}</span>
+                  </Link>
+                )
+              })
+            )}
 
-                {/* VOLONTARIO */}
-                {isVolontario && (
-                  <>
-                    {volontarioTabs.map((tab) => {
-                      const Icon = tab.icon
-                      return (
-                        <Link key={tab.id} href={tab.href} className={desktopLinkClass(tab.href)}>
-                          <Icon className="w-3.5 h-3.5 opacity-70" />
-                          <span>{tab.label}</span>
-                        </Link>
-                      )
-                    })}
-                  </>
-                )}
-              </>
-            ) : (
-              /* ANONIMO */
+            {isVolontario && (
+              volontarioTabs.map((tab) => {
+                const Icon = tab.icon
+                return (
+                  <Link key={tab.id} href={tab.href} className={desktopLinkClass(tab.href)}>
+                    <Icon className="w-3.5 h-3.5 opacity-70" />
+                    <span>{tab.label}</span>
+                  </Link>
+                )
+              })
+            )}
+
+            {/* SE NON HA RUOLO O È ANONIMO: Mostra esplorazione pubblica */}
+            {(!isLoggedIn || isPendingRole) && (
               <>
                 <Link href="/mappa" className={desktopLinkClass('/mappa')}>
                   <MapPin className="w-3.5 h-3.5 opacity-70" />
@@ -165,10 +171,10 @@ export default function NavbarUI({
             )}
           </div>
 
-          {/* AREA DESTRA (Vetrina & Profilo) */}
+          {/* AREA DESTRA */}
           <div className="flex items-center gap-2">
             
-            {/* TASTO VETRINA ENTE (Visibile anche su Mobile con icona) */}
+            {/* VETRINA ENTE */}
             {isAssociazione && (
               <Link
                 href="/app/associazione/personalizza"
@@ -186,27 +192,44 @@ export default function NavbarUI({
               </div>
             )}
 
+            {/* CHIP UTENTE LOGGATO */}
             {isLoggedIn ? (
               <Link 
-                href={isAssociazione ? "/app/associazione/profilo" : "/app/profilo"} 
+                href={
+                  isAssociazione 
+                    ? "/app/associazione/profilo" 
+                    : isVolontario 
+                      ? "/app/profilo" 
+                      : "/app/onboarding"
+                } 
                 className={`flex items-center gap-2 p-1 md:pr-3 rounded-full border transition-all ${
-                  isAziendale 
-                    ? 'bg-slate-900 border-slate-800 hover:border-violet-500/40' 
-                    : 'bg-slate-50 border-slate-200/60 hover:bg-slate-100'
+                  isPendingRole
+                    ? 'bg-amber-50 border-amber-200 hover:bg-amber-100 text-amber-900'
+                    : isAziendale 
+                      ? 'bg-slate-900 border-slate-800 hover:border-violet-500/40' 
+                      : 'bg-slate-50 border-slate-200/60 hover:bg-slate-100'
                 }`}
-                title="Modifica informazioni profilo"
+                title={isPendingRole ? "Completa la scelta del ruolo" : "Profilo utente"}
               >
                 <div className={`w-7 h-7 rounded-full flex items-center justify-center font-extrabold text-xs shadow-xs ${
-                  isAziendale ? 'bg-violet-600 text-white' : 'bg-slate-950 text-white'
+                  isPendingRole
+                    ? 'bg-amber-500 text-white'
+                    : isAziendale 
+                      ? 'bg-violet-600 text-white' 
+                      : 'bg-slate-950 text-white'
                 }`}>
                   {userInitial}
                 </div>
                 <div className="hidden md:flex flex-col text-left">
                   <span className="text-[11px] font-semibold text-slate-800 dark:text-slate-200 max-w-[110px] truncate leading-tight">
-                    {email ? email.split('@')[0] : 'Ente'}
+                    {email ? email.split('@')[0] : 'Account'}
                   </span>
                   <span className="text-[9px] font-bold text-slate-400 uppercase tracking-tight leading-none">
-                    {isAssociazione ? 'Associazione' : isVolontario ? (isAziendale ? 'Team ESG' : 'Volontario') : 'Profilo'}
+                    {isAssociazione 
+                      ? 'Associazione' 
+                      : isVolontario 
+                        ? (isAziendale ? 'Team ESG' : 'Volontario') 
+                        : 'Scegli Ruolo'}
                   </span>
                 </div>
               </Link>
@@ -226,12 +249,12 @@ export default function NavbarUI({
       </nav>
 
       {/* =========================================================
-          2. DOCK BAR MOBILE (Attiva SOLO su schermi piccoli md:hidden)
+          2. DOCK BAR MOBILE (Attiva SOLO se il ruolo è definito)
          ========================================================= */}
-      {isLoggedIn && (
+      {isLoggedIn && !isPendingRole && (
         <nav className="md:hidden fixed bottom-0 left-0 right-0 z-[9999] bg-white/95 backdrop-blur-md border-t border-slate-200/80 px-2 py-1 flex items-center justify-around font-sans pb-[calc(0.25rem+env(safe-area-inset-bottom))] shadow-lg">
           
-          {/* SE ASSOCIAZIONE: Disegna direttamente i 5 TAB operativi */}
+          {/* TAB ENTE */}
           {isAssociazione && associazioneTabs.map((tab) => {
             const Icon = tab.icon
             const active = isActive(tab.href)
@@ -249,7 +272,7 @@ export default function NavbarUI({
             )
           })}
 
-          {/* SE VOLONTARIO: Disegna i 4 TAB del volontario */}
+          {/* TAB VOLONTARIO */}
           {isVolontario && volontarioTabs.map((tab) => {
             const Icon = tab.icon
             const active = isActive(tab.href)

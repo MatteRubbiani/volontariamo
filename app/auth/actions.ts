@@ -3,6 +3,7 @@
 import { createServerClient } from '@supabase/ssr'
 import { cookies, headers } from 'next/headers'
 import { redirect } from 'next/navigation'
+import { Database } from '@/types/supabase'
 
 /**
  * Utility per garantire che il redirect avvenga solo su path interni
@@ -15,31 +16,11 @@ function getSafeRedirectTo(value: FormDataEntryValue | null): string | null {
 }
 
 /**
- * Utility per costruire URL di errore con messaggi trasparenti
+ * Helper per creare il client Supabase Server tipizzato
  */
-function buildErrorRedirect(basePath: string, message: string, redirectTo: string | null) {
-  const params = new URLSearchParams()
-  params.set('error', message)
-  if (redirectTo) {
-    params.set('redirectTo', redirectTo)
-  }
-  return `${basePath}?${params.toString()}`
-}
-
-/**
- * ⚡ SIGN IN ULTRA-RAPIDO (Zero blocchi di layout cache o SSR cascata)
- */
-export async function signIn(formData: FormData) {
-  const email = String(formData.get('email') ?? '').trim()
-  const password = String(formData.get('password') ?? '')
-  const redirectTo = getSafeRedirectTo(formData.get('redirectTo'))
-
-  if (!email || !password) {
-    return { error: 'Inserisci sia email che password.' }
-  }
-
+async function getSupabaseServerClient() {
   const cookieStore = await cookies()
-  const supabase = createServerClient(
+  return createServerClient<Database>(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
@@ -53,8 +34,23 @@ export async function signIn(formData: FormData) {
       },
     }
   )
+}
 
-  // 1. Verifica credenziali Supabase (~150ms)
+/**
+ * ⚡ SIGN IN
+ */
+export async function signIn(formData: FormData) {
+  const email = String(formData.get('email') ?? '').trim()
+  const password = String(formData.get('password') ?? '')
+  const redirectTo = getSafeRedirectTo(formData.get('redirectTo'))
+
+  if (!email || !password) {
+    return { error: 'Inserisci sia email che password.' }
+  }
+
+  const supabase = await getSupabaseServerClient()
+
+  // 1. Verifica credenziali Supabase
   const { data, error } = await supabase.auth.signInWithPassword({ email, password })
 
   if (error) {
@@ -64,40 +60,60 @@ export async function signIn(formData: FormData) {
     return { error: 'Credenziali non valide. Controlla email e password.' }
   }
 
-  // 2. Controllo redirect prioritario
+  // 2. Controllo redirect prioritario passato dal form
   if (redirectTo) {
     redirect(redirectTo)
   }
 
-  // 3. Query rapida per il ruolo
+  const userId = data.user.id
+
+  // 3. Query per recuperare il ruolo dal profilo
   const { data: profile } = await supabase
     .from('profili')
-    .select('role')
-    .eq('id', data.user.id)
+    .select('ruolo')
+    .eq('id', userId)
     .maybeSingle()
 
-  // 🚀 REDIRECT NATIVO HTTP: i cookie e la navigazione viaggiano insieme.
-  // Zero rimbalzi su Safari/iOS vecchio, e zero ritardi perché abbiamo tolto revalidatePath!
-  switch (profile?.role) {
-    case 'associazione':
-      redirect('/app/associazione')
-    case 'impresa':
-      redirect('/app/impresa')
-    case 'volontario':
-    default:
-      redirect('/app/volontario')
+  // 4. Controllo se l'utente ha completato l'onboarding
+  // (Verifichiamo se esiste il record nella tabella specifica del ruolo)
+  if (profile?.ruolo === 'associazione') {
+    const { data: associazione } = await supabase
+      .from('associazioni')
+      .select('id')
+      .eq('id', userId)
+      .maybeSingle()
+
+    if (!associazione) {
+      redirect('/app/onboarding/associazione')
+    }
+    redirect('/app/associazione')
   }
+
+  if (profile?.ruolo === 'volontario') {
+    const { data: volontario } = await supabase
+      .from('volontari')
+      .select('id')
+      .eq('id', userId)
+      .maybeSingle()
+
+    if (!volontario) {
+      redirect('/app/onboarding/volontario')
+    }
+    redirect('/app/volontario')
+  }
+
+  // Fallback per impresa o ruoli non configurati
+  redirect('/app/volontario')
 }
 
 /**
- * SIGN UP (Con anti-ghosting e redirect dinamico)
+ * SIGN UP (Generico: email + password)
  */
 export async function signUp(formData: FormData) {
   const email = String(formData.get('email') ?? '').trim()
   const password = String(formData.get('password') ?? '')
   const redirectTo = getSafeRedirectTo(formData.get('redirectTo'))
   
-  // Gestione dinamica dell'origin per il link di conferma
   const headersList = await headers()
   const forwardedHost = headersList.get('x-forwarded-host')
   const host = headersList.get('host')
@@ -110,19 +126,7 @@ export async function signUp(formData: FormData) {
         ? `${protocol}://${host}`
         : process.env.NEXT_PUBLIC_SITE_URL || 'http://localhost:3000')
 
-  const cookieStore = await cookies()
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        getAll() { return cookieStore.getAll() },
-        setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value, options }) => cookieStore.set(name, value, options))
-        },
-      },
-    }
-  )
+  const supabase = await getSupabaseServerClient()
 
   // 1. Esecuzione registrazione
   const { data, error } = await supabase.auth.signUp({
@@ -135,18 +139,17 @@ export async function signUp(formData: FormData) {
 
   const redirectParam = redirectTo ? `&redirectTo=${encodeURIComponent(redirectTo)}` : ''
 
-  // 2. Errori standard (es. password corta)
   if (error) {
     redirect(`/auth/registrazione?error=${encodeURIComponent(error.message)}${redirectParam}`)
   }
 
-  // 3. Controllo Anti-Ghosting (se identities è vuoto l'account esisteva già)
+  // 2. Controllo Anti-Ghosting (se identities è vuoto l'account esisteva già)
   if (data?.user && data.user.identities && data.user.identities.length === 0) {
     const userExistsMessage = "Questa email è già associata a un account. Effettua il login."
     redirect(`/auth/registrazione?error=${encodeURIComponent(userExistsMessage)}${redirectParam}`)
   }
 
-  // 4. Redirect alla schermata OTP
+  // 3. Redirect alla schermata di verifica OTP / conferma
   redirect(`/auth/verifica?email=${encodeURIComponent(email)}${redirectParam}`)
 }
 
@@ -154,22 +157,7 @@ export async function signUp(formData: FormData) {
  * LOGOUT
  */
 export async function logout() {
-  const cookieStore = await cookies()
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        getAll() { return cookieStore.getAll() },
-        setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value, options }) =>
-            cookieStore.set(name, value, options)
-          )
-        },
-      },
-    }
-  )
-
+  const supabase = await getSupabaseServerClient()
   await supabase.auth.signOut()
   redirect('/')
 }
@@ -179,20 +167,7 @@ export async function logout() {
  */
 export async function resetPassword(formData: FormData) {
   const email = String(formData.get('email') ?? '').trim()
-  const cookieStore = await cookies()
-  
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        getAll() { return cookieStore.getAll() },
-        setAll(cookiesToSet) {
-          cookiesToSet.forEach(({ name, value, options }) => cookieStore.set(name, value, options))
-        },
-      },
-    }
-  )
+  const supabase = await getSupabaseServerClient()
 
   const { error } = await supabase.auth.resetPasswordForEmail(email)
 

@@ -1,12 +1,13 @@
 import { createServerClient } from '@supabase/ssr'
 import { NextResponse, type NextRequest } from 'next/server'
+import { Database } from '@/types/supabase'
 
 export async function proxy(request: NextRequest) {
   let supabaseResponse = NextResponse.next({
     request,
   })
 
-  const supabase = createServerClient(
+  const supabase = createServerClient<Database>(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
     {
@@ -34,11 +35,9 @@ export async function proxy(request: NextRequest) {
   const isAuthRoute = pathname.startsWith('/auth')
   const isHomeRoute = pathname === '/' 
   const isAccettaInvitoRoute = pathname.startsWith('/accetta-invito') 
-  
-  // 🚨 NUOVA ROTTA WHITELISTATA
   const isUpdatePasswordRoute = pathname === '/auth/update-password'
 
-  // Salviamo i cookie di Supabase anche quando facciamo redirect
+  // Helper per preservare i cookie di sessione nei redirect
   const redirectWithCookies = (url: URL) => {
     const redirectResponse = NextResponse.redirect(url)
     supabaseResponse.cookies.getAll().forEach((cookie) => {
@@ -47,62 +46,108 @@ export async function proxy(request: NextRequest) {
     return redirectResponse
   }
 
+  // 1. Utente non loggato che tenta di accedere ad aree protette
   if (isAppRoute && !user) {
     return redirectWithCookies(new URL('/auth/login', request.url))
   }
 
   if (user) {
-    // 🚨 IL LASCIAPASSARE: 
-    // Se l'utente è loggato (tramite OTP) ed è sulla pagina di reset password, 
-    // fermiamo tutti i controlli successivi e lo lasciamo passare.
+    // Lasciapassare per il reset password
     if (isUpdatePasswordRoute) {
       return supabaseResponse
     }
 
-    // SINGOLA QUERY ALLA TABELLA HUB
+    // 1. LETTURA DEL RUOLO DAL PROFILO
     const { data: profilo } = await supabase
       .from('profili')
       .select('ruolo')
       .eq('id', user.id)
       .maybeSingle()
 
-    const hasCompletedOnboarding = !!profilo 
-    const isOnboardingRoute = pathname.startsWith('/app/onboarding')
-    const ruolo = profilo?.ruolo || 'volontario'
+    const ruolo = profilo?.ruolo
 
-    // CONTROLLO 1: Se NON ha finito e sta girando altrove, mandalo all'onboarding
-    if (!hasCompletedOnboarding && !isOnboardingRoute && !isAccettaInvitoRoute) {
-      const onboardingUrl = new URL('/app/onboarding', request.url)
-      if (!isAuthRoute) {
-        const currentPath = `${pathname}${request.nextUrl.search}`
-        if (currentPath && currentPath !== '/') {
-          onboardingUrl.searchParams.set('redirectTo', currentPath)
-        }
+    // =========================================================================
+    // STATO 1: RUOLO NON ANCORA SCELTO (ruolo è NULL)
+    // =========================================================================
+    if (!ruolo) {
+      if (pathname === '/app/onboarding') {
+        return supabaseResponse
       }
-      return redirectWithCookies(onboardingUrl)
+
+      // Se tenta di andare in /app, /auth o nella home, costringilo alla scelta del ruolo
+      if (isAppRoute || isAuthRoute || isHomeRoute) {
+        return redirectWithCookies(new URL('/app/onboarding', request.url))
+      }
+
+      return supabaseResponse
     }
 
-    // CONTROLLO 2: Se HA FINITO e prova ad andare su Login, Onboarding OPPURE sulla Home (/)
-    if (hasCompletedOnboarding && (isAuthRoute || isOnboardingRoute || isHomeRoute) && !isAccettaInvitoRoute) {
-      return redirectWithCookies(new URL(`/app/${ruolo}`, request.url))
+    // =========================================================================
+    // STATO 2 & 3: RUOLO SCELTO -> CONTROLLO ESISTENZA ANAGRAFICA WIZARD
+    // =========================================================================
+    let hasCompletedWizard = false
+
+    if (ruolo === 'volontario') {
+      const { data: volontario } = await supabase
+        .from('volontari')
+        .select('id')
+        .eq('id', user.id)
+        .maybeSingle()
+      hasCompletedWizard = !!volontario
+    } else if (ruolo === 'associazione') {
+      const { data: associazione } = await supabase
+        .from('associazioni')
+        .select('id')
+        .eq('id', user.id)
+        .maybeSingle()
+      hasCompletedWizard = !!associazione
     }
 
-    // CONTROLLO 3: Protezione delle rotte per ruolo (RBAC)
-    // Entra in azione solo se l'utente è dentro /app/ e ha finito l'onboarding
-    if (hasCompletedOnboarding && isAppRoute && !isOnboardingRoute) {
-      
-      const protectedRoutes = {
+    const wizardPath = `/app/onboarding/${ruolo}`
+    const isOnRequiredWizard = pathname.startsWith(wizardPath)
+
+    // -------------------------------------------------------------------------
+    // CASO A: WIZARD NON ANCORA COMPLETATO
+    // -------------------------------------------------------------------------
+    if (!hasCompletedWizard) {
+      // Se si trova già sul suo wizard specifico, lascialo procedere
+      if (isOnRequiredWizard) {
+        return supabaseResponse
+      }
+
+      // Se tenta di accedere a qualsiasi area /app (inclusa la dashboard),
+      // ad altre pagine di onboarding o ad auth/home, forzalo al wizard!
+      if (isAppRoute || isAuthRoute || isHomeRoute) {
+        return redirectWithCookies(new URL(wizardPath, request.url))
+      }
+
+      return supabaseResponse
+    }
+
+    // -------------------------------------------------------------------------
+    // CASO B: WIZARD COMPLETATO CON SUCCESSO
+    // -------------------------------------------------------------------------
+    const isOnboardingRoute = pathname.startsWith('/app/onboarding')
+
+    // 1. Non deve più accedere all'onboarding, al login o alla home: manda alla dashboard
+    if ((isOnboardingRoute || isAuthRoute || isHomeRoute) && !isAccettaInvitoRoute) {
+      const dashboardTarget = ruolo === 'associazione' ? '/app/associazione/oggi' : `/app/${ruolo}`
+      return redirectWithCookies(new URL(dashboardTarget, request.url))
+    }
+
+    // 2. Controllo accessi per ruolo (RBAC) dentro /app
+    if (isAppRoute) {
+      const protectedRoutes: Record<string, string> = {
         '/app/volontario': 'volontario',
         '/app/associazione': 'associazione',
         '/app/impresa': 'impresa',
       }
 
-      // Cicliamo sulle rotte protette. Se la rotta richiesta inizia con una di queste 
-      // (es. /app/impresa/team) ma il ruolo non combacia, scatta il blocco.
-      for (const [route, allowedRole] of Object.entries(protectedRoutes)) {
-        if (pathname.startsWith(route) && ruolo !== allowedRole) {
+      for (const [routePrefix, allowedRole] of Object.entries(protectedRoutes)) {
+        if (pathname.startsWith(routePrefix) && ruolo !== allowedRole) {
           console.warn(`Accesso negato: Utente [${ruolo}] ha tentato di accedere a ${pathname}`)
-          return redirectWithCookies(new URL(`/app/${ruolo}`, request.url))
+          const dashboardTarget = ruolo === 'associazione' ? '/app/associazione/oggi' : `/app/${ruolo}`
+          return redirectWithCookies(new URL(dashboardTarget, request.url))
         }
       }
     }

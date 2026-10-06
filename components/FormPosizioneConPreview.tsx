@@ -3,11 +3,11 @@
 import { useState, useEffect, useRef, useMemo } from 'react'
 import { createBrowserClient } from '@supabase/ssr'
 import TagBadge from '@/components/TagBadge'
-import CompetenzaSelector from './CompetenzaSelector'
 import MediaGalleryPicker from '@/components/MediaGalleryPicker'
 import { analizzaTestoPosizione } from '@/app/ai-actions'
 import PosizioneCard from '@/components/PosizioneCard'
 import { Sparkles, Eye, Calendar, Clock, MapPin, Check, Loader2 } from 'lucide-react'
+import { Database } from '@/types/supabase'
 
 const GIORNI = [
   { etichetta: 'L', valore: 'Lunedì' },
@@ -19,15 +19,22 @@ const GIORNI = [
   { etichetta: 'D', valore: 'Domenica' }
 ]
 
-const supabase = createBrowserClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!)
+function generaSlug(testo: string): string {
+  return testo
+    .toLowerCase()
+    .trim()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9\s-]/g, '')
+    .replace(/\s+/g, '-')
+    .replace(/-+/g, '-')
+}
 
 export default function FormPosizioneConPreview({ 
   posizione, 
   tagsDisponibili = [], 
   tagsSelezionati: tagsIniziali = [],
-  competenzeDisponibili = [],           
-  competenzeSelezionate = [],
-  mediaDisponibili = [],         
+  mediaDisponibili = [],
   salvaAction 
 }: { 
   posizione?: any
@@ -36,35 +43,69 @@ export default function FormPosizioneConPreview({
   competenzeDisponibili?: any[]         
   competenzeSelezionate?: string[]
   mediaDisponibili?: any[]
+  sediDisponibili?: any[]
   salvaAction: (formData: FormData) => Promise<void>
 }) {
+  const supabase = useMemo(
+    () => createBrowserClient<Database>(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!, 
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+    ),
+    []
+  )
+
   const [isSubmitting, setIsSubmitting] = useState(false)
   const [currentId, setCurrentId] = useState<string | null>(posizione?.id || null)
-  const [immagineId, setImmagineId] = useState<string | null>(posizione?.immagine_id || null)
-  const [immagineUrl, setImmagineUrl] = useState<string | null>(posizione?.media_associazioni?.url || posizione?.immagine?.url || null)
-  const [tipo, setTipo] = useState<'una_tantum' | 'ricorrente'>(posizione?.tipo || 'una_tantum')
+
+  // Campi Core
   const [titolo, setTitolo] = useState(posizione?.titolo || '')
   const [descrizione, setDescrizione] = useState(posizione?.descrizione || '')
+  const [tipo, setTipo] = useState<'una_tantum' | 'ricorrente'>(posizione?.tipo || 'una_tantum')
+  const [modalita, setModalita] = useState<'in_sede' | 'ibrido' | 'da_remoto'>(posizione?.modalita || 'in_sede')
+  
+  // Temporalità
   const [dataEsatta, setDataEsatta] = useState(posizione?.data_esatta || '')
   const [giorniSelezionati, setGiorniSelezionati] = useState<string[]>(posizione?.giorni_settimana || [])
-  const [oraInizio, setOraInizio] = useState(posizione?.ora_inizio?.substring(0,5) || '')
-  const [oraFine, setOraFine] = useState(posizione?.ora_fine?.substring(0,5) || '')
-  const [dove, setDove] = useState(posizione?.dove || '')
-  const [coordinate, setCoordinate] = useState<{lat: number, lng: number} | null>(
+  const [oraInizio, setOraInizio] = useState(posizione?.ora_inizio?.substring(0, 5) || '')
+  const [oraFine, setOraFine] = useState(posizione?.ora_fine?.substring(0, 5) || '')
+
+  // Localizzazione (colonne reali: indirizzo_specifico, luogo_nome, comune, provincia)
+  const [indirizzoSpecifico, setIndirizzoSpecifico] = useState(
+    posizione?.indirizzo_specifico || posizione?.dove || ''
+  )
+  const [luogoNome, setLuogoNome] = useState(posizione?.luogo_nome || '')
+  const [comune, setComune] = useState(posizione?.comune || '')
+  const [provincia, setProvincia] = useState(posizione?.provincia || '')
+  const [coordinate, setCoordinate] = useState<{ lat: number; lng: number } | null>(
     posizione?.lat && posizione?.lng ? { lat: posizione.lat, lng: posizione.lng } : null
   )
+
+  // Immagine (collegata a MediaGalleryPicker ma mappata su immagine_path)
+  const [immaginePath, setImmaginePath] = useState<string | null>(
+    posizione?.immagine_path || posizione?.immagine_url || null
+  )
+  const [immagineUrl, setImmagineUrl] = useState<string | null>(
+    posizione?.immagine_path || posizione?.immagine_url || null
+  )
+
+  // Tags
   const [tagSelezionati, setTagSelezionati] = useState<string[]>(tagsIniziali)
-  const [competenzeState, setCompetenzeState] = useState<string[]>(competenzeSelezionate)
-  const [compKey, setCompKey] = useState(0)
+
+  // Assistente AI & Auto-Save
   const [magicText, setMagicText] = useState('')
   const [isAnalyzing, setIsAnalyzing] = useState(false)
   const [autoSaveStatus, setAutoSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle')
 
-  const inputRef = useRef<HTMLInputElement>(null)
+  const inputIndirizzoRef = useRef<HTMLInputElement>(null)
 
-  const tagsRaggruppati = tagsDisponibili?.reduce((acc: any, tag: any) => {
-    const cat = tag.categoria || 'Altro'; acc[cat] = acc[cat] || []; acc[cat].push(tag); return acc
-  }, {})
+  const tagsRaggruppati = useMemo(() => {
+    return tagsDisponibili?.reduce((acc: any, tag: any) => {
+      const cat = tag.categoria || 'Generale'
+      acc[cat] = acc[cat] || []
+      acc[cat].push(tag)
+      return acc
+    }, {})
+  }, [tagsDisponibili])
 
   const toggleGiorno = (val: string) => {
     setGiorniSelezionati(prev => prev.includes(val) ? prev.filter(g => g !== val) : [...prev, val])
@@ -74,7 +115,6 @@ export default function FormPosizioneConPreview({
     setTagSelezionati(prev => prev.includes(id) ? prev.filter(t => t !== id) : [...prev, id])
   }
 
-  // Generatore della stringa leggibile del "quando" per evitare duplicazioni di logica
   const quandoCalcolato = useMemo(() => {
     if (tipo === 'una_tantum') {
       return dataEsatta || 'Data da definire'
@@ -82,46 +122,90 @@ export default function FormPosizioneConPreview({
     return giorniSelezionati.length > 0 ? giorniSelezionati.join(', ') : 'Giorni da definire'
   }, [tipo, dataEsatta, giorniSelezionati])
 
+  // Live Mock per l'anteprima laterale
   const liveMockPosizione = useMemo(() => {
-    const selectedTagsObjects = tagsDisponibili.filter((t: any) => tagSelezionati.includes(t.id))
-    const selectedCompetenzeObjects = competenzeDisponibili.filter((c: any) => competenzeState.includes(c.id))
+    const selectedTagsObjects = tagsDisponibili
+      .filter((t: any) => tagSelezionati.includes(t.id))
+      .map((t: any) => ({
+        ...t,
+        name: t.nome || t.name,
+      }))
 
     return {
       id: currentId || 'preview',
-      titolo: titolo || 'Titolo dell\'annuncio',
+      titolo: titolo || "Titolo dell'annuncio",
       descrizione: descrizione || 'La descrizione comparirà qui in tempo reale mentre scrivi...',
-      tipo: tipo,
-      dove: dove || 'Indirizzo sede',
+      tipo,
+      modalita,
+      luogo_nome: luogoNome,
+      indirizzo_specifico: indirizzoSpecifico || 'Sede da definire',
+      comune,
+      provincia,
       quando: quandoCalcolato,
       ora_inizio: oraInizio ? `${oraInizio}:00` : null,
       ora_fine: oraFine ? `${oraFine}:00` : null,
       giorni_settimana: giorniSelezionati,
       data_esatta: dataEsatta,
-      competenze: selectedCompetenzeObjects,
       tags: selectedTagsObjects,
       stato: posizione?.stato || 'bozza',
-      immagine_url: immagineUrl,
-      immagine: { url: immagineUrl },
-      media_associazioni: immagineUrl ? { url: immagineUrl } : null
+      immagine_url: immagineUrl || immaginePath,
+      immagine_path: immaginePath,
     }
-  }, [titolo, descrizione, tipo, dove, dataEsatta, giorniSelezionati, oraInizio, oraFine, tagSelezionati, competenzeState, immagineUrl, tagsDisponibili, competenzeDisponibili, currentId, posizione, quandoCalcolato])
+  }, [
+    titolo, descrizione, tipo, modalita, luogoNome, indirizzoSpecifico, comune, provincia,
+    quandoCalcolato, oraInizio, oraFine, giorniSelezionati, dataEsatta, tagSelezionati,
+    tagsDisponibili, currentId, posizione, immagineUrl, immaginePath
+  ])
 
-  const findCoordinatesWithPlacesAPI = (addressQuery: string) => {
-    const google = (window as any).google
-    if (google?.maps?.places) {
-      const service = new google.maps.places.PlacesService(window.document.createElement('div'))
-      service.findPlaceFromQuery({ query: addressQuery, fields: ['formatted_address', 'geometry'] }, (results: any, status: any) => {
-        if (status === google.maps.places.PlacesServiceStatus.OK && results?.[0]) {
-          const loc = results[0].geometry.location
-          setCoordinate({ lat: loc.lat(), lng: loc.lng() })
-          if (results[0].formatted_address) setDove(results[0].formatted_address)
-        }
-      })
+  // Autocomplete Indirizzo Google Places
+  useEffect(() => {
+    const initAutocomplete = () => {
+      const google = (window as any).google
+      if (google?.maps?.places && inputIndirizzoRef.current) {
+        const autocomplete = new google.maps.places.Autocomplete(inputIndirizzoRef.current, {
+          types: ['address'],
+          componentRestrictions: { country: 'it' },
+          fields: ['formatted_address', 'geometry', 'address_components']
+        })
+
+        autocomplete.addListener('place_changed', () => {
+          const place = autocomplete.getPlace()
+          if (place?.formatted_address) {
+            setIndirizzoSpecifico(place.formatted_address)
+
+            if (place.address_components) {
+              for (const c of place.address_components) {
+                if (c.types.includes('locality')) setComune(c.long_name)
+                if (c.types.includes('administrative_area_level_2')) setProvincia(c.short_name)
+              }
+            }
+
+            if (place.geometry?.location) {
+              setCoordinate({
+                lat: place.geometry.location.lat(),
+                lng: place.geometry.location.lng()
+              })
+            }
+          }
+        })
+      }
     }
-  }
+
+    if ((window as any).google) {
+      initAutocomplete()
+    } else {
+      const check = setInterval(() => {
+        if ((window as any).google) {
+          initAutocomplete()
+          clearInterval(check)
+        }
+      }, 500)
+      return () => clearInterval(check)
+    }
+  }, [])
 
   // ==========================================
-  // 💾 MOTORE AUTO-SAVE A BOZZA PROTETTO
+  // AUTO-SAVE BOZZA (Campi allineati al DB)
   // ==========================================
   useEffect(() => {
     if (!titolo.trim() || isSubmitting) return
@@ -135,96 +219,113 @@ export default function FormPosizioneConPreview({
           return
         }
 
-        const payload = {
-          id: currentId || undefined,
+        const baseSlug = generaSlug(titolo) || 'bozza'
+        const randomSuffix = Math.random().toString(36).substring(2, 6)
+        const slug = `${baseSlug}-${randomSuffix}`
+
+        const payload: any = {
           associazione_id: user.id,
           titolo: titolo.trim(),
           descrizione: descrizione.trim() || 'Nessuna descrizione inserita.',
-          tipo: tipo,
-          // ✨ FIX CRITICO: Forniamo la stringa calcolata per soddisfare il vincolo NOT NULL di "quando"
+          tipo,
+          modalita,
           quando: quandoCalcolato,
-          dove: dove.trim() || 'Sede da definire',
+          indirizzo_specifico: indirizzoSpecifico.trim() || null,
+          luogo_nome: luogoNome.trim() || null,
+          comune: comune.trim() || null,
+          provincia: provincia.trim() || null,
+          lat: coordinate?.lat || null,
+          lng: coordinate?.lng || null,
           data_esatta: tipo === 'una_tantum' && dataEsatta ? dataEsatta : null,
           giorni_settimana: tipo === 'ricorrente' ? giorniSelezionati : [],
-          ora_inizio: oraInizio || null,
-          ora_fine: oraFine || null,
-          immagine_id: immagineId || null,
-          stato: posizione?.stato || 'bozza'
+          ora_inizio: oraInizio ? `${oraInizio}:00` : null,
+          ora_fine: oraFine ? `${oraFine}:00` : null,
+          immagine_path: immaginePath || null,
+          stato: posizione?.stato || 'bozza',
         }
 
         if (currentId) {
-          const { error } = await supabase.from('posizioni').update(payload).eq('id', currentId)
+          const { error } = await supabase
+            .from('posizioni')
+            .update(payload)
+            .eq('id', currentId)
+            .eq('associazione_id', user.id)
+
           if (error) throw error
         } else {
-          const { data, error } = await supabase.from('posizioni').insert(payload).select('id').single()
+          payload.slug = slug
+          const { data, error } = await supabase
+            .from('posizioni')
+            .insert(payload)
+            .select('id')
+            .single()
+
           if (error) throw error
           if (data?.id) setCurrentId(data.id)
         }
+
         setAutoSaveStatus('saved')
       } catch (err) {
-        console.error("Errore critico durante l'auto-save della bozza:", err)
+        console.error("Errore durante l'auto-save della bozza:", err)
         setAutoSaveStatus('idle')
       }
     }, 2000)
 
     return () => clearTimeout(timer)
-  }, [titolo, descrizione, tipo, dove, dataEsatta, giorniSelezionati, oraInizio, oraFine, immagineId, currentId, isSubmitting, posizione, quandoCalcolato])
+  }, [
+    titolo, descrizione, tipo, modalita, indirizzoSpecifico, luogoNome, comune, provincia,
+    coordinate, dataEsatta, giorniSelezionati, oraInizio, oraFine, immaginePath,
+    currentId, isSubmitting, posizione, quandoCalcolato, supabase
+  ])
 
-  useEffect(() => {
-    const initAutocomplete = () => {
-      const google = (window as any).google
-      if (google && inputRef.current) {
-        const autocomplete = new google.maps.places.Autocomplete(inputRef.current, {
-          types: ['address'], componentRestrictions: { country: 'it' }, fields: ['formatted_address', 'geometry'] 
-        })
-        autocomplete.addListener('place_changed', () => {
-          const place = autocomplete.getPlace()
-          if (place?.formatted_address) {
-            setDove(place.formatted_address)
-            if (place.geometry?.location) setCoordinate({ lat: place.geometry.location.lat(), lng: place.geometry.location.lng() })
-          }
-        })
-      }
-    }
-    if ((window as any).google) initAutocomplete(); else {
-      const check = setInterval(() => { if ((window as any).google) { initAutocomplete(); clearInterval(check) } }, 500)
-      return () => clearInterval(check)
-    }
-  }, [])
-
+  // AI Magic Parse
   const handleMagicParse = async () => {
     setIsAnalyzing(true)
     try {
-      const result = await analizzaTestoPosizione(magicText, tagsDisponibili, competenzeDisponibili)
+      const result = await analizzaTestoPosizione(magicText, tagsDisponibili, [])
       if (result.success && result.data) {
         const d = result.data
         if (d.titolo) setTitolo(d.titolo)
         if (d.descrizione) setDescrizione(d.descrizione)
-        if (d.giorni_settimana?.length > 0) { setTipo('ricorrente'); setGiorniSelezionati(d.giorni_settimana) }
-        else if (d.tipo) setTipo(d.tipo)
+        if (d.giorni_settimana?.length > 0) { 
+          setTipo('ricorrente')
+          setGiorniSelezionati(d.giorni_settimana) 
+        } else if (d.tipo) {
+          setTipo(d.tipo)
+        }
         if (d.data_esatta) setDataEsatta(d.data_esatta)
         if (d.ora_inizio) setOraInizio(d.ora_inizio)
         if (d.ora_fine) setOraFine(d.ora_fine)
-        if (d.dove) { setDove(d.dove); findCoordinatesWithPlacesAPI(d.dove) }
-        if (Array.isArray(d.tags)) setTagSelezionati(d.tags)
-        if (Array.isArray(d.competenze)) { setCompetenzeState(d.competenze); setCompKey(p => p + 1) }
-        
-        if (d.immagine_id) {
-          setImmagineId(d.immagine_id)
-          const matchedMedia = mediaDisponibili.find((m: any) => String(m.id) === String(d.immagine_id))
-          if (matchedMedia) setImmagineUrl(matchedMedia.url)
+        if (d.indirizzo_specifico || d.dove) {
+          setIndirizzoSpecifico(d.indirizzo_specifico || d.dove)
         }
+        if (Array.isArray(d.tags)) setTagSelezionati(d.tags)
         setMagicText('')
-      } else alert(result.error)
-    } finally { setIsAnalyzing(false) }
+      } else if (result.error) {
+        alert(result.error)
+      }
+    } finally { 
+      setIsAnalyzing(false) 
+    }
   }
 
   return (
     <div className="w-full flex flex-col lg:flex-row items-start gap-12 relative">
       
+      {/* Indicatore Auto-Save */}
       <div className="absolute -top-16 right-0 text-[11px] font-medium text-slate-400 flex items-center gap-1.5 pointer-events-none">
-        {autoSaveStatus === 'saving' && <><Loader2 className="w-3 h-3 animate-spin text-slate-500" /> Salvataggio bozza...</>}
-        {autoSaveStatus === 'saved' && <><span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span> Modifiche salvate automaticamente</>}
+        {autoSaveStatus === 'saving' && (
+          <>
+            <Loader2 className="w-3 h-3 animate-spin text-slate-500" />
+            <span>Salvataggio bozza...</span>
+          </>
+        )}
+        {autoSaveStatus === 'saved' && (
+          <>
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+            <span>Modifiche salvate automaticamente</span>
+          </>
+        )}
       </div>
 
       <div className="flex-1 w-full space-y-10">
@@ -236,7 +337,7 @@ export default function FormPosizioneConPreview({
             <textarea 
               value={magicText}
               onChange={(e) => setMagicText(e.target.value)}
-              placeholder="Incolla qui un testo grezzo e lascia che l'AI compili la scheda..."
+              placeholder="Incolla qui un testo descrittivo e lascia che l'AI compili la scheda..."
               className="w-full bg-transparent text-white placeholder:text-slate-500 outline-none resize-none font-medium text-xs md:text-sm h-6 focus:h-20 transition-all leading-relaxed"
             />
           </div>
@@ -255,12 +356,13 @@ export default function FormPosizioneConPreview({
             setIsSubmitting(true)
             try { 
               fd.set('stato', 'pubblicata')
-              // Passiamo il quando compilato anche al Server Action finale
               fd.set('quando', quandoCalcolato)
               if (currentId) fd.set('id', currentId)
               await salvaAction(fd)
-              window.location.assign('/app/associazione/posizioni') 
-            } catch (e) { 
+            } catch (e: any) { 
+              if (e?.message?.includes('NEXT_REDIRECT') || e?.digest?.includes('NEXT_REDIRECT')) {
+                throw e
+              }
               console.error(e)
               setIsSubmitting(false) 
             }
@@ -269,19 +371,30 @@ export default function FormPosizioneConPreview({
         >
           {/* TIPO OPPORTUNITÀ */}
           <div className="flex border-b border-slate-100 gap-6">
-            <button type="button" onClick={() => setTipo('una_tantum')} className={`pb-2.5 text-xs font-bold uppercase tracking-wider border-b-2 transition-colors ${tipo === 'una_tantum' ? 'border-slate-900 text-slate-900' : 'border-transparent text-slate-400 hover:text-slate-600'}`}>
+            <button 
+              type="button" 
+              onClick={() => setTipo('una_tantum')} 
+              className={`pb-2.5 text-xs font-bold uppercase tracking-wider border-b-2 transition-colors ${tipo === 'una_tantum' ? 'border-slate-900 text-slate-900' : 'border-transparent text-slate-400 hover:text-slate-600'}`}
+            >
               Evento Singolo
             </button>
-            <button type="button" onClick={() => setTipo('ricorrente')} className={`pb-2.5 text-xs font-bold uppercase tracking-wider border-b-2 transition-colors ${tipo === 'ricorrente' ? 'border-slate-900 text-slate-900' : 'border-transparent text-slate-400 hover:text-slate-600'}`}>
+            <button 
+              type="button" 
+              onClick={() => setTipo('ricorrente')} 
+              className={`pb-2.5 text-xs font-bold uppercase tracking-wider border-b-2 transition-colors ${tipo === 'ricorrente' ? 'border-slate-900 text-slate-900' : 'border-transparent text-slate-400 hover:text-slate-600'}`}
+            >
               Attività Continuativa
             </button>
             <input type="hidden" name="tipo" value={tipo} />
+            <input type="hidden" name="modalita" value={modalita} />
           </div>
 
           {/* TITOLO E DESCRIZIONE */}
           <div className="space-y-6">
             <div className="space-y-1">
-              <label className="text-[10px] font-bold uppercase text-slate-400 tracking-wider pl-0.5">Titolo della posizione</label>
+              <label className="text-[10px] font-bold uppercase text-slate-400 tracking-wider pl-0.5">
+                Titolo dell'annuncio
+              </label>
               <input 
                 name="titolo" 
                 value={titolo} 
@@ -293,7 +406,9 @@ export default function FormPosizioneConPreview({
             </div>
 
             <div className="space-y-1">
-              <label className="text-[10px] font-bold uppercase text-slate-400 tracking-wider pl-0.5">Descrizione delle attività</label>
+              <label className="text-[10px] font-bold uppercase text-slate-400 tracking-wider pl-0.5">
+                Descrizione delle attività
+              </label>
               <textarea 
                 name="descrizione" 
                 value={descrizione} 
@@ -309,7 +424,9 @@ export default function FormPosizioneConPreview({
           <div className="py-2 border-b border-slate-100">
             {tipo === 'una_tantum' ? (
               <div className="flex flex-col sm:flex-row sm:items-center gap-4 justify-between">
-                <span className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5"><Calendar className="w-3.5 h-3.5" /> Giorno dell'evento</span>
+                <span className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+                  <Calendar className="w-3.5 h-3.5" /> Giorno dell'evento
+                </span>
                 <input 
                   type="date" 
                   name="data_esatta" 
@@ -321,7 +438,9 @@ export default function FormPosizioneConPreview({
               </div>
             ) : (
               <div className="space-y-3">
-                <span className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5"><Calendar className="w-3.5 h-3.5" /> Giorni ricorrenti della settimana</span>
+                <span className="text-xs font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+                  <Calendar className="w-3.5 h-3.5" /> Giorni ricorrenti della settimana
+                </span>
                 <div className="flex flex-wrap gap-2">
                   {GIORNI.map(g => {
                     const isSelected = giorniSelezionati.includes(g.valore)
@@ -342,45 +461,79 @@ export default function FormPosizioneConPreview({
             <input type="hidden" name="giorni_settimana" value={JSON.stringify(giorniSelezionati)} />
           </div>
 
-          {/* ORARI E LUOGO CORRETTI SU UNA RIGA */}
+          {/* ORARI E INDIRIZZO SPECIFICO */}
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 pt-2">
             <div className="space-y-1.5">
-              <label className="text-[10px] font-bold uppercase text-slate-400 tracking-wider flex items-center gap-1"><Clock className="w-3 h-3" /> Orari di attività</label>
+              <label className="text-[10px] font-bold uppercase text-slate-400 tracking-wider flex items-center gap-1">
+                <Clock className="w-3 h-3" /> Orari di attività
+              </label>
               <div className="flex items-center gap-2 bg-slate-50 border border-slate-100 p-2 rounded-xl">
-                <input type="time" name="ora_inizio" value={oraInizio} onChange={e => setOraInizio(e.target.value)} className="w-full text-center bg-white border border-slate-200 rounded-lg py-1 px-2 font-bold text-xs sm:text-sm text-slate-800 outline-none focus:border-slate-900" required />
+                <input 
+                  type="time" 
+                  name="ora_inizio" 
+                  value={oraInizio} 
+                  onChange={e => setOraInizio(e.target.value)} 
+                  className="w-full text-center bg-white border border-slate-200 rounded-lg py-1 px-2 font-bold text-xs sm:text-sm text-slate-800 outline-none focus:border-slate-900" 
+                  required 
+                />
                 <span className="text-slate-300 font-bold">-</span>
-                <input type="time" name="ora_fine" value={oraFine} onChange={e => setOraFine(e.target.value)} className="w-full text-center bg-white border border-slate-200 rounded-lg py-1 px-2 font-bold text-xs sm:text-sm text-slate-800 outline-none focus:border-slate-900" required />
+                <input 
+                  type="time" 
+                  name="ora_fine" 
+                  value={oraFine} 
+                  onChange={e => setOraFine(e.target.value)} 
+                  className="w-full text-center bg-white border border-slate-200 rounded-lg py-1 px-2 font-bold text-xs sm:text-sm text-slate-800 outline-none focus:border-slate-900" 
+                  required 
+                />
               </div>
             </div>
 
             <div className="space-y-1.5">
-              <label className="text-[10px] font-bold uppercase text-slate-400 tracking-wider flex items-center gap-1"><MapPin className="w-3 h-3" /> Sede di svolgimento</label>
-              <input ref={inputRef} name="dove" value={dove} onChange={e => setDove(e.target.value)} placeholder="Cerca indirizzo o comune..." className="w-full p-3 border border-slate-200 rounded-xl outline-none focus:border-slate-900 text-xs sm:text-sm text-slate-800 font-semibold placeholder:text-slate-300 placeholder:font-normal h-[54px]" required />
-              {coordinate && <><input type="hidden" name="lat" value={coordinate.lat} /><input type="hidden" name="lng" value={coordinate.lng} /></>}
+              <label className="text-[10px] font-bold uppercase text-slate-400 tracking-wider flex items-center gap-1">
+                <MapPin className="w-3 h-3" /> Indirizzo o sede specifica
+              </label>
+              <input 
+                ref={inputIndirizzoRef} 
+                name="indirizzo_specifico" 
+                value={indirizzoSpecifico} 
+                onChange={e => setIndirizzoSpecifico(e.target.value)} 
+                placeholder="Cerca via, piazza o sede..." 
+                className="w-full p-3 border border-slate-200 rounded-xl outline-none focus:border-slate-900 text-xs sm:text-sm text-slate-800 font-semibold placeholder:text-slate-300 placeholder:font-normal h-[54px]" 
+                required 
+              />
+              <input type="hidden" name="comune" value={comune} />
+              <input type="hidden" name="provincia" value={provincia} />
+              {coordinate && (
+                <>
+                  <input type="hidden" name="lat" value={coordinate.lat} />
+                  <input type="hidden" name="lng" value={coordinate.lng} />
+                </>
+              )}
             </div>
           </div>
 
-          {/* CARICAMENTO COPERTINA */}
+          {/* MEDIA GALLERY RIPRISTINATA */}
           <div className="space-y-2 pt-4 border-t border-slate-100">
-            <label className="text-[10px] font-bold uppercase text-slate-400 tracking-wider block pl-0.5">Media di Copertina</label>
+            <label className="text-[10px] font-bold uppercase text-slate-400 tracking-wider block pl-0.5">
+              Media di Copertina
+            </label>
             <MediaGalleryPicker 
               mediaIniziali={mediaDisponibili} 
               onSelect={(id: string | null, url?: string | null) => {
-                setImmagineId(id)
-                if (url) {
-                  setImmagineUrl(url)
-                } else {
-                  const selectedMedia = mediaDisponibili.find((m: any) => String(m.id) === String(id))
-                  setImmagineUrl(selectedMedia ? selectedMedia.url : null)
-                }
+                const finalUrl = url || mediaDisponibili.find((m: any) => String(m.id) === String(id))?.url || (id?.startsWith('http') ? id : null)
+                setImmagineUrl(finalUrl)
+                setImmaginePath(finalUrl || id || null)
               }} 
             />
-            <input type="hidden" name="immagine_id" value={immagineId || ''} />
+            <input type="hidden" name="immagine_path" value={immaginePath || immagineUrl || ''} />
           </div>
 
-          {/* ASSEGNAZIONE TAG E COMPETENZE */}
+          {/* ASSEGNAZIONE TAG TEMATICI */}
           <div className="space-y-6 pt-6 border-t border-slate-100">
             <div className="space-y-4">
+              <label className="text-[10px] font-bold uppercase text-slate-400 tracking-wider block pl-0.5">
+                Ambiti e Categorie
+              </label>
               {tagsRaggruppati && Object.entries(tagsRaggruppati).map(([cat, tags]: any) => (
                 <div key={cat} className="space-y-2">
                   <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider block pl-0.5">{cat}</span>
@@ -388,9 +541,18 @@ export default function FormPosizioneConPreview({
                     {tags.map((t: any) => {
                       const isSelected = tagSelezionati.includes(t.id)
                       return (
-                        <button key={t.id} type="button" onClick={() => toggleTag(t.id)} className={`transition-all rounded-lg text-left relative ${isSelected ? 'ring-2 ring-slate-900 shadow-sm scale-[1.01]' : 'opacity-50 hover:opacity-100'}`}>
-                          <TagBadge nome={t.name} categoria={t.categoria} size="md" />
-                          {isSelected && <span className="absolute -top-1 -right-1 bg-slate-900 text-white p-0.5 rounded-full"><Check className="w-2 h-2" /></span>}
+                        <button 
+                          key={t.id} 
+                          type="button" 
+                          onClick={() => toggleTag(t.id)} 
+                          className={`transition-all rounded-lg text-left relative ${isSelected ? 'ring-2 ring-slate-900 shadow-sm scale-[1.01]' : 'opacity-50 hover:opacity-100'}`}
+                        >
+                          <TagBadge nome={t.nome || t.name} categoria={t.categoria} size="md" />
+                          {isSelected && (
+                            <span className="absolute -top-1 -right-1 bg-slate-900 text-white p-0.5 rounded-full">
+                              <Check className="w-2 h-2" />
+                            </span>
+                          )}
                         </button>
                       )
                     })}
@@ -399,12 +561,6 @@ export default function FormPosizioneConPreview({
               ))}
             </div>
             <input type="hidden" name="tags" value={JSON.stringify(tagSelezionati)} />
-
-            <div className="space-y-2 pt-4 border-t border-slate-100">
-              <label className="text-[10px] font-bold uppercase text-slate-400 tracking-wider block pl-0.5">Competenze trasversali cercate</label>
-              <CompetenzaSelector key={compKey} allCompetenze={competenzeDisponibili} competenzeIniziali={competenzeState} onChange={setCompetenzeState} />
-              <input type="hidden" name="competenze" value={JSON.stringify(competenzeState)} />
-            </div>
           </div>
 
           {/* BOTTONE PUBBLICAZIONE */}
@@ -413,12 +569,12 @@ export default function FormPosizioneConPreview({
             disabled={isSubmitting} 
             className={`w-full py-4 rounded-xl font-bold text-sm sm:text-base text-white transition-all shadow-sm ${isSubmitting ? 'bg-slate-100 text-slate-400 cursor-not-allowed' : 'bg-slate-900 hover:bg-black active:scale-[0.99]'}`}
           >
-            {isSubmitting ? "Pubblicazione in corso..." : (posizione ? 'Rilascia aggiornamento' : 'Rilascia e pubblica annuncio')}
+            {isSubmitting ? 'Pubblicazione in corso...' : (posizione ? 'Rilascia aggiornamento' : 'Rilascia e pubblica annuncio')}
           </button>
         </form>
       </div>
 
-      {/* COLONNA DESTRA: Sticky Live Preview */}
+      {/* ANTEPRIMA STICKY */}
       <div className="hidden lg:block w-[320px] sticky top-28 shrink-0">
         <div className="space-y-4">
           <div className="flex items-center gap-1.5 text-[10px] font-black uppercase text-slate-400 tracking-widest pl-1">
@@ -428,7 +584,7 @@ export default function FormPosizioneConPreview({
             <PosizioneCard posizione={liveMockPosizione} ruolo="volontario" layout="vertical" />
           </div>
           <p className="text-[11px] text-slate-400 font-normal leading-relaxed text-center px-4">
-            Così apparirà l'opportunità sulla tua bacheca e nella mappa di esplorazione dei volontari una volta pubblicata.
+            Così apparirà l'opportunità sulla tua bacheca e nella mappa dei volontari una volta pubblicata.
           </p>
         </div>
       </div>
