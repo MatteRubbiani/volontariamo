@@ -1,63 +1,86 @@
-import { createServerClient } from '@supabase/ssr'
-import { cookies } from 'next/headers'
-import { redirect } from 'next/navigation'
 import Link from 'next/link'
 
-export default async function MieCandidature() {
-  const cookieStore = await cookies()
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        getAll() { return cookieStore.getAll() }
+// ============================================================================
+// MOCK DATA: CANDIDATURE INVIATE DAL VOLONTARIO
+// ============================================================================
+const MOCK_CANDIDATURE = [
+  {
+    id: 'cand-1',
+    stato: 'accettato',
+    created_at: new Date(Date.now() - 1000 * 60 * 60 * 24 * 2).toISOString(), // 2 giorni fa
+    posizione_id: 'pos-vol-1',
+    posizioni: {
+      id: 'pos-vol-1',
+      titolo: 'Supporto compiti e tutoraggio pomeridiano',
+      dove: 'Via dei Rospigliosi 14, Milano',
+      quando: 'Ogni martedì e giovedì',
+      tipo: 'ricorrente',
+      immagine_url: 'https://images.unsplash.com/photo-1509062522246-3755977927d7?w=600&auto=format&fit=crop&q=80',
+      associazioni: {
+        denominazione: 'Spazio Aperto Servizi ETS',
+        slug: 'spazio-aperto-servizi'
       }
     }
-  )
-
-  // 1. Controllo Utente
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user) redirect('/auth/login')
-
-  // 2. Recuperiamo le candidature unendo i dati della posizione (INCLUSA LA FOTO)
-  const { data: candidature, error } = await supabase
-    .from('candidature')
-    .select(`
-      id,
-      stato,
-      created_at,
-      posizione_id,
-      posizioni (
-        titolo,
-        dove,
-        quando,
-        tipo,
-        media_associazioni(url),
-        associazioni(nome)
-      )
-    `)
-    .eq('volontario_id', user.id)
-    .order('created_at', { ascending: false })
-
-  if (error) {
-    console.error("Errore recupero candidature:", error.message)
+  },
+  {
+    id: 'cand-2',
+    stato: 'in_attesa',
+    created_at: new Date(Date.now() - 1000 * 60 * 60 * 18).toISOString(), // 18 ore fa
+    posizione_id: 'pos-vol-2',
+    posizioni: {
+      id: 'pos-vol-2',
+      titolo: 'Distribuzione pasti e accoglienza serale',
+      dove: 'Piazza San Sepolcro 3, Milano',
+      quando: 'Venerdì e Sabato sera',
+      tipo: 'ricorrente',
+      immagine_url: 'https://images.unsplash.com/photo-1593113598332-cd288d649433?w=600&auto=format&fit=crop&q=80',
+      associazioni: {
+        denominazione: 'Pane Quotidiano Onlus',
+        slug: 'pane-quotidiano'
+      }
+    }
+  },
+  {
+    id: 'cand-3',
+    stato: 'rifiutato',
+    created_at: new Date(Date.now() - 1000 * 60 * 60 * 24 * 7).toISOString(), // 7 giorni fa
+    posizione_id: 'pos-vol-6',
+    posizioni: {
+      id: 'pos-vol-6',
+      titolo: 'Grande colletta alimentare d’autunno',
+      dove: 'Via Carnia 24, Milano',
+      quando: '24 Ottobre 2026',
+      tipo: 'una_tantum',
+      immagine_url: 'https://images.unsplash.com/photo-1488521787991-ed7bbaae773c?w=600&auto=format&fit=crop&q=80',
+      associazioni: {
+        denominazione: 'Banco Alimentare della Lombardia',
+        slug: 'banco-alimentare-lombardia'
+      }
+    }
   }
+]
 
-  // Helper per le date calde
+export default async function MieCandidature() {
+  // Utilizziamo l'array mock direttamente (sostituibile con Supabase al momento del collegamento)
+  const candidature = MOCK_CANDIDATURE
+
+  // Helper per le date
   const formattaData = (dataString: string | null, tipo: string) => {
-    if (!dataString) return 'Data da definire';
+    if (!dataString) return 'Data da definire'
     if (tipo === 'una_tantum') {
       try {
-        const dateObj = new Date(dataString);
-        return dateObj.toLocaleDateString('it-IT', { day: 'numeric', month: 'long', year: 'numeric' });
-      } catch (e) {
-        return dataString;
+        const dateObj = new Date(dataString)
+        if (!isNaN(dateObj.getTime())) {
+          return dateObj.toLocaleDateString('it-IT', { day: 'numeric', month: 'long', year: 'numeric' })
+        }
+      } catch {
+        return dataString
       }
     }
-    return `Ogni ${dataString}`;
+    return dataString.toLowerCase().startsWith('ogni') ? dataString : `Ogni ${dataString}`
   }
 
-  // Stili e label premium per gli stati (Senza Emoji)
+  // Normalizzazione stato
   const normalizzaStato = (stato: string) => {
     if (stato === 'accettata') return 'accettato'
     if (stato === 'rifiutata') return 'rifiutato'
@@ -119,16 +142,16 @@ export default async function MieCandidature() {
           </div>
         ) : (
           <div className="space-y-5">
-            {candidature.map((cand: any) => {
-              const pos = cand.posizioni;
-              if (!pos) return null; // Salta se la posizione è stata eliminata dal DB
+            {candidature.map((cand) => {
+              const pos = cand.posizioni
+              if (!pos) return null
 
-              const imgUrl = pos.media_associazioni?.url;
-              const iniziale = pos.titolo ? pos.titolo.charAt(0).toUpperCase() : 'V';
-              const nomeAssoc = Array.isArray(pos.associazioni) ? pos.associazioni[0]?.nome : pos.associazioni?.nome || 'Associazione';
-              const statoNormalizzato = normalizzaStato(cand.stato);
-              const status = getStatusProps(statoNormalizzato);
-              const dataFormattata = formattaData(pos.quando, pos.tipo);
+              const imgUrl = pos.immagine_url
+              const iniziale = pos.titolo ? pos.titolo.charAt(0).toUpperCase() : 'V'
+              const nomeAssoc = pos.associazioni?.denominazione || 'Associazione'
+              const statoNormalizzato = normalizzaStato(cand.stato)
+              const status = getStatusProps(statoNormalizzato)
+              const dataFormattata = formattaData(pos.quando, pos.tipo)
 
               return (
                 <div key={cand.id} className="bg-white p-5 md:p-6 rounded-[2rem] shadow-[0_8px_30px_rgba(0,0,0,0.04)] hover:shadow-[0_12px_40px_rgba(0,0,0,0.08)] border border-slate-100 transition-all duration-300 flex flex-col md:flex-row gap-6">
@@ -136,6 +159,7 @@ export default async function MieCandidature() {
                   {/* 📸 MINIATURA IMMAGINE */}
                   <div className="w-full md:w-36 h-48 md:h-36 flex-shrink-0 rounded-2xl overflow-hidden bg-slate-100 relative">
                     {imgUrl ? (
+                      // eslint-disable-next-line @next/next/no-img-element
                       <img src={imgUrl} alt={pos.titolo} className="w-full h-full object-cover" loading="lazy" />
                     ) : (
                       <div className="w-full h-full flex items-center justify-center bg-slate-100">
@@ -143,7 +167,7 @@ export default async function MieCandidature() {
                       </div>
                     )}
                     
-                    {/* Badge tipo (Mobile overlap, Desktop absolute) */}
+                    {/* Badge tipo */}
                     <div className="absolute top-3 left-3 bg-white/90 backdrop-blur-md px-2.5 py-1 rounded-md text-[10px] font-bold text-slate-700 uppercase tracking-widest shadow-sm">
                       {pos.tipo === 'una_tantum' ? 'Singolo' : 'Ricorrente'}
                     </div>
@@ -171,11 +195,16 @@ export default async function MieCandidature() {
 
                     <div className="flex flex-wrap items-center gap-x-6 gap-y-2 mt-auto">
                       <div className="flex items-center gap-2 text-sm text-slate-600 font-medium">
-                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4 text-slate-400"><path strokeLinecap="round" strokeLinejoin="round" d="M15 10.5a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" /><path strokeLinecap="round" strokeLinejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1 1 15 0Z" /></svg>
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4 text-slate-400">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M15 10.5a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z" />
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 10.5c0 7.142-7.5 11.25-7.5 11.25S4.5 17.642 4.5 10.5a7.5 7.5 0 1 1 15 0Z" />
+                        </svg>
                         <span className="truncate max-w-[150px] md:max-w-xs">{pos.dove}</span>
                       </div>
                       <div className="flex items-center gap-2 text-sm text-slate-600 font-medium">
-                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4 text-slate-400"><path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0v-7.5A2.25 2.25 0 0 1 5.25 9h13.5A2.25 2.25 0 0 1 21 11.25v7.5" /></svg>
+                        <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" strokeWidth={1.5} stroke="currentColor" className="w-4 h-4 text-slate-400">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M6.75 3v2.25M17.25 3v2.25M3 18.75V7.5a2.25 2.25 0 0 1 2.25-2.25h13.5A2.25 2.25 0 0 1 21 7.5v11.25m-18 0A2.25 2.25 0 0 0 5.25 21h13.5A2.25 2.25 0 0 0 21 18.75m-18 0v-7.5A2.25 2.25 0 0 1 5.25 9h13.5A2.25 2.25 0 0 1 21 11.25v7.5" />
+                        </svg>
                         <span className="capitalize">{dataFormattata}</span>
                       </div>
                     </div>
