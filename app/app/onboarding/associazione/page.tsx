@@ -29,6 +29,20 @@ type AssociazioneFormState = {
   tags: string[];
 }
 
+interface TagItem {
+  id: string;
+  name: string;
+}
+
+interface ClaimMatchData {
+  denominazione: string;
+  codice_fiscale: string;
+  comune: string;
+  provincia: string;
+  forma_giuridica: string;
+  claimed: boolean;
+}
+
 function AssociazioneWizardForm() {
   const router = useRouter()
   const searchParams = useSearchParams()
@@ -40,7 +54,7 @@ function AssociazioneWizardForm() {
 
   const [step, setStep] = useState<1 | 2 | 3>(1)
   const [isSubmitting, setIsSubmitting] = useState(false)
-  const [tagsCatalog, setTagsCatalog] = useState<{id: string, name: string}[]>([])
+  const [tagsCatalog, setTagsCatalog] = useState<TagItem[]>([])
   const [tagQuery, setTagQuery] = useState('')
   
   const [isSearching, setIsSearching] = useState(false)
@@ -55,11 +69,16 @@ function AssociazioneWizardForm() {
     dichiarazione_legale: false, consenso_privacy: false, consenso_newsletter: false, tags: []
   })
 
-  // Caricamento Tag
+  // Caricamento Tag (colonna reale: 'nome')
   useEffect(() => {
     async function loadTags() {
-      const { data } = await supabase.from('tags').select('id,name').order('name')
-      if (data) setTagsCatalog(data)
+      const { data } = await (supabase.from('tags') as any)
+        .select('id, nome')
+        .order('nome')
+
+      if (data) {
+        setTagsCatalog(data.map((t: any) => ({ id: t.id, name: t.nome || t.name })))
+      }
     }
     loadTags()
   }, [supabase])
@@ -70,44 +89,52 @@ function AssociazioneWizardForm() {
 
     const fetchClaimData = async () => {
       setIsSearching(true)
-      
-      // A. Controlla prima in 'associazioni'
-      let { data } = await supabase
-        .from('associazioni')
-        .select('denominazione, codice_fiscale, comune, provincia, forma_giuridica, claimed')
+      let claimRecord: ClaimMatchData | null = null
+
+      // A. Controlla prima in 'associazioni' (usando colonne reali)
+      const { data: assocData } = await (supabase.from('associazioni') as any)
+        .select('denominazione, codice_fiscale, comune_legale, provincia_legale, forma_giuridica, is_verificata')
         .eq('id', claimId)
         .maybeSingle()
 
-      // B. Se non presente, controlla in 'runts_import'
-      if (!data) {
-        const runtsRes = await supabase
-          .from('runts_import')
+      if (assocData) {
+        claimRecord = {
+          denominazione: assocData.denominazione || '',
+          codice_fiscale: assocData.codice_fiscale || '',
+          comune: assocData.comune_legale || '',
+          provincia: assocData.provincia_legale || '',
+          forma_giuridica: assocData.forma_giuridica || 'ETS',
+          claimed: assocData.is_verificata ?? true
+        }
+      } else {
+        // B. Se non presente, controlla in 'runts_import'
+        const { data: runtsData } = await (supabase.from('runts_import') as any)
           .select('denominazione, codice_fiscale, comune, provincia, sezione_runts')
           .eq('id', claimId)
           .maybeSingle()
         
-        if (runtsRes.data) {
-          data = { 
-            denominazione: runtsRes.data.denominazione,
-            codice_fiscale: runtsRes.data.codice_fiscale,
-            comune: runtsRes.data.comune,
-            provincia: runtsRes.data.provincia,
-            forma_giuridica: runtsRes.data.sezione_runts,
+        if (runtsData) {
+          claimRecord = { 
+            denominazione: runtsData.denominazione || '',
+            codice_fiscale: runtsData.codice_fiscale || '',
+            comune: runtsData.comune || '',
+            provincia: runtsData.provincia || '',
+            forma_giuridica: runtsData.sezione_runts || 'ETS',
             claimed: false 
           }
         }
       }
 
-      if (data) {
-        setRuntsMatch({ found: true, claimed: data.claimed, name: data.denominazione })
-        if (!data.claimed) {
+      if (claimRecord) {
+        setRuntsMatch({ found: true, claimed: claimRecord.claimed, name: claimRecord.denominazione })
+        if (!claimRecord.claimed) {
           setFormData(prev => ({
             ...prev,
-            codice_fiscale: data.codice_fiscale || prev.codice_fiscale,
-            denominazione: data.denominazione || prev.denominazione,
-            comune: data.comune || prev.comune,
-            provincia: data.provincia || prev.provincia,
-            forma_giuridica: data.forma_giuridica || prev.forma_giuridica
+            codice_fiscale: claimRecord!.codice_fiscale || prev.codice_fiscale,
+            denominazione: claimRecord!.denominazione || prev.denominazione,
+            comune: claimRecord!.comune || prev.comune,
+            provincia: claimRecord!.provincia || prev.provincia,
+            forma_giuridica: claimRecord!.forma_giuridica || prev.forma_giuridica
           }))
         }
       }
@@ -117,7 +144,7 @@ function AssociazioneWizardForm() {
     fetchClaimData()
   }, [claimId, supabase])
 
-  // 🟢 2. RICERCA AUTOMATICA DA DIGITAZIONE MANUAL CF (se claim_id non è presente)
+  // 🟢 2. RICERCA AUTOMATICA DA DIGITAZIONE MANUALE CF
   useEffect(() => {
     if (claimId) return
 
@@ -125,10 +152,11 @@ function AssociazioneWizardForm() {
     if (cf.length === 11) {
       const searchRunts = async () => {
         setIsSearching(true)
-        const { data } = await supabase.rpc('verifica_codice_fiscale_runts', { cf_input: cf })
+        const { data } = await (supabase.rpc as any)('verifica_codice_fiscale_runts', { cf_input: cf })
         
-        if (data && data.length > 0) {
-          const res = data[0]
+        const results = data as any[] | null
+        if (results && results.length > 0) {
+          const res = results[0]
           if (res.trovato) {
             setRuntsMatch({ found: true, claimed: res.gia_rivendicato, name: res.denominazione })
             if (!res.gia_rivendicato) {
@@ -143,6 +171,8 @@ function AssociazioneWizardForm() {
           } else {
             setRuntsMatch({ found: false, claimed: false })
           }
+        } else {
+          setRuntsMatch({ found: false, claimed: false })
         }
         setIsSearching(false)
       }
@@ -156,7 +186,7 @@ function AssociazioneWizardForm() {
   useEffect(() => {
     if (step !== 2) return
     const initGoogleAutocomplete = () => {
-      const google = (window as any).google
+      const google = typeof window !== 'undefined' ? (window as any).google : null
       if (google && googleInputRef.current) {
         const autocomplete = new google.maps.places.Autocomplete(googleInputRef.current, {
           types: ['address'], componentRestrictions: { country: 'it' }, fields: ['address_components', 'formatted_address', 'geometry'] 
@@ -183,11 +213,11 @@ function AssociazioneWizardForm() {
         })
       }
     }
-    const google = (window as any).google
+    const google = typeof window !== 'undefined' ? (window as any).google : null
     if (google?.maps?.places) initGoogleAutocomplete()
     else {
       const interval = setInterval(() => {
-        if ((window as any).google?.maps?.places) { initGoogleAutocomplete(); clearInterval(interval) }
+        if ((window as any)?.google?.maps?.places) { initGoogleAutocomplete(); clearInterval(interval) }
       }, 300)
       return () => clearInterval(interval)
     }
@@ -234,7 +264,7 @@ function AssociazioneWizardForm() {
           <input type="hidden" name="lat" value={formData.lat} />
           <input type="hidden" name="lng" value={formData.lng} />
 
-          {/* ================= STEP 1: ANAGRAFICA RUNTS BLOCCATA ================= */}
+          {/* ================= STEP 1: ANAGRAFICA RUNTS ================= */}
           {step === 1 && (
             <div className="flex flex-col gap-5 sm:gap-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
               <div className="space-y-1.5">
@@ -280,10 +310,9 @@ function AssociazioneWizardForm() {
                   </div>
                 )}
 
-                {/* 🔴 SE TROVATO NEL RUNTS: DENOMINAZIONE E FORMA GIURIDICA BLOCCATE */}
+                {/* SE TROVATO NEL RUNTS: DENOMINAZIONE E FORMA GIURIDICA BLOCCATE */}
                 {runtsMatch?.found ? (
                   <div className="space-y-3 mt-1">
-                    {/* Denominazione Bloccata */}
                     <div className="relative">
                       <input 
                         type="text" 
@@ -297,7 +326,6 @@ function AssociazioneWizardForm() {
                     </div>
 
                     <div className="grid grid-cols-2 gap-3 sm:gap-4">
-                      {/* Forma Giuridica Bloccata */}
                       <div className="relative">
                         <input 
                           type="text" 
@@ -308,7 +336,6 @@ function AssociazioneWizardForm() {
                         <Lock className="w-3.5 h-3.5 text-slate-400 absolute right-3.5 top-4" />
                       </div>
 
-                      {/* Email Ufficiale (Compilabile dal referente) */}
                       <input 
                         type="email" 
                         placeholder="Email Ufficiale *" 
@@ -320,7 +347,7 @@ function AssociazioneWizardForm() {
                     </div>
                   </div>
                 ) : (
-                  /* ⚪ SE NON RUNTS: TUTTO LIBERO PER NUOVA REGISTRAZIONE */
+                  /* SE NON RUNTS: TUTTO LIBERO PER NUOVA REGISTRAZIONE */
                   <div className="space-y-3 mt-1">
                     <input 
                       type="text" 
