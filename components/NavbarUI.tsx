@@ -67,7 +67,6 @@ export default function NavbarUI({
   // 🎯 TAB VOLONTARIO
   const volontarioTabs = [
     { id: 'dashboard', label: 'Dashboard', href: dashboardLink, icon: LayoutDashboard },
-    { id: 'mappa', label: 'Mappa', href: '/mappa', icon: MapPin },
     { id: 'associazioni', label: 'Associazioni', href: '/associazioni', icon: Building2 },
     { 
       id: 'candidature', 
@@ -159,7 +158,7 @@ export default function NavbarUI({
             {/* SE NON HA RUOLO O È ANONIMO: Mostra esplorazione pubblica */}
             {(!isLoggedIn || isPendingRole) && (
               <>
-                <Link href="/mappa" className={desktopLinkClass('/mappa')}>
+                <Link href="/esplora" className={desktopLinkClass('/esplora')}>
                   <MapPin className="w-3.5 h-3.5 opacity-70" />
                   Esplora Mappa
                 </Link>

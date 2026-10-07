@@ -4,6 +4,7 @@ import Link from 'next/link'
 import { FileText, Link2, Quote, MapPin } from 'lucide-react'
 import PosizioneCard from '@/components/PosizioneCard'
 import MappaVetrinaPubblica from './MappaVetrinaPubblica'
+import { Database } from '@/types/supabase'
 
 // 🛡️ FIX CACHE: Forza il fetch dinamico per vedere subito i dati reali del DB
 export const dynamic = 'force-dynamic'
@@ -15,20 +16,18 @@ function extractShortId(slugWithQueries: string): string {
   return parts[parts.length - 1] || cleanSlug;
 }
 
-function getAbsoluteImageUrl(url: string | null | undefined): string {
-  const fallbackImage = 'https://volontariando.work/opengraph-image.png';
-  if (!url) return fallbackImage;
-  
-  const cleanUrl = url.trim();
-  if (cleanUrl.startsWith('http://') || cleanUrl.startsWith('https://')) {
-    return cleanUrl;
+function resolveImageUrl(urlOrPath: string | null | undefined): string | null {
+  if (!urlOrPath) return null;
+  const clean = urlOrPath.trim();
+  if (clean.startsWith('http://') || clean.startsWith('https://')) {
+    return clean;
   }
-  
-  return `https://kbgguubqwpthsbvnfdnq.supabase.co/storage/v1/object/public/${cleanUrl.replace(/^\//, '')}`;
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://kbgguubqwpthsbvnfdnq.supabase.co';
+  return `${supabaseUrl}/storage/v1/object/public/posizioni/${clean.replace(/^\//, '')}`;
 }
 
 export async function generateStaticParams() {
-  const supabase = createClient(
+  const supabase = createClient<Database>(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
   )
@@ -51,14 +50,14 @@ export async function generateMetadata(
   const resolvedParams = await params
   const shortId = extractShortId(resolvedParams.slug || '');
 
-  const supabase = createClient(
+  const supabase = createClient<Database>(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
   )
 
   const { data: associazione } = await supabase
     .from('associazioni')
-    .select('denominazione, forma_giuridica, logo_url, grafica:associazioni_grafica(tagline, cover_url)')
+    .select('id, denominazione, forma_giuridica, logo_path, cover_path, descrizione, slug')
     .ilike('slug', `%${shortId}%`)
     .maybeSingle()
 
@@ -66,18 +65,27 @@ export async function generateMetadata(
     return { title: 'Profilo Associazione' }
   }
 
+  const { data: vetrina } = await (supabase.from('associazioni_vetrina' as any) as any)
+    .select('layout_config, colore_brand')
+    .eq('associazione_id', associazione.id)
+    .maybeSingle()
+
   const denominazione = associazione.denominazione || 'Associazione'
   const formaGiuridica = associazione.forma_giuridica ? ` (${associazione.forma_giuridica})` : ''
   const title = `${denominazione}${formaGiuridica}`
   
-  const tagline = (associazione.grafica as any)?.tagline || `Scopri i progetti di utilità sociale e i bandi di volontariato aperti di ${denominazione}.`
+  // Estrazione eventuale sottotitolo dal blocco hero salvato o fallback su descrizione
+  const parsedConfig = Array.isArray(vetrina?.layout_config) 
+    ? vetrina.layout_config 
+    : typeof vetrina?.layout_config === 'string' 
+      ? JSON.parse(vetrina.layout_config) 
+      : []
+  const heroBlock = parsedConfig.find((b: any) => b.type === 'hero')
+  const tagline = heroBlock?.content?.subtitle || associazione.descrizione || `Scopri i progetti di utilità sociale e i bandi di volontariato aperti di ${denominazione}.`
   const description = tagline.replace(/\s+/g, ' ').trim().slice(0, 155) + '...'
 
-  const rawLogoUrl = associazione.logo_url || 'https://volontariando.work/opengraph-image.png'
-  const rawCoverUrl = (associazione.grafica as any)?.cover_url || rawLogoUrl
-  
-  const coverUrl = getAbsoluteImageUrl(rawCoverUrl)
-  const logoUrl = getAbsoluteImageUrl(rawLogoUrl)
+  const rawLogoUrl = resolveImageUrl(heroBlock?.content?.logoUrl || associazione.logo_path) || 'https://volontariando.work/opengraph-image.png'
+  const rawCoverUrl = resolveImageUrl(heroBlock?.content?.coverUrl || associazione.cover_path) || rawLogoUrl
 
   const cleanSlugWithoutQueries = (resolvedParams.slug || '').split('?')[0].trim()
 
@@ -91,15 +99,15 @@ export async function generateMetadata(
       url: `https://volontariando.work/associazione/${cleanSlugWithoutQueries}`,
       siteName: 'Volontariando',
       images: [
-        { url: coverUrl, width: 1200, height: 630, alt: `Copertina di ${denominazione}` },
-        { url: logoUrl, width: 400, height: 400, alt: `Logo di ${denominazione}` }
+        { url: rawCoverUrl, width: 1200, height: 630, alt: `Copertina di ${denominazione}` },
+        { url: rawLogoUrl, width: 400, height: 400, alt: `Logo di ${denominazione}` }
       ]
     },
     twitter: {
       card: 'summary_large_image',
       title: `${title} | Volontariando`,
       description,
-      images: [coverUrl]
+      images: [rawCoverUrl]
     }
   }
 }
@@ -119,6 +127,7 @@ const Blocks = {
       <div className="relative w-full pt-4 pb-4">
         <div className="w-full h-32 md:h-48 rounded-[2rem] bg-slate-100 overflow-hidden relative shadow-sm border border-slate-100/50 z-0">
           {content.coverUrl && (
+            // eslint-disable-next-line @next/next/no-img-element
             <img 
               src={content.coverUrl} 
               className="w-full h-full object-cover" 
@@ -131,6 +140,7 @@ const Blocks = {
         <div className="px-4 md:px-8 relative -mt-10 md:-mt-12 flex flex-col items-start z-20">
           {content.logoUrl ? (
             <div className="w-24 h-24 md:w-28 md:h-28 shrink-0 bg-white rounded-3xl shadow-lg border-[4px] border-white overflow-hidden relative">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
               <img 
                 src={content.logoUrl} 
                 className="w-full h-full object-cover" 
@@ -215,7 +225,8 @@ const Blocks = {
     return (
       <section className={`grid ${getGridLayout()} px-2`}>
         {images.map((img: string, i: number) => (
-          <img key={i} src={img} className={`${getImageStyle(i)} w-full h-full object-cover shadow-sm`} alt="Galleria" />
+          // eslint-disable-next-line @next/next/no-img-element
+          <img key={i} src={resolveImageUrl(img) || img} className={`${getImageStyle(i)} w-full h-full object-cover shadow-sm`} alt="Galleria" />
         ))}
       </section>
     )
@@ -275,7 +286,8 @@ const Blocks = {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           {items.map((proj: any, i: number) => (
             <div key={i} className="bg-white border border-slate-100 rounded-3xl overflow-hidden shadow-sm flex flex-col h-full">
-              {proj.img && <img src={proj.img} className="w-full h-44 shrink-0 object-cover" alt={proj.title} />}
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              {proj.img && <img src={resolveImageUrl(proj.img) || proj.img} className="w-full h-44 shrink-0 object-cover" alt={proj.title} />}
               <div className="p-5 flex-1 flex flex-col gap-1">
                 <h4 className="font-bold text-slate-900 text-lg leading-snug">{proj.title || 'Progetto'}</h4>
                 <p className="text-sm text-slate-500 font-light leading-relaxed whitespace-pre-wrap">{proj.desc}</p>
@@ -301,7 +313,8 @@ const Blocks = {
                 <p className="text-base md:text-lg font-light text-slate-800 leading-relaxed italic whitespace-pre-wrap">{test.quote}</p>
               </div>
               <div className="mt-6 flex items-center gap-3">
-                {test.avatarUrl && <img src={test.avatarUrl} className="w-11 h-11 rounded-full border border-white shadow-md object-cover shrink-0" alt={test.author} />}
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                {test.avatarUrl && <img src={resolveImageUrl(test.avatarUrl) || test.avatarUrl} className="w-11 h-11 rounded-full border border-white shadow-md object-cover shrink-0" alt={test.author} />}
                 <div>
                   <p className="font-bold text-slate-900 text-sm leading-none">{test.author || 'Volontario'}</p>
                   {test.role && <p className="text-xs text-slate-400 font-medium mt-1">{test.role}</p>}
@@ -357,7 +370,7 @@ const Blocks = {
         <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest mb-4">Documenti Utili</h3>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           {items.map((doc: any, i: number) => (
-            <a key={i} href={doc.url} target="_blank" rel="noopener noreferrer" className="group flex items-center gap-4 p-4 bg-white border border-slate-100 rounded-2xl shadow-sm hover:shadow-md transition-all">
+            <a key={i} href={resolveImageUrl(doc.url) || doc.url} target="_blank" rel="noopener noreferrer" className="group flex items-center gap-4 p-4 bg-white border border-slate-100 rounded-2xl shadow-sm hover:shadow-md transition-all">
               <div className="w-10 h-10 shrink-0 bg-red-50 text-red-500 rounded-xl flex items-center justify-center">
                 <FileText className="w-5 h-5" />
               </div>
@@ -447,7 +460,7 @@ const Blocks = {
         <div className="flex gap-4 overflow-x-auto pb-4 snap-x snap-mandatory scrollbar-hide" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
           {positions.map((p: any) => (
             <div key={p.id} className="snap-start shrink-0 w-[85%] md:w-[45%]">
-              <PosizioneCard posizione={p} ruolo="volontario" coloreBrand={brandColor} />
+              <PosizioneCard posizione={p} ruolo="volontario" coloreBrand={brandColor} layout="vertical" />
             </div>
           ))}
         </div>
@@ -456,40 +469,33 @@ const Blocks = {
   },
 }
 
-function createFallbackLayout(associazione: any, grafica: any) {
+function createFallbackLayout(associazione: any, vetrina: any) {
   const blocks = []
+  const logoUrl = resolveImageUrl(associazione.logo_path)
+  const coverUrl = resolveImageUrl(associazione.cover_path)
+  const brandColor = vetrina?.colore_brand || '#111827'
   
-  blocks.push({ id: 'f-hero', type: 'hero', content: { title: associazione.denominazione, eyebrow: associazione.forma_giuridica, subtitle: grafica.tagline, coverUrl: grafica.cover_url, logoUrl: associazione.logo_url, brandColor: grafica.colore_brand || '#111827' } })
+  blocks.push({ 
+    id: 'f-hero', 
+    type: 'hero', 
+    content: { 
+      title: associazione.denominazione, 
+      eyebrow: associazione.forma_giuridica || 'Ente del Terzo Settore', 
+      subtitle: associazione.descrizione || '', 
+      coverUrl: coverUrl, 
+      logoUrl: logoUrl, 
+      brandColor: brandColor 
+    } 
+  })
   
-  if (grafica.chi_siamo) {
-    blocks.push({ id: 'f-about', type: 'about', content: { title: 'Chi Siamo', body: grafica.chi_siamo } })
+  if (associazione.descrizione) {
+    blocks.push({ id: 'f-about', type: 'about', content: { title: 'Chi Siamo', body: associazione.descrizione } })
   }
 
   blocks.push({ id: 'f-map', type: 'map', content: { title: 'La nostra Sede' } })
 
-  if (grafica.statistiche?.length > 0) {
-    blocks.push({ id: 'f-stats', type: 'stats', content: { items: grafica.statistiche } })
-  }
-  if (grafica.mission) {
-    blocks.push({ id: 'f-mission', type: 'mission', content: { title: 'La nostra Mission', body: grafica.mission } })
-  }
-  if (grafica.vision) {
-    blocks.push({ id: 'f-vision', type: 'vision', content: { title: 'La nostra Vision', body: grafica.vision } })
-  }
-  if (grafica.immagini_gallery?.length > 0) {
-    blocks.push({ id: 'f-gallery', type: 'gallery', content: { items: grafica.immagini_gallery } })
-  }
-  if (grafica.faq?.length > 0) {
-    blocks.push({ id: 'f-faq', type: 'faq', content: { items: grafica.faq } })
-  }
-  if (grafica.documenti?.length > 0) {
-    blocks.push({ id: 'f-docs', type: 'documents', content: { items: grafica.documenti } })
-  }
-  if (grafica.sito_web || grafica.instagram || grafica.facebook) {
-    blocks.push({ id: 'f-links', type: 'links', content: { website: grafica.sito_web, instagram: grafica.instagram, facebook: grafica.facebook } })
-  }
-  if (grafica.partner?.length > 0) {
-    blocks.push({ id: 'f-partners', type: 'partners', content: { items: grafica.partner } })
+  if (associazione.sito_web) {
+    blocks.push({ id: 'f-links', type: 'links', content: { website: associazione.sito_web } })
   }
 
   blocks.push({ id: 'f-positions', type: 'positions', content: {} })
@@ -500,14 +506,14 @@ export default async function ProfiloAssociazione({ params }: { params: Promise<
   const { slug } = await params
   const shortId = extractShortId(slug);
 
-  const supabase = createClient(
+  const supabase = createClient<Database>(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
   )
 
   const { data: associazione } = await supabase
     .from('associazioni')
-    .select('*, grafica:associazioni_grafica(*), sedi:associazioni_sedi(*)')
+    .select('*')
     .ilike('slug', `%${shortId}%`)
     .maybeSingle()
 
@@ -516,47 +522,44 @@ export default async function ProfiloAssociazione({ params }: { params: Promise<
   }
 
   const associazioneId = associazione.id
-  const grafica = associazione.grafica || {}
-  const coloreBrand = grafica.colore_brand || '#111827'
-  
-  const sedePrincipale = Array.isArray(associazione.sedi) 
-    ? associazione.sedi.find((s: any) => s.is_principale) || associazione.sedi[0]
-    : associazione.sedi
 
+  // 1. Fetch configurazione Vetrina / CMS a blocchi
+  const { data: vetrina } = await (supabase.from('associazioni_vetrina' as any) as any)
+    .select('*')
+    .eq('associazione_id', associazioneId)
+    .maybeSingle()
+
+  const coloreBrand = vetrina?.colore_brand || '#111827'
+  
+  // 2. Info Sede Legale (Solo sede legale sulla mappa pubblica)
   const assocInfo = {
-    denominazione: associazione.nome_breve || associazione.denominazione || 'Sede Associazione',
-    lat: associazione.lat ?? sedePrincipale?.lat ?? null,
-    lng: associazione.lng ?? sedePrincipale?.lng ?? null,
-    comune: associazione.comune || sedePrincipale?.comune || '',
-    provincia: associazione.provincia || sedePrincipale?.provincia || '',
-    indirizzo: sedePrincipale?.indirizzo || associazione.comune || ''
+    denominazione: associazione.denominazione || 'Sede Associazione',
+    lat: associazione.lat_legale ?? null,
+    lng: associazione.lng_legale ?? null,
+    comune: associazione.comune_legale || '',
+    provincia: associazione.provincia_legale || '',
+    indirizzo: associazione.indirizzo_legale || associazione.comune_legale || ''
   }
 
-  // 🛡️ QUERY BLINDATA: Estraiamo posizioni attive con solo i tag, senza dipendere da join instabili su media_associazioni
+  // 3. Posizioni attive legate all'associazione (con tags reali)
   const todayStr = new Date().toISOString().split('T')[0]
 
-  const { data: rawPos, error: posError } = await supabase
-    .from('posizioni')
-    .select('*, tags:posizione_tags(tag:tags(id, name))')
+  const { data: rawPos, error: posError } = await (supabase.from('posizioni') as any)
+    .select(`
+      *,
+      posizione_tags (
+        tags (
+          id,
+          nome
+        )
+      )
+    `)
     .eq('associazione_id', associazioneId)
     .in('stato', ['pubblicata', 'aperta'])
     .order('created_at', { ascending: false })
 
   if (posError) {
     console.error("Errore fetch posizioni vetrina:", posError)
-  }
-
-  // Risoluzione indipendente delle immagini da media_associazioni
-  const imageIds = (rawPos || []).map((p: any) => p.immagine_id).filter(Boolean)
-  let mediaMap = new Map<string, string>()
-
-  if (imageIds.length > 0) {
-    const { data: mediaItems } = await supabase
-      .from('media_associazioni')
-      .select('id, url')
-      .in('id', imageIds)
-
-    mediaMap = new Map((mediaItems || []).map(m => [m.id, m.url]))
   }
 
   // Filtriamo eventuali una_tantum scadute (le ricorrenti passano sempre)
@@ -567,65 +570,90 @@ export default async function ProfiloAssociazione({ params }: { params: Promise<
     return true
   })
 
-  // Normalizziamo i campi per PosizioneCard
+  // Normalizziamo per PosizioneCard
   const posizioni = posizioniValide.map((p: any) => {
-    const imgUrl = mediaMap.get(p.immagine_id) || null
+    const imgUrl = resolveImageUrl(p.immagine_path)
+    const tagsList = (p.posizione_tags || [])
+      .map((pt: any) => pt.tags)
+      .filter(Boolean)
+      .map((t: any) => ({
+        id: t.id,
+        name: t.nome,
+        nome: t.nome
+      }))
+
     return {
       ...p,
       slug: p.slug || null,
+      dove: p.indirizzo_specifico || p.luogo_nome || p.comune || '',
+      quando: p.quando || (p.tipo === 'una_tantum' ? p.data_esatta : (p.giorni_settimana?.join(', ') || '')),
       immagine_url: imgUrl,
-      media_associazioni: imgUrl ? { url: imgUrl } : null,
-      // Forniamo sia il formato singolare che plurale per sicurezza
       associazione: {
         id: associazione.id,
         denominazione: associazione.denominazione,
-        nome_breve: associazione.nome_breve,
-        logo_url: associazione.logo_url,
+        logo_url: resolveImageUrl(associazione.logo_path),
         slug: associazione.slug
       },
       associazioni: {
         denominazione: associazione.denominazione,
         slug: associazione.slug
       },
-      tags: p.tags?.map((t: any) => t.tag).filter(Boolean) || []
+      tags: tagsList
     }
   })
 
-  // 🛡️ FIX LAYOUT: Se layout_config personalizzato non contiene il blocco 'positions', lo aggiungiamo in coda se ci sono annunci
-  const parsedConfig = typeof grafica.layout_config === 'string' ? JSON.parse(grafica.layout_config) : grafica.layout_config
-  let layout = parsedConfig && Array.isArray(parsedConfig) && parsedConfig.length > 0 
-    ? [...parsedConfig]
-    : createFallbackLayout(associazione, grafica)
+  // 4. Parsing Layout Pubblicato (layout_config)
+  const rawConfig = vetrina?.layout_config
+  const parsedConfig = Array.isArray(rawConfig) 
+    ? rawConfig 
+    : typeof rawConfig === 'string' 
+      ? JSON.parse(rawConfig) 
+      : null
 
+  let layout = parsedConfig && parsedConfig.length > 0 
+    ? [...parsedConfig]
+    : createFallbackLayout(associazione, vetrina)
+
+  // Risoluzione URL immagini nei blocchi hero
+  const heroBlock = layout.find((b: any) => b.type === 'hero')
+  if (heroBlock && heroBlock.content) {
+    heroBlock.content.coverUrl = resolveImageUrl(heroBlock.content.coverUrl) || resolveImageUrl(associazione.cover_path)
+    heroBlock.content.logoUrl = resolveImageUrl(heroBlock.content.logoUrl) || resolveImageUrl(associazione.logo_path)
+  }
+
+  // Se il layout non contiene il blocco 'positions' ma ci sono annunci attivi, lo aggiungiamo in coda
   const hasPositionsBlock = layout.some((b: any) => b.type === 'positions')
   if (!hasPositionsBlock && posizioni.length > 0) {
     layout.push({ id: 'auto-positions', type: 'positions', content: {} })
   }
 
   const baseUrl = process.env.NEXT_PUBLIC_SITE_URL || 'https://volontariando.work'
-  
+  const logoUrl = resolveImageUrl(associazione.logo_path) || `${baseUrl}/opengraph-image.png`
+  const cleanSlugWithoutQueries = slug.split('?')[0]
+
   const schemaNGO: any = {
     '@context': 'https://schema.org',
     '@type': 'NGO',
     name: associazione.denominazione,
-    url: `${baseUrl}/associazione/${slug.split('?')[0]}`,
-    logo: associazione.logo_url ? getAbsoluteImageUrl(associazione.logo_url) : `${baseUrl}/opengraph-image.png`,
+    url: `${baseUrl}/associazione/${cleanSlugWithoutQueries}`,
+    logo: logoUrl,
     sameAs: [
-      grafica.sito_web,
-      grafica.instagram ? `https://instagram.com/${grafica.instagram.replace('@', '')}` : null,
-      grafica.facebook
+      associazione.sito_web
     ].filter(Boolean)
   }
 
-  if (grafica.email || grafica.phone || grafica.address) {
+  if (associazione.email_istituzionale || associazione.telefono || associazione.indirizzo_legale) {
     schemaNGO.contactPoint = {
       '@type': 'ContactPoint',
       contactType: 'customer support',
-      email: grafica.email || undefined,
-      telephone: grafica.phone || undefined,
-      address: grafica.address ? {
+      email: associazione.email_istituzionale || undefined,
+      telephone: associazione.telefono || undefined,
+      address: associazione.indirizzo_legale ? {
         '@type': 'PostalAddress',
-        streetAddress: grafica.address,
+        streetAddress: associazione.indirizzo_legale,
+        addressLocality: associazione.comune_legale,
+        addressRegion: associazione.provincia_legale,
+        postalCode: associazione.cap_legale,
         addressCountry: 'IT'
       } : undefined
     }

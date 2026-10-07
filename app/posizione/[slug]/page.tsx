@@ -19,17 +19,17 @@ function extractShortId(slugWithQueries: string): string {
   return id;
 }
 
-// 🛡️ URL IMMAGINI ASSOLUTI
-function getAbsoluteImageUrl(url: string | null | undefined): string {
-  const fallbackImage = 'https://volontariando.work/opengraph-image.png';
-  if (!url) return fallbackImage;
+// 🛡️ RISOLUZIONE URL IMMAGINI ASSOLUTI (Storage 'posizioni' o URL esterno)
+function getAbsoluteImageUrl(urlOrPath: string | null | undefined): string | null {
+  if (!urlOrPath) return null;
   
-  const cleanUrl = url.trim();
-  if (cleanUrl.startsWith('http://') || cleanUrl.startsWith('https://')) {
-    return cleanUrl;
+  const clean = urlOrPath.trim();
+  if (clean.startsWith('http://') || clean.startsWith('https://')) {
+    return clean;
   }
   
-  return `https://kbgguubqwpthsbvnfdnq.supabase.co/storage/v1/object/public/${cleanUrl.replace(/^\//, '')}`;
+  const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || 'https://kbgguubqwpthsbvnfdnq.supabase.co';
+  return `${supabaseUrl}/storage/v1/object/public/posizioni/${clean.replace(/^\//, '')}`;
 }
 
 export async function generateStaticParams() {
@@ -61,7 +61,7 @@ export async function generateMetadata(
 
   const { data: posizione, error: posError } = await supabase
     .from('posizioni')
-    .select('titolo, descrizione, associazione_id, immagine_id')
+    .select('titolo, descrizione, associazione_id, immagine_path')
     .ilike('slug', `%${shortId}%`)
     .maybeSingle()
 
@@ -69,16 +69,15 @@ export async function generateMetadata(
     return { title: 'Opportunità di Volontariato' }
   }
 
-  const [assocRes, mediaRes] = await Promise.all([
-    posizione.associazione_id 
-      ? supabase.from('associazioni').select('denominazione').eq('id', posizione.associazione_id).maybeSingle()
-      : Promise.resolve({ data: null }),
-    posizione.immagine_id
-      ? supabase.from('media_associazioni').select('url').eq('id', posizione.immagine_id).maybeSingle()
-      : Promise.resolve({ data: null })
-  ])
+  const { data: assoc } = posizione.associazione_id 
+    ? await supabase
+        .from('associazioni')
+        .select('denominazione')
+        .eq('id', posizione.associazione_id)
+        .maybeSingle()
+    : { data: null }
 
-  const nomeAssociazione = assocRes.data?.denominazione || 'Associazione'
+  const nomeAssociazione = assoc?.denominazione || 'Associazione'
   const titoloPulito = posizione.titolo || 'Bando di Volontariato'
   const title = `${titoloPulito} con ${nomeAssociazione}`
   
@@ -87,7 +86,8 @@ export async function generateMetadata(
     .trim()
     .slice(0, 155) + '...'
 
-  const imageUrl = getAbsoluteImageUrl(mediaRes.data?.url)
+  const fallbackImage = 'https://volontariando.work/opengraph-image.png'
+  const imageUrl = getAbsoluteImageUrl(posizione.immagine_path) || fallbackImage
   const cleanSlugWithoutQueries = (resolvedParams.slug || '').split('?')[0].trim()
 
   return {
@@ -138,60 +138,43 @@ export default async function DettaglioPosizioneVolontario({
 
   const id = posBase.id 
 
-  const [associazioneResult, immagineResult, tagsResult, competenzeResult] = await Promise.all([
+  // Recupero anagrafica associazione e tags (senza join a tabelle inesistenti)
+  const [associazioneResult, tagsResult] = await Promise.all([
     publicSupabase
       .from('associazioni')
-      .select('id, denominazione, email_associazione, slug')
+      .select('id, denominazione, email_istituzionale, slug, logo_path')
       .eq('id', posBase.associazione_id)
       .maybeSingle(),
-    posBase.immagine_id
-      ? publicSupabase
-          .from('media_associazioni')
-          .select('url')
-          .eq('id', posBase.immagine_id)
-          .maybeSingle()
-      : Promise.resolve({ data: null }),
     publicSupabase
       .from('posizione_tags')
       .select('tag_id')
       .eq('posizione_id', id),
-    publicSupabase
-      .from('posizione_competenze')
-      .select('competenza_id')
-      .eq('posizione_id', id),
   ])
 
   const tagIds = (tagsResult.data || []).map((row: any) => row.tag_id)
-  const competenzaIds = (competenzeResult.data || []).map((row: any) => row.competenza_id)
 
-  const [tagCatalogResult, competenzeCatalogResult] = await Promise.all([
-    tagIds.length
-      ? publicSupabase
-          .from('tags')
-          .select('id, name')
-          .in('id', tagIds)
-      : Promise.resolve({ data: [] as { id: string; name: string }[] }),
-    competenzaIds.length
-      ? publicSupabase
-          .from('competenze')
-          .select('id, name')
-          .in('id', competenzaIds)
-      : Promise.resolve({ data: [] as { id: string; name: string }[] }),
-  ])
+  const { data: tagCatalog } = tagIds.length
+    ? await publicSupabase
+        .from('tags')
+        .select('id, nome')
+        .in('id', tagIds)
+    : { data: [] }
 
-  const tagById = new Map((tagCatalogResult.data || []).map((tag: any) => [tag.id, tag.name]))
-  const competenzaById = new Map((competenzeCatalogResult.data || []).map((comp: any) => [comp.id, comp.name]))
+  const tags = (tagCatalog || []).map((t: any) => ({
+    tag: { id: t.id, name: t.nome, nome: t.nome }
+  }))
+
+  const luogoVisualizzato = 
+    posBase.indirizzo_specifico || 
+    posBase.luogo_nome || 
+    (posBase.comune ? `${posBase.comune}${posBase.provincia ? ` (${posBase.provincia})` : ''}` : 'Sede da definire')
 
   const pos = {
     ...posBase,
+    dove: luogoVisualizzato,
     associazioni: associazioneResult.data,
-    media_associazioni: immagineResult.data,
-    tags: (tagsResult.data || []).map((row: any) => ({
-      tag: { name: tagById.get(row.tag_id) || '' },
-    })),
-    competenze: (competenzeResult.data || []).map((row: any) => ({
-      competenza: { id: row.competenza_id, name: competenzaById.get(row.competenza_id) || '' },
-    })),
+    tags,
+    competenze: [],
   }
 
   const formattaOra = (ora: string | null) => {
@@ -204,30 +187,37 @@ export default async function DettaglioPosizioneVolontario({
     if (tipo === 'una_tantum') {
       try {
         const dateObj = new Date(dataString);
-        return dateObj.toLocaleDateString('it-IT', { day: 'numeric', month: 'short', year: 'numeric' });
-      } catch (e) {
-        return dataString;
+        if (!isNaN(dateObj.getTime())) {
+          return dateObj.toLocaleDateString('it-IT', { day: 'numeric', month: 'short', year: 'numeric' });
+        }
+      } catch {
+        // fallback
       }
+      return dataString;
     }
-    return `Ogni ${dataString}`;
+    return dataString.toLowerCase().startsWith('ogni') ? dataString : `Ogni ${dataString}`;
   }
 
-  const nomeAssociazione = pos.associazioni?.denominazione || pos.associazioni?.email_associazione || 'Associazione'
+  const nomeAssociazione = pos.associazioni?.denominazione || 'Associazione'
   const associazioneSlug = pos.associazioni?.slug || pos.associazioni?.id
   const inizialeAssociazione = nomeAssociazione.charAt(0).toUpperCase()
-  const competenzeRichieste = pos.competenze?.map((c: any) => c.competenza).filter(Boolean) || []
+  const competenzeRichieste: any[] = []
   
-  const imgUrl = pos.media_associazioni?.url ? getAbsoluteImageUrl(pos.media_associazioni.url) : null;
-  const inizialePosizione = pos.titolo ? pos.titolo.charAt(0).toUpperCase() : 'V';
+  const imgUrl = getAbsoluteImageUrl(pos.immagine_path)
+  const inizialePosizione = pos.titolo ? pos.titolo.charAt(0).toUpperCase() : 'V'
   
-  const dataFormattata = formattaDataLeggibile(pos.quando || pos.data_esatta, pos.tipo);
-  const oraInizio = formattaOra(pos.ora_inizio);
-  const oraFine = formattaOra(pos.ora_fine);
+  const dataRaw = pos.tipo === 'una_tantum' 
+    ? (pos.data_esatta || pos.quando) 
+    : (pos.quando || (pos.giorni_settimana && pos.giorni_settimana.length > 0 ? pos.giorni_settimana.join(', ') : null))
+
+  const dataFormattata = formattaDataLeggibile(dataRaw, pos.tipo)
+  const oraInizio = formattaOra(pos.ora_inizio)
+  const oraFine = formattaOra(pos.ora_fine)
   const orarioFormattato = (oraInizio && oraFine) 
     ? `${oraInizio} - ${oraFine}` 
     : oraInizio 
       ? `Dalle ${oraInizio}` 
-      : 'Orario flessibile';
+      : 'Orario flessibile'
 
   return (
     <div className="min-h-screen bg-white text-slate-900 font-sans selection:bg-slate-200">
@@ -235,6 +225,7 @@ export default async function DettaglioPosizioneVolontario({
       {/* IMMAGINE COPERTINA */}
       <div className="w-full h-[32vh] md:h-[48vh] relative bg-slate-100">
         {imgUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
           <img src={imgUrl} alt={pos.titolo} className="w-full h-full object-cover" />
         ) : (
           <div className="absolute inset-0 flex items-center justify-center bg-slate-100">
@@ -372,7 +363,7 @@ export default async function DettaglioPosizioneVolontario({
         </div>
       </div>
 
-      {/* 🔴 BARRA MOBILE PREMIUM STILE AIRBNB / UBER */}
+      {/* 🔴 BARRA MOBILE AIRBNB STYLE */}
       <div className="md:hidden fixed bottom-0 left-0 right-0 z-[99999] bg-white/95 backdrop-blur-2xl border-t border-slate-200/80 px-5 pt-3 pb-[calc(0.75rem+env(safe-area-inset-bottom))] shadow-[0_-10px_35px_rgba(0,0,0,0.08)] flex items-center justify-between gap-3">
         
         {/* COLONNA SINISTRA: DATA ED ORARIO */}
@@ -390,7 +381,7 @@ export default async function DettaglioPosizioneVolontario({
           </div>
         </div>
 
-        {/* COLONNA DESTRA: PULSANTE CANDIDATURA COMPATTO & BILANCIATO */}
+        {/* COLONNA DESTRA: PULSANTE CANDIDATURA */}
         <div className="shrink-0 flex items-center justify-end max-w-[50%]">
           <PannelloCandidatura 
             posizioneId={id} 

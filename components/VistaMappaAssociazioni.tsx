@@ -1,11 +1,12 @@
 'use client'
 
-import { useState, useEffect, useRef, useCallback } from 'react'
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { createBrowserClient } from '@supabase/ssr'
 import dynamic from 'next/dynamic'
 import { Search, Building2, MapPin, ShieldCheck, ArrowRight, SlidersHorizontal, X, ChevronRight } from 'lucide-react'
 import Link from 'next/link'
+import { Database } from '@/types/supabase'
 
 // Dynamic import per Leaflet
 const MappaAssociazioni = dynamic(() => import('@/components/MappaAssociazioni'), {
@@ -38,6 +39,7 @@ function CardAssociazioneRegistrata({ item, isHovered, isFocused, onClick }: any
       <div className="flex items-center gap-3.5">
         {item.logo_url ? (
           <div className="w-12 h-12 rounded-xl border border-slate-100 overflow-hidden shrink-0 shadow-sm bg-white">
+            {/* eslint-disable-next-line @next/next/no-img-element */}
             <img src={item.logo_url} alt={item.denominazione} className="w-full h-full object-cover" />
           </div>
         ) : (
@@ -102,20 +104,42 @@ function CardAssociazioneUnclaimed({ item, onClaim }: any) {
 export default function VistaMappaAssociazioni({ initialData = [] }: { initialData?: any[] }) {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const supabase = createBrowserClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+
+  const supabase = useMemo(
+    () =>
+      createBrowserClient<Database>(
+        process.env.NEXT_PUBLIC_SUPABASE_URL!,
+        process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+      ),
+    []
   )
 
-  const [associazioniMappa, setAssociazioniMappa] = useState<any[]>(initialData)
-  const [risultatiDirectory, setRisultatiDirectory] = useState<any[]>([])
+  const resolveImageUrl = useCallback((path: string | null) => {
+    if (!path) return null
+    if (path.startsWith('http://') || path.startsWith('https://')) return path
+    const { data } = supabase.storage.from('posizioni').getPublicUrl(path)
+    return data?.publicUrl || null
+  }, [supabase])
+
+  // Normalizza i dati iniziali per garantire le proprietà attese dalle card
+  const formattedInitialData = useMemo(() => {
+    return initialData.map((item) => ({
+      ...item,
+      is_registrata: true,
+      comune: item.comune || item.comune_legale || '',
+      lat: item.lat || item.lat_legale || null,
+      lng: item.lng || item.lng_legale || null,
+      logo_url: item.logo_url || resolveImageUrl(item.logo_path)
+    }))
+  }, [initialData, resolveImageUrl])
+
+  const [associazioniMappa, setAssociazioniMappa] = useState<any[]>(formattedInitialData)
+  const [risultatiDirectory, setRisultatiDirectory] = useState<any[]>(formattedInitialData)
   const [loading, setLoading] = useState(false)
   const [hoveredId, setHoveredId] = useState<string | null>(null)
   const [focusedId, setFocusedId] = useState<string | null>(null)
   
-  // Stato apertura pannello fluttuante
   const [isPanelOpen, setIsPanelOpen] = useState(false)
-  
   const [searchInput, setSearchInput] = useState(searchParams.get('q') || '')
   const boundsRef = useRef<MapBounds | null>(null)
   const isFirstLoad = useRef(true)
@@ -126,20 +150,18 @@ export default function VistaMappaAssociazioni({ initialData = [] }: { initialDa
 
   const selectedAssoc = associazioniMappa.find(a => a.id === focusedId)
 
-// 🚀 GESTIONE RIVENDICAZIONE CON ID SICURO (NO CF IN URL)
-const handleClaim = async (item: any) => {
-  const { data: { session } } = await supabase.auth.getSession()
-  
-  // Passiamo l'id UUID della scheda
-  const claimId = item.id || ''
-  const targetOnboardingUrl = `/app/onboarding/associazione?claim_id=${encodeURIComponent(claimId)}`
+  // 🚀 GESTIONE RIVENDICAZIONE CON ID SICURO
+  const handleClaim = async (item: any) => {
+    const { data: { session } } = await supabase.auth.getSession()
+    const claimId = item.id || ''
+    const targetOnboardingUrl = `/app/onboarding/associazione?claim_id=${encodeURIComponent(claimId)}`
 
-  if (session) {
-    router.push(targetOnboardingUrl)
-  } else {
-    router.push(`/auth/login?redirectTo=${encodeURIComponent(targetOnboardingUrl)}`)
+    if (session) {
+      router.push(targetOnboardingUrl)
+    } else {
+      router.push(`/auth/login?redirectTo=${encodeURIComponent(targetOnboardingUrl)}`)
+    }
   }
-}
 
   // Debounce ricerca (400ms)
   useEffect(() => {
@@ -152,25 +174,103 @@ const handleClaim = async (item: any) => {
     return () => clearTimeout(timer)
   }, [searchInput])
 
-  const eseguiRicerca = async (searchQuery: string | null) => {
+  // ⚡ QUERY DIRETTA SUL NUOVO SCHEMA (associazioni + runts_import)
+  const eseguiRicerca = useCallback(async (searchQuery: string | null) => {
     setLoading(true)
     try {
-      const { data, error } = await supabase.rpc('cerca_directory_unificata', {
-        search_query: searchQuery
-      })
-      if (error) throw error
+      const clean = searchQuery?.trim() || ''
 
-      const directoryResults = data || []
-      setRisultatiDirectory(directoryResults)
+      // 1. Ricerca enti già registrati
+      let queryAssoc = supabase
+        .from('associazioni')
+        .select(`
+          id,
+          denominazione,
+          codice_fiscale,
+          comune_legale,
+          provincia_legale,
+          indirizzo_legale,
+          lat_legale,
+          lng_legale,
+          logo_path,
+          slug,
+          sezione_runts,
+          is_verificata
+        `)
+        .limit(30)
 
-      const registratiConCoordinate = directoryResults.filter((item: any) => item.is_registrata && item.lat && item.lng)
-      setAssociazioniMappa(registratiConCoordinate)
+      if (clean) {
+        queryAssoc = queryAssoc.or(`denominazione.ilike.%${clean}%,comune_legale.ilike.%${clean}%`)
+      }
+
+      // 2. Ricerca anagrafiche ministeriali RUNTS non ancora iscritte
+      let queryRunts = supabase
+        .from('runts_import')
+        .select(`
+          id,
+          denominazione,
+          codice_fiscale,
+          comune,
+          provincia,
+          indirizzo,
+          sezione_runts
+        `)
+        .limit(30)
+
+      if (clean) {
+        queryRunts = queryRunts.or(`denominazione.ilike.%${clean}%,comune.ilike.%${clean}%`)
+      }
+
+      const [resAssoc, resRunts] = await Promise.all([queryAssoc, queryRunts])
+
+      const registrati = (resAssoc.data || []).map((a) => ({
+        id: a.id,
+        denominazione: a.denominazione,
+        codice_fiscale: a.codice_fiscale,
+        comune: a.comune_legale,
+        provincia: a.provincia_legale,
+        indirizzo: a.indirizzo_legale,
+        lat: a.lat_legale,
+        lng: a.lng_legale,
+        logo_url: resolveImageUrl(a.logo_path),
+        slug: a.slug,
+        sezione_runts: a.sezione_runts,
+        is_registrata: true,
+        is_verificata: a.is_verificata,
+      }))
+
+      const codiciFiscaliRegistrati = new Set(registrati.map(a => a.codice_fiscale))
+
+      // Escludi da RUNTS gli enti che risultano già a bordo
+      const unclaimed = (resRunts.data || [])
+        .filter(r => !codiciFiscaliRegistrati.has(r.codice_fiscale))
+        .map((r) => ({
+          id: r.id,
+          denominazione: r.denominazione,
+          codice_fiscale: r.codice_fiscale,
+          comune: r.comune,
+          provincia: r.provincia,
+          indirizzo: r.indirizzo,
+          lat: null,
+          lng: null,
+          logo_url: null,
+          slug: null,
+          sezione_runts: r.sezione_runts,
+          is_registrata: false,
+        }))
+
+      const combined = [...registrati, ...unclaimed]
+      setRisultatiDirectory(combined)
+
+      // I pin sulla mappa appartengono solo agli enti geolocalizzati
+      const mappabili = registrati.filter(item => item.lat && item.lng)
+      setAssociazioniMappa(mappabili)
     } catch (error) {
-      console.error("Errore ricerca directory:", error)
+      console.error("Errore ricerca directory associazioni:", error)
     } finally {
       setLoading(false)
     }
-  }
+  }, [supabase, resolveImageUrl])
 
   const handleBoundsChange = (b: MapBounds) => { boundsRef.current = b }
 
@@ -180,11 +280,11 @@ const handleClaim = async (item: any) => {
       isFirstLoad.current = false
       eseguiRicerca(q)
     }
-  }, [q])
+  }, [q, eseguiRicerca])
 
   useEffect(() => {
     if (!isFirstLoad.current) eseguiRicerca(q)
-  }, [q])
+  }, [q, eseguiRicerca])
 
   return (
     <div className="flex w-full h-[calc(100dvh-3.5rem)] overflow-hidden relative bg-slate-100 font-sans">

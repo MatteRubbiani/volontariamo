@@ -7,6 +7,7 @@ import PosizioneCard from '@/components/PosizioneCard'
 import MappaWrapper from '@/components/MappaWrapper'
 import SearchPill from '@/components/SearchPill'
 import { X } from 'lucide-react'
+import { Database } from '@/types/supabase'
 
 interface MapBounds {
   sw: { lat: number; lng: number };
@@ -49,12 +50,13 @@ interface VistaEsploraProps {
 export default function VistaEsplora({ initialData = [] }: VistaEsploraProps) {
   const router = useRouter()
   const searchParams = useSearchParams()
-  const supabase = createBrowserClient(
+  const supabase = createBrowserClient<Database>(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
   )
 
-  const [posizioni, setPosizioni] = useState<any[]>([])
+  // 1. Inizializzazione immediata con i dati SSR
+  const [posizioni, setPosizioni] = useState<any[]>(initialData)
   const [loading, setLoading] = useState(false)
   const [hoveredId, setHoveredId] = useState<string | null>(null)
   const [focusedId, setFocusedId] = useState<string | null>(null)
@@ -75,15 +77,20 @@ export default function VistaEsplora({ initialData = [] }: VistaEsploraProps) {
   const lng = searchParams.get('lng') ? parseFloat(searchParams.get('lng')!) : null
   
   const tagsStr = searchParams.get('tags') || null
-  const competenzeStr = searchParams.get('competenze') || null
   const filterData = searchParams.get('data') || null
   const giorniStr = searchParams.get('giorni') || null
 
   const filterTags = tagsStr ? tagsStr.split(',') : null
-  const filterCompetenze = competenzeStr ? competenzeStr.split(',') : null
   const filterGiorni = giorniStr ? giorniStr.split(',') : null
 
   const selectedPos = posizioni.find(p => p.id === focusedId)
+
+  const resolveImageUrl = useCallback((path: string | null) => {
+    if (!path) return null
+    if (path.startsWith('http://') || path.startsWith('https://')) return path
+    const { data } = supabase.storage.from('posizioni').getPublicUrl(path)
+    return data?.publicUrl || null
+  }, [supabase])
 
   // TOUCH & DRAG DRAWER
   const handlePointerDown = (e: React.PointerEvent) => {
@@ -113,36 +120,115 @@ export default function VistaEsplora({ initialData = [] }: VistaEsploraProps) {
     e.currentTarget.releasePointerCapture(e.pointerId)
   }
 
-  const fetchPosizioni = async (targetBounds: MapBounds) => {
+  // 2. Query georeferenziata diretta con filtri nativi
+  const fetchPosizioni = useCallback(async (targetBounds: MapBounds) => {
     setLoading(true)
     try {
-      const { data, error } = await supabase.rpc('ricerca_avanzata_posizioni', {
-        min_lat: targetBounds.sw.lat,
-        min_lng: targetBounds.sw.lng,
-        max_lat: targetBounds.ne.lat,
-        max_lng: targetBounds.ne.lng,
-        search_q: q,
-        filter_tipo: tipo,
-        filter_tags: filterTags,
-        filter_competenze: filterCompetenze,
-        filter_data: filterData,
-        filter_giorni: filterGiorni
-      })
-      if (error) throw error
-      
-      const formattedData = (data || []).map((pos: any) => ({
-        ...pos,
-        slug: pos.slug || null, 
-        associazioni: pos.associazione_denominazione ? {
+      let query = (supabase.from('posizioni') as any)
+        .select(`
+          *,
+          associazioni:associazione_id (
+            id,
+            denominazione,
+            slug,
+            logo_path
+          ),
+          posizione_tags (
+            tags (
+              id,
+              nome
+            )
+          )
+        `)
+        .in('stato', ['pubblicata', 'aperta'])
+        .not('lat', 'is', null)
+        .not('lng', 'is', null)
+        .gte('lat', targetBounds.sw.lat)
+        .lte('lat', targetBounds.ne.lat)
+        .gte('lng', targetBounds.sw.lng)
+        .lte('lng', targetBounds.ne.lng)
+
+      if (tipo) {
+        query = query.eq('tipo', tipo)
+      }
+
+      if (filterData) {
+        query = query.eq('data_esatta', filterData)
+      }
+
+      if (q && q.trim()) {
+        const cleanQ = q.trim()
+        query = query.or(`titolo.ilike.%${cleanQ}%,descrizione.ilike.%${cleanQ}%,comune.ilike.%${cleanQ}%,luogo_nome.ilike.%${cleanQ}%,indirizzo_specifico.ilike.%${cleanQ}%`)
+      }
+
+      const { data, error } = await query
+
+      if (error) {
+        console.error("Errore fetch posizioni esplora:", error)
+        return
+      }
+
+      let results = data || []
+
+      // Filtro giorni ricorrenti
+      if (filterGiorni && filterGiorni.length > 0) {
+        results = results.filter((p: any) => 
+          p.giorni_settimana && p.giorni_settimana.some((g: string) => filterGiorni.includes(g))
+        )
+      }
+
+      // Filtro tags
+      if (filterTags && filterTags.length > 0) {
+        results = results.filter((p: any) => 
+          p.posizione_tags?.some((pt: any) => 
+            pt.tags && (filterTags.includes(pt.tags.id) || filterTags.includes(pt.tags.nome))
+          )
+        )
+      }
+
+      const formattedData = results.map((pos: any) => {
+        const tags = (pos.posizione_tags || [])
+          .map((pt: any) => pt.tags)
+          .filter(Boolean)
+          .map((t: any) => ({
+            id: t.id,
+            nome: t.nome,
+            name: t.nome,
+          }))
+
+        const assoc = pos.associazioni ? {
+          id: pos.associazioni.id,
+          denominazione: pos.associazioni.denominazione,
+          slug: pos.associazioni.slug || null,
+          logo_url: resolveImageUrl(pos.associazioni.logo_path),
+        } : (pos.associazione_denominazione ? {
           denominazione: pos.associazione_denominazione,
-          slug: pos.associazione_slug || null
-        } : null,
-        tags: pos.tags ? pos.tags.map((t: string) => ({ id: t, name: t })) : [],
-        competenze: pos.competenze ? pos.competenze.map((c: string) => ({ id: c, name: c })) : []
-      }))
+          slug: pos.associazione_slug || null,
+        } : null)
+
+        const imgUrl = resolveImageUrl(pos.immagine_path || pos.immagine_url)
+
+        return {
+          ...pos,
+          slug: pos.slug || null,
+          dove: pos.indirizzo_specifico || pos.luogo_nome || pos.comune || '',
+          indirizzo_specifico: pos.indirizzo_specifico || pos.luogo_nome || pos.comune || '',
+          quando: pos.quando || (pos.tipo === 'una_tantum' ? pos.data_esatta : (pos.giorni_settimana?.join(', ') || '')),
+          immagine_url: imgUrl,
+          associazioni: assoc,
+          associazione: assoc,
+          tags,
+          competenze: [],
+        }
+      })
+
       setPosizioni(formattedData)
-    } catch (error) { console.error(error) } finally { setLoading(false) }
-  }
+    } catch (error) { 
+      console.error("Errore imprevisto esplora:", error) 
+    } finally { 
+      setLoading(false) 
+    }
+  }, [q, tipo, filterTags, filterData, filterGiorni, supabase, resolveImageUrl])
 
   const handleBoundsChange = (b: MapBounds) => {
     boundsRef.current = b;
@@ -152,22 +238,30 @@ export default function VistaEsplora({ initialData = [] }: VistaEsploraProps) {
     }, 350); 
   }
 
+  // Risoluzione deadlock iniziale: esegue la ricerca sia con coordinate da URL che generiche
   const handleMapReady = useCallback((initialBounds: MapBounds) => {
-    boundsRef.current = initialBounds;
-    if (isFirstLoad.current) {
-      isFirstLoad.current = false;
-      if (!lat || !lng) fetchPosizioni(initialBounds);
+    if (lat && lng) {
+      const calcBounds = getBoundsFromCenter(lat, lng)
+      boundsRef.current = calcBounds
+      fetchPosizioni(calcBounds)
+    } else {
+      boundsRef.current = initialBounds
+      fetchPosizioni(initialBounds)
     }
-  }, [lat, lng, q, tipo, tagsStr, competenzeStr, filterData, giorniStr])
+    isFirstLoad.current = false
+  }, [lat, lng, fetchPosizioni])
 
+  // Aggiornamento reattivo al cambio di filtri o coordinate nell'URL
   useEffect(() => {
     if (isFirstLoad.current) return;
     if (lat && lng) {
       const calcBounds = getBoundsFromCenter(lat, lng);
       boundsRef.current = calcBounds; 
       fetchPosizioni(calcBounds);
-    } else if (boundsRef.current) fetchPosizioni(boundsRef.current);
-  }, [q, tipo, tagsStr, competenzeStr, lat, lng, filterData, giorniStr])
+    } else if (boundsRef.current) {
+      fetchPosizioni(boundsRef.current);
+    }
+  }, [q, tipo, tagsStr, filterData, giorniStr, lat, lng, fetchPosizioni])
 
   return (
     <div className="flex flex-col lg:flex-row w-full h-[calc(100dvh-3.5rem)] overflow-hidden relative bg-slate-50 lg:bg-white">
@@ -251,7 +345,7 @@ export default function VistaEsplora({ initialData = [] }: VistaEsploraProps) {
             forcedLat={lat} forcedLng={lng} forcedZoom={12} 
           />
 
-          {/* CARD SELEZIONATA SULLA MAPPA (FLUTTUANTE SOPRA LA BOTTOM NAV) */}
+          {/* CARD SELEZIONATA SULLA MAPPA */}
           {selectedPos && (
             <div 
               className={`absolute left-1/2 -translate-x-1/2 z-[1001] flex flex-col items-end gap-2.5 w-[92%] sm:w-[380px] pointer-events-none transition-all duration-500 ease-[cubic-bezier(0.16,1,0.3,1)] ${
@@ -272,7 +366,7 @@ export default function VistaEsplora({ initialData = [] }: VistaEsploraProps) {
           )}
         </div>
 
-        {/* 📱 TENDINA DRAWER MOBILE (SOSPESA PERFETTAMENTE SOPRA LA BOTTOM NAV) */}
+        {/* 📱 TENDINA DRAWER MOBILE */}
         <div 
           className={`lg:hidden fixed inset-x-0 bottom-0 z-[1000] bg-white rounded-t-[2.5rem] shadow-[0_-12px_40px_rgba(0,0,0,0.15)] border-t border-slate-200/80 flex flex-col ${
             !isDragging ? 'transition-transform duration-500 ease-[cubic-bezier(0.16,1,0.3,1)]' : ''
